@@ -1,0 +1,58 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Generate version.js
+        run: |
+          echo "// Auto-generated version file - $(date -u)" > version.js
+          echo "const BUILD_VERSION_BY_YAML = {" >> version.js
+          echo "  timestamp: '$(date -u +"%Y-%m-%dT%H:%M:%SZ")'," >> version.js
+          echo "  commit: '${{ github.sha }}'," >> version.js
+          echo "  shortCommit: '$(echo ${{ github.sha }} | cut -c1-7)'," >> version.js
+          echo "  branch: '${{ github.ref_name }}'," >> version.js
+          echo "  buildNumber: '${{ github.run_number }}'," >> version.js
+          echo "  buildDate: '$(date -u +"%Y-%m-%d %H:%M:%S UTC")'," >> version.js
+          echo "  repository: '${{ github.repository }}'" >> version.js
+          echo "};" >> version.js
+          echo "" >> version.js
+          echo "// Export for both ES6 and CommonJS" >> version.js
+          echo "if (typeof module !== 'undefined' && module.exports) {" >> version.js
+          echo "  module.exports = BUILD_VERSION_BY_YAML;" >> version.js
+          echo "}" >> version.js
+          
+          echo "Generated version.js:"
+          cat version.js
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
