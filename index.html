@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sinclaude Sinclair Simple Simulator - Home</title>
+    <style>
+        body {
+            background: black;
+            color: white;
+            font-family: monospace;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 {
+            color: #00ff00;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #00ff00;
+            font-size: 1.8em;
+            margin: 30px 0 20px 0;
+            text-align: left;
+        }
+        h3 {
+            color: #00ff00;
+            font-size: 1.4em;
+            margin: 25px 0 15px 0;
+            text-align: left;
+        }
+        .content {
+            font-size: 1.2em;
+            line-height: 1.6;
+            margin: 30px 0;
+            text-align: left;
+        }
+        .launch-button {
+            background: #333;
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 15px 30px;
+            font-family: monospace;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .launch-button:hover {
+            background: #00ff00;
+            color: black;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul li:before {
+            content: "> ";
+            color: #00ff00;
+        }
+        ul ul {
+            margin-left: 20px;
+            font-size: 0.9em;
+        }
+        code {
+            background: #333;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        p {
+            margin: 15px 0;
+        }
+        a {
+            color: #00ff00;
+        }
+        .magazine-ad {
+            margin: 40px 0 0 0;
+            padding: 0;
+            text-align: center;
+            display: none;
+        }
+        .magazine-ad.loaded {
+            display: block;
+        }
+        .magazine-ad img {
+            max-width: 80%;
+            width: 80%;
+            height: auto;
+            margin: 0 auto;
+            border: 2px solid #00ff00;
+            box-sizing: border-box;
+            display: block;
+        }
+        .attributions {
+            font-size: 0.8em;
+            color: #888;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .attributions h4 {
+            color: #00ff00;
+            margin-bottom: 10px;
+        }
+        .attributions p {
+            margin: 5px 0;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" 
+            integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" 
+            crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="container">
+        <a href="simulator.html" class="launch-button">LAUNCH SIMULATOR</a>
+        
+        <div id="content" class="content">
+            Loading README...
+        </div>
+    </div>
+    
+    <div class="magazine-ad">
+        <div class="attributions">
+            <p>Image credit: <a href="https://archive.org/details/byte-magazine-1981-12/page/n169/mode/2up" target="_blank" rel="noopener">Byte Magazine December 1981</a></p>
+        </div>
+        <img src="magazine_ad.png" alt="Sinclair ZX81 Magazine Advertisement">
+    </div>
+
+    <script>
+        // Fetch and render README.md
+        async function loadReadme() {
+            try {
+                const response = await fetch('README.md');
+                const markdown = await response.text();
+                const html = marked.parse(markdown);
+                document.getElementById('content').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading README.md:', error);
+                document.getElementById('content').innerHTML = marked.parse(
+                    "## README.md not available\n" +
+                    "You can view it [here](https://github.com/andyrsinclair/sinclair-z80-assembly-sandbox/blob/main/README.md)."
+                );
+            } finally {
+                // Show the magazine ad after README loading is complete (success or error)
+                document.querySelector('.magazine-ad').classList.add('loaded');
+            }
+        }
+        window.addEventListener('load', loadReadme);
+    </script>
+</body>
+</html>
