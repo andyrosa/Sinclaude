@@ -912,7 +912,9 @@ class Simulator {
     loadDefaultAssembly() {
         this.loadAssemblyCode(typeof DEFAULT_ASM !== 'undefined' ? DEFAULT_ASM : null);
     }
-
+    loadBenchmarkAssembly() {
+        this.loadAssemblyCode(typeof BENCHMARK_ASM !== 'undefined' ? BENCHMARK_ASM : null);
+    }
     loadSpaceInvaderAssembly() {
         this.loadAssemblyCode(typeof SPACE_INVADER_ASM !== 'undefined' ? SPACE_INVADER_ASM : null);
     }

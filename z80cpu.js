@@ -883,13 +883,6 @@ class Z80CPU {
                 }
                 break;
                 
-            case 0xED: // ED prefix - extended instructions  
-                {
-                    const edOpcode = memory[this.registers.PC++];
-                    this.executeEDInstruction(edOpcode);
-                }
-                break;
-                
             default:
                 // Return error for unknown instructions
                 const errorMsg = `Unknown opcode: 0x${opcode.toString(16).toUpperCase()} at PC=${(this.registers.PC-1).toString(16).toUpperCase()}`;
