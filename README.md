@@ -75,10 +75,10 @@ A web-based ZX81/Spectrum/Z80 simulator somewhat-carefully co-written with Claud
 Scripts are loaded in the following order to ensure proper dependencies:
 1. `constants.js` - Core configuration values
 2. `console-utils.js` - Logging infrastructure  
-3. `assembler.js` - Z80 assembler engine
+3. `assembler.js` - Z80 Assembler
 4. `z80cpu.js` - Z80 CPU emulation
-5. `default_assembly.js` & `benchmark_assembly.js` - Sample programs
-6. `sinclair.js` - Main controller class (~1,300 lines)
+5. `default_asm.js` & `space_invader_asm.js` - Sample programs
+6. `simulator.js` - Main controller class
 7. `initialization.js` - Application bootstrap
 
 ## Project Files

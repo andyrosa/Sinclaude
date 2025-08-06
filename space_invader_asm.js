@@ -1,4 +1,4 @@
-const DEFAULT_ASM = `
+const SPACE_INVADER_ASM = `
 ORG 0
 
 start:
@@ -574,5 +574,5 @@ set_new_start_row:
 
 // Export for Node.js if running in Node environment
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = DEFAULT_ASM;
+    module.exports = SPACE_INVADER_ASM;
 }

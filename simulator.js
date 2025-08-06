@@ -1,4 +1,3 @@
-// Sinclair-specific constants
 const SCREEN_START = 60000;
 const SCREEN_WIDTH = 32;
 const SCREEN_HEIGHT = 24;
@@ -7,7 +6,7 @@ const KEYBOARD_POKE = 59999;
 const VERT_COUNT = 59998;
 const KBD_NO_KEY_PRESSED = -1;
 
-class Sinclair {
+class Simulator {
     constructor() {
         this.assembler = new Z80Assembler();
         this.cpu = new Z80CPU();
@@ -914,8 +913,8 @@ class Sinclair {
         this.loadAssemblyCode(typeof DEFAULT_ASM !== 'undefined' ? DEFAULT_ASM : null);
     }
 
-    loadBenchmarkAssembly() {
-        this.loadAssemblyCode(typeof BENCHMARK_ASM !== 'undefined' ? BENCHMARK_ASM : null);
+    loadSpaceInvaderAssembly() {
+        this.loadAssemblyCode(typeof SPACE_INVADER_ASM !== 'undefined' ? SPACE_INVADER_ASM : null);
     }
 
 

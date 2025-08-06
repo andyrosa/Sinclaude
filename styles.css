@@ -1,36 +1,77 @@
+/* Layout scaffolding */
 body {
     background: black;
+    box-sizing: border-box;
     color: white;
-    font-family: monospace;
-    margin: 0;
-    padding: 10px;
     display: flex;
     flex-direction: column;
+    font-family: monospace;
+    margin: 0;
     min-height: 100vh;
-    box-sizing: border-box;
+    padding: 10px;
     position: relative;
+}
+
+button {
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    background: #f0f0f0;
+    border: 2px inset #ccc;
+    border-radius: 0;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.8),
+                inset -1px -1px 2px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+    color: black;
+    cursor: pointer;
+    flex: 1;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+    margin: 2px;
+    min-width: 60px;
+    padding: 8px 2px;
+    touch-action: manipulation;
+    transition: all 0.1s ease;
+    user-select: none;
+    /* Desktop disables tap‑zoom by default – no harm here */
+}
+
+button:hover {
+    background: #e8e8e8;
+    box-shadow: inset 1px 1px 3px rgba(255,255,255,0.9),
+                inset -1px -1px 3px rgba(0,0,0,0.3);
+}
+
+button:active {
+    background: #d0d0d0;
+    border: 2px inset #999;
+    box-shadow: inset 2px 2px 4px rgba(0,0,0,0.3),
+                inset -1px -1px 2px rgba(255,255,255,0.5);
+    transform: translateY(1px);
 }
 
 .menu-container {
     position: fixed;
-    top: 0;
     right: 0;
+    top: 0;
     z-index: var(--z-menu-dropdown);
 }
 
 .menu-button {
-    background: rgba(0, 0, 0, 0.8);
-    border: none;
-    border-radius: 0;
-    width: 40px;
-    height: 40px;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    cursor: pointer;
+    background: rgba(0,0,0,.8);
+    border: none;
     color: white;
+    cursor: pointer;
+    display: flex;
     font-size: 20px;
+    height: 40px;
+    justify-content: center;
+    transition: .3s;
+    width: 40px;
 }
 
 .menu-button:hover {
@@ -39,25 +80,25 @@ body {
 }
 
 .menu-dropdown {
-    display: none;
-    position: absolute;
-    top: 45px;
-    right: 0;
-    background: rgba(0, 0, 0, 0.95);
+    background: rgba(0,0,0,.95);
     border: 2px solid white;
     border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.3);
+    display: none;
     min-width: 120px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    position: absolute;
+    right: 0;
+    top: 45px;
     z-index: var(--z-menu-dropdown);
 }
 
 .menu-item {
+    border-bottom: 1px solid rgba(255,255,255,.2);
+    color: white;
     display: block;
     padding: 10px 15px;
-    color: white;
     text-decoration: none;
-    transition: background-color 0.3s ease;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    transition: background-color .3s;
 }
 
 .menu-item:last-child {
@@ -65,125 +106,44 @@ body {
 }
 
 .menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255,255,255,.1);
     color: #00ff00;
 }
 
 
-/* Assembly section header with touch hint */
 .section-header-flex {
-    display: flex;
     align-items: center;
+    display: flex;
     gap: 15px;
 }
 
 .touch-hint {
-    font-size: 10px;
-    color: #666;
-    background: rgba(0, 0, 0, 0.8);
+    align-items: center;
+    background: rgba(0,0,0,.8);
     border: 1px solid #666;
     border-radius: 4px;
-    display: flex;
-    text-align: center;
-    width: 35px;
-    height: 40px;
-    padding: 0 2px;
-    align-items: center;
-    justify-content: center;
+    color: #666;
     cursor: pointer;
-    transition: all 0.3s ease;
+    display: flex;
+    font-size: 10px;
+    gap: 0;
+    height: 40px;
+    justify-content: center;
     line-height: 1.1;
+    padding: 0 2px;
+    transition: .3s;
+    width: 35px;
 }
 
 .touch-hint:hover {
-    color: white;
+    background: rgba(255,255,255,.1);
     border-color: white;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-/* Header menu for assembly section - only show on narrow devices */
-.header-menu {
-    display: none;
-}
-
-/* Show header menu on narrow devices where expansion is useful */
-@media (max-width: 768px) {
-    body {
-        padding: 0;
-    }
-    
-    .header-menu {
-        display: flex;
-        gap: 2px;
-    }
-    
-    .top-row {
-        flex-direction: column;
-    }
-    .section {
-        margin-bottom: 0px;
-    }
-    .section-content {
-        flex-direction: column;
-    }
-    
-    .section-controls {
-        flex: 0 0 auto;
-        min-width: auto;
-    }
-    
-    .execution-controls {
-        padding-left: 0;
-    }
-    
-    .keyboard-status {
-        display: none;
-    }
-    .controls {
-        gap : 0px;
-    }
-    .assembly-section {
-        min-height: 60vh;
-    }
-    
-    /* Hide magazine listing section until it has content */
-    .listing-section {
-        display: none;
-    }
-    
-    /* Show listing section when it has content (when #machineCode is not empty) */
-    .listing-section:has(#machineCode:not(:empty)) {
-        display: flex;
-        height: 33.33vh;
-    }
-}
-
-.header-menu-item {
-    font-size: 16px;
-    color: #666;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid #666;
-    border-radius: 4px;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.header-menu-item:hover {
     color: white;
-    border-color: white;
-    background: rgba(255, 255, 255, 0.1);
-    transform: scale(1.1);
 }
 
-/* Section main content layout */
 .section-main-flex {
-    display: flex;
     align-items: flex-start;
+    display: flex;
     gap: 10px;
 }
 
@@ -192,141 +152,41 @@ body {
 }
 
 #screen {
+    background: black;
     border: 2px solid white;
+    box-sizing: border-box;
+    color: white;
+    contain: layout style;
+    display: grid;
+    flex-shrink: 0;
     font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
     font-size: 12px;
-    background: black;
-    color: white;
-    padding: 5px;
-    display: grid;
-    grid-template-columns: repeat(32, 1fr);
-    grid-template-rows: repeat(24, 1fr);
     gap: 0;
-    width: 480px;
+    grid-template-columns: repeat(32,1fr);
+    grid-template-rows: repeat(24,1fr);
     height: 360px;
+    max-height: 80vh;
     max-width: calc(100vw - 25px);
-    max-height: calc(80vh);
     overflow: hidden;
+    padding: 5px;
+    width: 480px;
     will-change: contents;
-    contain: layout style;
-    box-sizing: border-box;
-    flex-shrink: 0;
 }
 
-
 .screen-char {
-    display: flex;
     align-items: center;
+    display: flex;
     justify-content: center;
-    font-weight: normal;
     line-height: 1;
-    overflow: hidden;
-    text-align: center;
 }
 
 .screen-char.inverted {
-    background-color: white;
+    background: white;
     color: black;
-}
-
-.controls {
-    margin-top: 10px;
-    flex-shrink: 0;
-    text-align: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-}
-
-@media (min-width: 769px) {
-    .assembly-section .section-controls .controls {
-        display: flex;
-        flex-direction: column;
-    }
-    .assembly-section .section-controls .controls button {
-        flex: none; /* Override the default flex: 1 for assembly buttons */
-    }
-}
-
-/* Stack assembly controls vertically and pin Assemble and Run to bottom */
-.assembly-section .section-controls .controls {
-    display: flex;
-    flex-direction: column;
-}
-
-.assembly-section .section-controls .controls button {
-    flex: none; /* Override the default flex: 1 for assembly buttons */
-}
-
-button {
-    background: #f0f0f0;
-    color: black;
-    border: 2px inset #ccc;
-    padding: 8px 2px;
-    margin: 2px;
-    font-family: monospace;
-    font-size: 12px;
-    font-weight: bold;
-    box-sizing: border-box;
-    flex: 1;
-    min-width: 60px;
-    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.8), inset -1px -1px 2px rgba(0,0,0,0.2);
-    border-radius: 0;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-button:hover {
-    background: #e8e8e8;
-    box-shadow: inset 1px 1px 3px rgba(255,255,255,0.9), inset -1px -1px 3px rgba(0,0,0,0.3);
-}
-
-button:active {
-    background: #d0d0d0;
-    border: 2px inset #999;
-    box-shadow: inset 2px 2px 4px rgba(0,0,0,0.3), inset -1px -1px 2px rgba(255,255,255,0.5);
-    transform: translateY(1px);
-}
-
-.debug {
-    margin-top: 15px;
-    padding: 12px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    color: #ccc;
-    flex-shrink: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    gap: 4px 16px;
-}
-
-.debug > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 2px 0;
-}
-
-.debug span {
-    color: #4CAF50;
-    font-weight: bold;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.5px;
 }
 
 .top-row {
     display: flex;
-    flex-direction: row;
     gap: 10px;
     margin-bottom: 10px;
 }
@@ -340,178 +200,287 @@ button:active {
 }
 
 .section {
-    margin-bottom: 10px;
     border: 1px solid #333;
-    padding: 10px;
     border-radius: 5px;
     display: flex;
     flex-direction: column;
+    margin-bottom: 10px;
     overflow-y: auto;
+    padding: 10px;
     box-sizing: border-box;
 }
 
 .section h2 {
-    margin-top: 0;
-    margin-bottom: 10px;
     color: #ccc;
     flex-shrink: 0;
-}
-
-textarea {
-    background: #111;
-    color: white;
-    border: 1px solid #333;
-    font-family: monospace;
-    font-size: 14px;
-    padding: 10px;
-    width: 100%;
-    resize: none;
-    flex: 1;
-    box-sizing: border-box;
-    min-height: 100px;
-}
-
-#machineCode {
-    background: #111;
-    border: 1px solid #333;
-    padding: 10px;
-    font-family: monospace;
-    font-size: 12px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    overflow-x: auto;
-    flex: 1;
-    box-sizing: border-box;
-    color: white;
-}
-
-#machineCode.error {
-    color: #ff6666;
-}
-
-#console {
-    background: #000;
-    border: 1px solid #333;
-    padding: 10px;
-    font-family: monospace;
-    font-size: 12px;
-    white-space: pre-wrap;
-    overflow-y: auto;
-    flex: 1;
-    box-sizing: border-box;
-}
-
-.execution-section {
-    min-height: max(100px, 33.33vh);
-    flex: 1;
-}
-
-.assembly-section {
-    min-height: max(100px, 33.33vh);
-    height: 33.33vh;
-    flex: 0 0 auto;
-}
-
-.listing-section {
-    min-height: max(100px, 33.33vh);
-    height: 33.33vh;
-    max-height: 60vh;
-    flex: 0 0 auto;
-}
-
-.console-section {
-    min-height: max(100px, 20vh);
-    height: 20vh;
-    flex: 0 0 auto;
+    margin: 0 0 10px;
 }
 
 .section-content {
     display: flex;
-    flex-direction: row;
     flex: 1;
-    overflow: hidden;
     gap: 0;
+    overflow: hidden;
 }
 
 .section-main {
-    flex: 1;
     display: flex;
+    flex: 1;
     flex-direction: column;
     overflow: hidden;
 }
 
 .section-controls {
     display: flex;
-    flex-direction: column;
     flex: 0 0 200px;
+    flex-direction: column;
     min-width: 200px;
     overflow-y: auto;
 }
 
-.execution-left {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-}
-
-.execution-controls {
-    display: flex;
-    flex-direction: column;
+textarea {
+    background: #111;
+    border: 1px solid #333;
+    box-sizing: border-box;
+    color: white;
     flex: 1;
-    min-width: 200px;
+    font-family: monospace;
+    font-size: 14px;
+    min-height: 100px;
+    padding: 10px;
+    resize: none;
+    width: 100%;
+}
+
+#machineCode, #console {
+    background: #111;
+    border: 1px solid #333;
+    box-sizing: border-box;
+    color: white;
+    font-family: monospace;
+    font-size: 12px;
     overflow-y: auto;
-    padding-left: 10px;
+    padding: 10px;
+    white-space: pre-wrap;
+    flex: 1;
+}
+
+#machineCode.error {
+    color: #ff6666;
+}
+
+.execution-section,
+.assembly-section,
+.listing-section,
+.console-section {
+    flex: 0 0 auto;
+}
+
+.execution-section {
+    flex: 1;
+    min-height: max(100px,33.33vh);
+}
+
+.assembly-section {
+    height: 33.33vh;
+    min-height: max(100px,33.33vh);
+}
+
+.listing-section {
+    height: 33.33vh;
+    max-height: 60vh;
+    min-height: max(100px,33.33vh);
+}
+
+.console-section {
+    height: 20vh;
+    min-height: max(100px,20vh);
+}
+
+.controls {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+    text-align: center;
+}
+
+.assembly-section .section-controls .controls {
+    flex-direction: column;
+}
+
+.assembly-section .section-controls .controls button {
+    flex: none;
+}
+
+.keyboard-status {
+    background: #f0f0f0;
+    border-radius: 4px;
+    color: #888;
+    font-style: italic;
+    margin: 10px 0 0;
+    padding: 5px;
+    text-align: center;
+    transition: .3s;
+    width: 470px;
+}
+
+.keyboard-status.hover-state {
+    animation: pulseGlow 2s ease-in-out infinite;
+    background: #fff3e0;
+    border: 2px solid #ff6b35;
+    color: #ff6b35;
+    font-weight: bold;
+    width: 455px;
+}
+
+@keyframes pulseGlow {
+    0%,100% {
+        box-shadow: 0 0 5px rgba(255,107,53,.3);
+        transform: scale(.95);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(255,107,53,.6);
+        transform: scale(1);
+    }
+}
+
+@keyframes pulsateText {
+    0%,100% { font-size: 100%; }
+    50%     { font-size: 200%; }
+}
+
+@media (max-width: 768px) {
+
+    body { padding: 0; }
+
+    .controls { gap: 0; }
+
+    .header-menu { 
+        position: fixed;
+        right: 5px;
+        top: 5px;
+        display: flex; 
+        gap: 2px; 
+    }
+
+    .top-row { flex-direction: column; }
+
+    .section { margin-bottom: 0; }
+
+    .section-content { flex-direction: column; }
+
+    .section-controls,
+    .execution-controls { min-width: auto; }
+
+    .execution-controls { padding-left: 0; }
+
+    .assembly-section { min-height: 60vh; }
+
+    .listing-section { display: none; }
+
+    .listing-section:has(#machineCode:not(:empty)) {
+        display: flex; height: 33.33vh;
+    }
+}
+
+@media (pointer: coarse) and (hover: none) {
+
+    .keyboard-status { display: none; }
+}
+
+.menu-button { border-radius: 0; }
+
+.edit-toggle {
+    background: white;
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,.8),
+                inset -1px -1px 2px rgba(0,0,0,.2);
+    color: red;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+    margin: 4px 0;
+    max-width: 100%;
+    padding: 4px;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.edit-toggle:hover           { background: #f0f0f0; }
+
+.edit-toggle.active          { background: red; color: white; }
+
+.edit-toggle.active:hover    { background: #cc0000; }
+
+.header-menu {
+    position: fixed;
+    right: 10px;
+    top: 10px;
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+}
+
+.header-menu-item {
+    align-items: center;
+    background: rgba(0,0,0,.8);
+    border: 1px solid #666;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    font-size: 16px;
+    height: 30px;
+    justify-content: center;
+    transition: all 0.3s ease;
+    width: 30px;
+}
+
+.header-menu-item:hover {
+    background: rgba(255,255,255,.1);
+    border-color: white;
+    color: white;
+    transform: scale(1.1);
+}
+
+.debug {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #ccc;
+    display: grid;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    gap: 4px 16px;
+    grid-template-columns: repeat(auto-fit, minmax(80px,1fr));
+    margin-top: 15px;
+    padding: 12px;
+    flex-shrink: 0;
+}
+
+.debug > div {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.debug span {
+    color: #4caf50;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    letter-spacing: .5px;
 }
 
 .game-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin: 4px 0 2px 0;
-}
-
-.edit-toggle {
-    background: white;
-    color: red;
-    border: none;
-    padding: 4px;
-    font-family: monospace;
-    font-size: 12px;
-    font-weight: bold;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-    cursor: pointer;
-    margin-top: 4px;
-    margin-bottom: 4px;
-    transition: all 0.2s;
-    border-radius: 0;
-    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.8), inset -1px -1px 2px rgba(0,0,0,0.2);
-}
-
-.edit-toggle:hover { 
-    background: #f0f0f0; 
-}
-
-.edit-toggle.active { 
-    background: red; 
-    color: white; 
-}
-
-.edit-toggle.active:hover { 
-    background: #cc0000; 
-}
-
-.edit-input {
-    background: transparent;
-    border: none;
-    color: inherit;
-    font: inherit;
-    text-align: center;
-    width: 100%;
-    outline: none;
-    padding: 0;
-    margin: 0;
+    margin: 4px 0 2px;
 }
 
 .game-buttons button {
@@ -520,137 +489,13 @@ textarea {
 }
 
 .game-buttons button.edit-mode {
-    color: red;
+    align-items: center;
     animation: pulsateText 3s ease-in-out infinite;
+    color: red;
+    display: flex;
+    height: 32px;
+    justify-content: center;
     line-height: 1;
     overflow: hidden;
-    height: 32px;
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Prevent double-click zoom on buttons */
-button {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-/* Prevent double-click zoom on all interactive elements */
-.header-menu-item, .game-buttons button, .controls button {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-@keyframes pulseGlow {
-    0%, 100% {
-        box-shadow: 0 0 5px rgba(255, 107, 53, 0.3);
-        transform: scale(.95);
-    }
-    50% {
-        box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);
-        transform: scale(1);
-    }
-}
-
-@keyframes pulsateText {
-    0%, 100% {
-            font-size: 100%;
-    }
-    50% {
-        font-size: 200%;
-    }
-}
-
-.keyboard-status {
-    text-align: center;
-    color: #888;
-    margin: 10px 0px 0px 0px;
-    padding: 5px;
-    font-style: italic;
-    width: 470px;
-    background: #f0f0f0;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-}
-
-/* Attention-grabbing state when section doesn't have focus */
-.keyboard-status.hover-state {
-    color: #ff6b35;
-    background: #fff3e0;
-    border: 2px solid #ff6b35;
-    font-weight: bold;
-    animation: pulseGlow 2s ease-in-out infinite;
-    width: 455px;
-    
-}
-
-/* Hide keyboard status on touch devices */
-@media (pointer: coarse) and (hover: none) {
-    .keyboard-status {
-        display: none;
-    }
-}
-
-@media (max-width: 768px) {
-    body {
-        padding: 0;
-    }
-    
-    /* Show header menu on narrow devices where expansion is useful */
-    .header-menu {
-        display: flex;
-        gap: 2px;
-    }
-    
-    .top-row {
-        flex-direction: column;
-    }
-    .section {
-        margin-bottom: 0px;
-    }
-    .section-content {
-        flex-direction: column;
-    }
-    
-    .section-controls {
-        flex: 0 0 auto;
-        min-width: auto;
-    }
-    
-    .execution-controls {
-        padding-left: 0;
-    }
-    
-    .keyboard-status {
-        display: none;
-    }
-    .controls {
-        gap : 0px;
-    }
-    .assembly-section {
-        min-height: 60vh;
-    }
-    
-    /* Hide magazine listing section until it has content */
-    .listing-section {
-        display: none;
-    }
-    
-    /* Show listing section when it has content (when #machineCode is not empty) */
-    .listing-section:has(#machineCode:not(:empty)) {
-        display: flex;
-        height: 33.33vh;
-    }
 }
