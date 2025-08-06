@@ -8,7 +8,7 @@ window.addEventListener('load', () => {
         console.error('Z80Assembler class not found!');
         return;
     }
-    window.sinclaude = new Sinclair();
+    window.sinclaude = new Simulator();
 
     // Load assembly: from URL if present, otherwise default
     if (!window.sinclaude.loadFromURL()) {

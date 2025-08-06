@@ -15,15 +15,6 @@
         <div class="section assembly-section">
             <div class="section-header-flex">
                 <h2 id="assembly-section-title">1. Assembly Code Input</h2>
-                <div class="header-menu">
-                    <button class="header-menu-item" onpointerdown="expandAssemblyTextarea()" title="Expand Editor">⤢</button>
-                    <button class="header-menu-item" onclick="toggleMenu()" title="Menu">🍔</button>
-                    <div class="menu-dropdown" id="menuDropdown">
-                        <a href="#" onclick="showAbout(); return false;" class="menu-item">About</a>
-                        <a href="https://andyrosa.github.io/Sinclaude/" target="_blank" rel="noopener" class="menu-item">Docs</a>
-                        <a href="https://github.com/andyrosa/Sinclaude" target="_blank" rel="noopener" class="menu-item">Repository</a>
-                    </div>
-                </div>
             </div>
             <div class="section-content">
                 <div class="section-main section-main-flex">
@@ -34,7 +25,7 @@
                     <div class="controls">
                         <button onclick="sinclaude.clearAssembly()">Clear</button>
                         <button onclick="sinclaude.loadDefaultAssembly()">Load Default</button>
-                        <button onclick="sinclaude.loadBenchmarkAssembly()">Load Benchmark</button>
+                        <button onclick="sinclaude.loadSpaceInvaderAssembly()">Load Space Invader</button>
                         <button onclick="sinclaude.assembleAndRun()">Assemble and Run</button>
                     </div>
                 </div>
@@ -47,6 +38,15 @@
                 <div class="section-main">
                     <div id="machineCode"></div>
                 </div>
+            </div>
+        </div>
+        <div class="header-menu">
+            <button class="header-menu-item" onpointerdown="expandAssemblyTextarea()" title="Expand Editor">⤢</button>
+            <button class="header-menu-item" onclick="toggleMenu()" title="Menu">🍔</button>
+            <div class="menu-dropdown" id="menuDropdown">
+                <a href="#" onclick="showAbout(); return false;" class="menu-item">About</a>
+                <a href="https://andyrosa.github.io/Sinclaude/" target="_blank" rel="noopener" class="menu-item">Docs</a>
+                <a href="https://github.com/andyrosa/Sinclaude" target="_blank" rel="noopener" class="menu-item">Repo</a>
             </div>
         </div>
     </div>
@@ -201,9 +201,9 @@
                 "console-utils.js",
                 "assembler.js",
                 "z80cpu.js",
-                "default_assembly.js",
-                "benchmark_assembly.js",
-                "sinclair.js",
+                "default_asm.js",
+                "space_invader_asm.js",
+                "simulator.js",
                 "initialization.js"
             ];
             scripts.forEach(function (src) {
