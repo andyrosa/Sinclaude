@@ -232,7 +232,6 @@ button:active {
 
 .section-controls {
     display: flex;
-    flex: 0 0 200px;
     flex-direction: column;
     min-width: 200px;
     overflow-y: auto;

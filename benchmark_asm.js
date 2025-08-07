@@ -1,15 +1,15 @@
 const BENCHMARK_ASM = `
-; Increment and print HL every aproximately 4MM t-states
-; which is about a second in a real Z80A
+; Increment and print HL approximately every 4 million T-states,
+; which corresponds to roughly 1 second on an physical 4 MHz Z80A CPU.
 
-SCREEN_START:  equ 60000
+    SCREEN_START:  equ 60000
 
     ld   hl, 0
 performance_test:
     ld   de, SCREEN_START
     call hex_print_hl_at_de
     inc  hl
-    call delay
+    call delay_4M_t_states
     jp   performance_test
 
 ;----------------------------------------------
@@ -25,10 +25,10 @@ hex_print_hl_at_de:
 ; increments DE by 2; clobbers af
 print_hex_a_at_de:
     push af                 ; save original A
-    rlca                    ; rotate left 4 times instead of right because this is the only rotation instruction we implemented :)
-    rlca
-    rlca
-    rlca                    ; high nibble now in low nibble
+    sra a
+    sra a
+    sra a
+    sra a
     and  0Fh
     call print_hex_a_nibble_at_de
     pop  af                 ; restore original A
@@ -48,11 +48,11 @@ print_hex_a_nibble_at_de_print:
     ret
    
 ;=======================
-delay:
-    OUTER_COUNT: equ 4;
-    INNER_COUNT: equ 41667;
+delay_4M_t_states:
     ;   12 (pushes) + 10 (ld de) + OUTER_COUNT * [10 + (INNER_COUNT * 24) + 24] + 12 (pops) + 10 (ret)
     ;   = 4,000,212 T-states
+    OUTER_COUNT: equ 4;
+    INNER_COUNT: equ 41667;
     push de                  ; 4 T-states
     push bc                  ; 4 T-states
     push af                  ; 4 T-states
