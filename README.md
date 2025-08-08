@@ -110,7 +110,8 @@ When you assemble a program, the URL automatically updates to include the encode
 ## Known Issues
 - 90 MIPS on a phone, sometimes as low as 1 MIPS on a laptop, no idea why.
 - The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different tastes. Assembly uses snake_case, while JavaScript varies between the two conventions depending on the contributor.
-- Saving opcodes to the URL would be much more efficient, but then we'd need a disassembler. AI enables scope creep and yak shaving to a new level.
+- The assembly is not hand-optimized, which hurts my eyes a little.
+- As a test of GPT5, GPT5 under vscode was asked to simplify the CSS but it created 2 utility classes it did not use, which stuff Claude Code cleaned up.
 
 ## About This Project
 
