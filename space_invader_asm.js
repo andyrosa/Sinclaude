@@ -23,8 +23,8 @@ SCREEN_BASE         EQU 60000
 SCREEN_COLS         EQU 32
 SCREEN_ROWS         EQU 24
 
-KEYBOARD_IN         EQU 59999
-FRAME_COUNT_IN      EQU 59998
+FRAME_COUNT_PORT    EQU 0
+KEYBOARD_PORT       EQU 1
 
 PLAYER_ROW          EQU SCREEN_ROWS-3
 PLAYER_START_COL    EQU SCREEN_COLS/2
@@ -85,7 +85,7 @@ game_loop:
   JR   game_loop
 
 handle_keyboard:
-  LD   A, (KEYBOARD_IN)
+  IN   A, (KEYBOARD_PORT)
   CP   KBD_NO_KEY_PRESSED
   RET  Z
 
@@ -473,13 +473,13 @@ clear_loop:
 
 game_delay:
   CALL inc_random_seed
-  LD   A, (FRAME_COUNT_IN)
+  IN   A, (FRAME_COUNT_PORT)
   CP   FRAME_DELAY_COUNT
   JR   C, game_delay
 
 delay_done:
   XOR  A
-  LD   (FRAME_COUNT_IN), A
+  OUT  (FRAME_COUNT_PORT), A
   RET
 
 end_game:
@@ -508,13 +508,13 @@ SCREEN_show_press_to_play:
 
 wait_for_key:
   CALL inc_random_seed
-  LD   A, (KEYBOARD_IN)
+  IN   A, (KEYBOARD_PORT)
   CP   KBD_RESTART
   JR   NZ, wait_for_key
 
 wait_for_key_release:
   CALL inc_random_seed
-  LD   A, (KEYBOARD_IN)
+  IN   A, (KEYBOARD_PORT)
   CP   KBD_NO_KEY_PRESSED
   JR   NZ, wait_for_key_release
 

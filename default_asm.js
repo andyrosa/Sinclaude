@@ -1,15 +1,17 @@
 const DEFAULT_ASM = `
     ;Assembler basic test
 
-    SCREEN_START:  equ 60000
+    SCREEN_START  EQU 60000
+    TWO EQU 2
+    FOUR EQU TWO*TWO
 
     halt ; so we can single-step from the start
     xor a ; verify z flag and not c
     inc a ; verify not z
     ccf ; verify c flag
-    ld hl, 2
-    ld de, 3
-    ld bc, 4
+    ld hl, TWO
+    ld de, FOUR-1
+    ld bc, FOUR
     push hl ; verify sp
 inc_all:
     ld (SCREEN_START), a
@@ -18,6 +20,8 @@ inc_all:
     inc de
     inc bc
     jp inc_all
+
+
 
 `;
 

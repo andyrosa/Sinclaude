@@ -2,8 +2,8 @@ const SCREEN_START = 60000;
 const SCREEN_WIDTH = 32;
 const SCREEN_HEIGHT = 24;
 const MEMORY_SIZE = 65536;
-const KEYBOARD_POKE = 59999;
-const VERT_COUNT = 59998;
+const FRAME_COUNT_PORT = 0;
+const KEYBOARD_PORT = 1;
 const KBD_NO_KEY_PRESSED = -1;
 
 class Simulator {
@@ -11,6 +11,7 @@ class Simulator {
         this.assembler = new Z80Assembler();
         this.cpu = new Z80CPU();
         this.memory = new Uint8Array(MEMORY_SIZE);
+        this.ioMap = new Uint8Array(256); 
         this.setState(STATE.NOT_READY);
         this.instructionCount = 0;
         this.mipsValue = 0.0;
@@ -24,6 +25,11 @@ class Simulator {
         this.runLoopId = null;
         this.fastMode = false;
         this.easterEggEnabled = false;
+
+        // Line highlighting for stepping
+        this.sourceLines = [];
+        this.lineAddresses = [];
+        this.currentHighlightedLine = -1;
 
         // Screen optimization tracking
         this.lastScreenState = new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT);
@@ -42,7 +48,7 @@ class Simulator {
         this.setupKeyboard();
         this.setupDisplayUpdates();
         this.setupCleanupHandlers();
-        this.initializeSinclairMemory();
+        this.bootShow();
     }
 
     initializeCharacterMappings() {
@@ -88,6 +94,8 @@ class Simulator {
         this.flagCDisplay = document.getElementById('flagC');
         this.flagZDisplay = document.getElementById('flagZ');
         this.currentInstructionDisplay = document.getElementById('currentInstruction');
+        this.memoryAtPCDisplay = document.getElementById('memoryAtPC');
+        this.portsDisplay = document.getElementById('portsDisplay');
         this.mipsDisplay = document.getElementById('mips');
         this.refreshRateDisplay = document.getElementById('refreshRate');
 
@@ -187,16 +195,16 @@ class Simulator {
         ### Keyboard Processing Pipeline (Example: Escape Key)
 
         **Direct Keyboard Input:**
-        1. **Key Press** → `keydown` event handler calls `setKey(27)` directly.
+        1. **Key Press** to `keydown` event handler calls `setKey(27)` directly.
         2. **Special Handling** → `setKey(27)` maps 27 → 12 (Sinclair ESC code).
-        3. **Memory Poke** → `pokeMemory()` writes 12 to address KEYBOARD_IN.
+        3. **Memory Poke** → `OutPort()` writes 12 to address KEYBOARD_PORT.
 
         **Programmable Button Input:**
         1. **User Configuration** → User types "Escape" in a button's textbox.
         2. **Button Click** → `buttonClick()` reads "Escape" from the button's caption.
         3. **Code Conversion** → `labelToKeyCodeOrNull("Escape")` returns 27.
         4. **Special Handling** → `setKey(27)` maps 27 → 12 (Sinclair ESC code).
-        5. **Memory Poke** → `pokeMemory()` writes 12 to address KEYBOARD_IN.
+        5. **Memory Poke** → `OutPort()` writes 12 to address KEYBOARD_PORT.
 
         **Keyboard Capture Activation:**
         - **Hover**: Activated when the `.execution-section` is hovered.
@@ -381,7 +389,10 @@ class Simulator {
         const buttons = gameButtonsDiv.querySelectorAll('button');
         const button = buttons[buttonNumber - 1]; // Convert to 0-based index
         
-        if (!button) return;
+        if (!button) {
+            userMessageAboutBug('Game button not found', `buttonClick(${buttonNumber}) called but button ${buttonNumber} not found in DOM`);
+            return;
+        }
 
         const value = button.textContent.trim();
 
@@ -403,39 +414,50 @@ class Simulator {
         this.memory[address] = value;
     }
 
+    OutPort(port, value) {
+        this.ioMap[port] = value;
+    }
+
+    InPort(port) {
+        return this.ioMap[port];
+    }
+
     setKey(keyCode) {
         this.keyCodeCurrentReleased = keyCode === KBD_NO_KEY_PRESSED;
         if (!this.keyCodeCurrentReleased){
             this.keyCodeCurrent = keyCode;
         }
 
+        
         if (keyCode === KBD_NO_KEY_PRESSED) { 
-            this.pokeMemory(KEYBOARD_POKE, KBD_NO_KEY_PRESSED, 'no-key');
+            this.OutPort(KEYBOARD_PORT, KBD_NO_KEY_PRESSED & 0xFF, 'no-key');
         } else if (keyCode === 27) {
-            this.pokeMemory(KEYBOARD_POKE, 12, 'ESC key');
+            this.OutPort(KEYBOARD_PORT, 12, 'ESC key');
         } else if (keyCode === 13) {
-            this.pokeMemory(KEYBOARD_POKE, 13, 'ENTER key');
+            this.OutPort(KEYBOARD_PORT, 13, 'ENTER key');
         } else if (keyCode === 37) {
-            this.pokeMemory(KEYBOARD_POKE, 144, 'LEFT arrow');
+            this.OutPort(KEYBOARD_PORT, 144, 'LEFT arrow');
         } else if (keyCode === 38) {
-            this.pokeMemory(KEYBOARD_POKE, 145, 'UP arrow');
+            this.OutPort(KEYBOARD_PORT, 145, 'UP arrow');
         } else if (keyCode === 39) {
-            this.pokeMemory(KEYBOARD_POKE, 146, 'RIGHT arrow');
+            this.OutPort(KEYBOARD_PORT, 146, 'RIGHT arrow');
         } else if (keyCode === 40) {
-            this.pokeMemory(KEYBOARD_POKE, 147, 'DOWN arrow');
+            this.OutPort(KEYBOARD_PORT, 147, 'DOWN arrow');
         } else {
             const sinclairCode = this.unicodeToSinclair(String.fromCharCode(keyCode));
-            this.pokeMemory(KEYBOARD_POKE, sinclairCode, `key ${keyCode} -> "${String.fromCharCode(keyCode)}"`);
+            this.OutPort(KEYBOARD_PORT, sinclairCode, `key ${keyCode} -> "${String.fromCharCode(keyCode)}"`);
         }
     }
 
-    initializeSinclairMemory() {
+    bootShow() {
         // Define stage configuration (duration in ms, handler function)
         // Animation removed from boot sequence - now easter egg only
         this.stageConfig = [
             { duration: 1000, handler: 'displayCharacterGrid' },
             { duration: 1000, handler: 'benchmarkCPU' },
-            { duration: -1, handler: 'showSinclairCopyright' }
+            { duration: 1, handler: 'showSinclairCopyright' },
+            { duration: 1, handler: 'runAssemblerTests' },
+            { duration: -1, handler: 'runZ80CPUTests' }
         ];
 
         // Start the transition chain
@@ -457,7 +479,7 @@ class Simulator {
             this.currentStageTimer = null;
         }
 
-        // Execute stage handler
+        // stage handler
         const handlerFunction = this[stage.handler];
         if (typeof handlerFunction === 'function') {
             const result = handlerFunction.call(this);
@@ -491,6 +513,7 @@ class Simulator {
 
             // Create a temporary CPU for benchmarking
             const benchCPU = new Z80CPU();
+            const benchIomap = new Uint8Array(256);
 
             // Benchmark configuration constants
             const worst_mips = .5; // Worst case MIPS performance
@@ -500,7 +523,7 @@ class Simulator {
 
             const runBenchmark = (instructionCount) => {
                 const startTime = performance.now();
-                const benchResult = benchCPU.execute(benchMemory, instructionCount);
+                const benchResult = benchCPU.executeSteps(benchMemory, benchIomap, instructionCount);
                 const endTime = performance.now();
                 const elapsedTime = (endTime - startTime) / 1000; // seconds
                 return { benchResult, elapsedTime };
@@ -526,6 +549,14 @@ class Simulator {
             userMessage(`CPU Benchmark: ${benchmarkResult.benchResult.instructionsExecuted.toLocaleString()} instructions in ${benchmarkResult.elapsedTime.toFixed(3)}s running "${benchedProgram.replace(/\n/g, '\\n')}" = ${MIPS.toFixed(1)} MIPS`);
         } else {
             userMessageAboutBug('Benchmark assembly failed', assemble.error);
+        }
+    }
+
+    displayTextAtPosition(text, row, col) {
+        // Helper function to display text at specific screen position
+        const addr = SCREEN_START + row * SCREEN_WIDTH + col;
+        for (let i = 0; i < text.length && col + i < SCREEN_WIDTH; i++) {
+            this.memory[addr + i] = this.unicodeToSinclair(text[i]);
         }
     }
 
@@ -642,19 +673,16 @@ class Simulator {
             }
         };
 
-        // Remove existing listeners to avoid duplicates
-        this.screen.removeEventListener('click', this.animationEasterEggHandler);
-        this.screen.removeEventListener('touchstart', this.animationEasterEggHandler);
+        // Remove existing listener to avoid duplicates
+        if (this.animationEasterEggHandler) {
+            this.screen.removeEventListener('pointerdown', this.animationEasterEggHandler);
+        }
 
         // Store handler reference for cleanup
         this.animationEasterEggHandler = handleClick;
 
-        // Add click and touch listeners
-        this.screen.addEventListener('pointerdown', handleClick);
-        this.screen.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            handleClick();
-        });
+    // Add pointer listener
+    this.screen.addEventListener('pointerdown', handleClick);
     }
 
     triggerAnimationEasterEgg() {
@@ -665,6 +693,66 @@ class Simulator {
             this.clearTimer(animationTimer);
             this.showSinclairCopyright();
         }, 3000, false);
+    }
+
+    runAssemblerTests() {
+        try {
+            // Check if assembler_test.js Z80AssemblerTestSuite is available
+            if (typeof Z80AssemblerTestSuite !== 'undefined') {
+                // Capture console.error and redirect to userMessage
+                const originalError = console.error;
+                console.error = (message) => userMessage(`Assembler Test Error: ${message}`);
+                
+                try {
+                    const z80AssemblerTestSuite = new Z80AssemblerTestSuite();
+                    z80AssemblerTestSuite.runAllTests();
+                    
+                    // Report summary to user console
+                    userMessage(`Assembler Tests: ${z80AssemblerTestSuite.passedCount} passed, ${z80AssemblerTestSuite.failedTests.length} failed`);
+                } finally {
+                    console.error = originalError;
+                }
+            } else {
+                userMessage("Assembler tests cannot run - z80_assembler_test.js not loaded");
+            }
+            
+        } catch (error) {
+            userMessageAboutBug('Assembler test error', error.message);
+        }
+    }
+
+    runZ80CPUTests() {
+        try {
+            // Check if Z80CPUTestSuite class is available from z80cpu_test.js
+            if (typeof Z80CPUTestSuite !== 'undefined') {
+                // Capture console.error and preserve detailed error messages
+                const originalError = console.error;
+                console.error = (message) => {
+                    // Pass through detailed error messages without generic prefix
+                    // The test suite already provides structured error information
+                    userMessage(message);
+                };
+                
+                try {
+                    const z80CPUTestSuite = new Z80CPUTestSuite();
+                    const success = z80CPUTestSuite.runAllTests();
+                    
+                    // Report summary to user console
+                    userMessage(`Z80 CPU Tests: ${z80CPUTestSuite.passedCount} passed, ${z80CPUTestSuite.failedTests.length} failed`);
+                } finally {
+                    console.error = originalError;
+                }
+            } else {
+                userMessage("Z80 CPU tests cannot run - z80_cpu_test.js not loaded");
+            }
+            
+        } catch (error) {
+            userMessageAboutBug('Z80 CPU test error', error.message);
+        }
+
+        // Enable easter egg after tests are complete
+        this.easterEggEnabled = true;
+        this.setupAnimationEasterEgg();
     }
 
     toggleSpeed() {
@@ -725,13 +813,17 @@ class Simulator {
             this.updateHardwareDisplay();
             this.updateMIPS();
 
-            // Increment VERT_COUNT on each frame
-            this.memory[VERT_COUNT] = (this.memory[VERT_COUNT] + 1) & 0xFF;
+            // Increment FRAME_COUNT_PORT on each frame
+            const currentCount = this.InPort(FRAME_COUNT_PORT);
+            this.OutPort(FRAME_COUNT_PORT, (currentCount + 1) & 0xFF);
         }, 1000 / FPS, true);
     }
 
     updateScreen() {
-        if (!this.screen) return;
+        if (!this.screen) {
+            userMessageAboutBug('Screen update failed - screen element not found', 'updateScreen() called but screen element missing from DOM');
+            return;
+        }
 
         // Initialize screen elements cache if needed
         if (this.screenElements.length === 0) {
@@ -822,8 +914,10 @@ class Simulator {
             return byte;
             }
         }
-        return 0;
-        }
+    // Fallback: map unknown char to space to avoid injecting NULs
+    // Consider reporting via userMessageAboutBug if this occurs frequently
+    return this.unicodeToSinclair(' ');
+    }
 
         updateHardwareDisplay() {
         const regs = this.cpu.registers;
@@ -835,6 +929,11 @@ class Simulator {
 
         if (this.pcDisplay) {
             this.pcDisplay.textContent = regs.PC.toString(16).padStart(4, '0').toUpperCase();
+        }
+        
+        // Update line highlighting when PC changes in stepping mode
+        if (this.state === STATE.STEPPING) {
+            this.highlightCurrentLine();
         }
         if (this.spDisplay) {
             this.spDisplay.textContent = regs.SP.toString(16).padStart(4, '0').toUpperCase();
@@ -860,6 +959,25 @@ class Simulator {
         if (this.currentInstructionDisplay) {
             const memVal = this.memory[regs.PC];
             this.currentInstructionDisplay.textContent = '0x' + memVal.toString(16).padStart(2, '0').toUpperCase();
+        }
+        if (this.memoryAtPCDisplay) {
+            // Display 4 bytes of memory starting at PC
+            const memoryBytes = [];
+            for (let i = 0; i < 4; i++) {
+                const addr = (regs.PC + i) & 0xFFFF; // Wrap around at 16-bit boundary
+                const byte = this.memory[addr];
+                memoryBytes.push(byte.toString(16).padStart(2, '0').toUpperCase());
+            }
+            this.memoryAtPCDisplay.textContent = memoryBytes.join(' ');
+        }
+        if (this.portsDisplay) {
+            // Display ports 0-3
+            const portValues = [];
+            for (let port = 0; port < 4; port++) {
+                const value = this.ioMap[port];
+                portValues.push(value.toString(16).padStart(2, '0').toUpperCase());
+            }
+            this.portsDisplay.textContent = portValues.join(' ');
         }
         if (this.keyCodeCurrentDisplay) {
             // Show diagonal if keyCodeCurrentReleased is true
@@ -893,6 +1011,9 @@ class Simulator {
     clearAssembly() {
         document.getElementById('assemblyInput').value = '';
         this.clearMagazineListing();
+        this.clearLineHighlight();
+        this.sourceLines = [];
+        this.lineAddresses = [];
         this.setState(STATE.NOT_READY);
         this.updateURL('');
     }
@@ -928,6 +1049,10 @@ class Simulator {
         this.loadAddress = result.loadAddress;
 
         if (result.success) {
+            // Store source lines and line addresses for stepping highlights
+            this.sourceLines = sourceCode.split('\n');
+            this.lineAddresses = result.lineAddresses || [];
+            this.clearLineHighlight(); // Clear any previous highlighting
 
             // Load machine code into memory (without clearing existing memory)
             for (let i = 0; i < result.machineCode.length; i++) {
@@ -939,7 +1064,7 @@ class Simulator {
                 userMessage('Code hot-reloaded - may need Reset to run properly');
                 sinclaude.cpu.set(this.loadAddress);
             } else {
-                sinclaude.cpu.set(this.loadAddress, 0);
+                sinclaude.cpu.set(this.loadAddress, 0xFFFF);
                 this.setState(STATE.FREE_RUNNING);
             }
 
@@ -949,20 +1074,18 @@ class Simulator {
             // Update URL with encoded program
             this.updateURL(sourceCode);
             
-            // Scroll to bottom of page after successful assembly and give focus to execution area
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            
-            // Give focus to the execution section after a brief delay to allow scroll to complete
-            setTimeout(() => {
-                const executionSection = document.querySelector('.execution-section');
-                if (executionSection) {
-                    executionSection.focus();
-                }
-            }, 500); // Wait for scroll animation to complete
-            
-            // Scroll to top of page after successful assembly
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            // Focus execution area to enable keyboard capture UX
+            const executionSection = document.querySelector('.execution-section');
+            if (executionSection) {
+                executionSection.focus();
+                executionSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         } else {
+            // Clear line address data on assembly failure
+            this.sourceLines = [];
+            this.lineAddresses = [];
+            this.clearLineHighlight();
+            
             // Show all errors in machine code window
             let errorText = 'Assembly Errors:\n\n';
             if (result.errors) {
@@ -1071,15 +1194,20 @@ class Simulator {
         switch (newState) {
             case STATE.NOT_READY:
                 this.stopContinuousExecution();
+                this.clearLineHighlight();
                 break;
 
             case STATE.FREE_RUNNING:
                 // Per README: "Any time the state changes to state_running, the CPU is reset and the assembled program is started"
+                this.clearLineHighlight(); // Clear highlighting when running continuously
                 this.startContinuousExecution();
                 break;
 
             case STATE.STEPPING:
                 this.stopContinuousExecution();
+                // Don't clear highlighting in stepping mode - we want to show current line
+                // When entering stepping mode, highlight the current line immediately
+                this.highlightCurrentLine();
                 break;
         }
 
@@ -1136,6 +1264,7 @@ class Simulator {
             this.cpu.registers.PC = this.loadAddress;
         }
         this.instructionCount = 0;
+        this.clearLineHighlight(); // Clear any line highlighting
         this.updateHardwareDisplay();
         // Clear any animation timers during reset
         this.clearNonEssentialTimers();
@@ -1206,9 +1335,9 @@ class Simulator {
 
         const endTime = performance.now() + 1000 / FPS / 2;
         // at 1 mips, 1/60 of a second is 16,000 instructions
-        const batchSize = 10000;
+        const numberOfInstructions = 15991; // closest prime so i doesnt sync with refresh rate
         while (performance.now() < endTime) {
-            const result = this.cpu.execute(this.memory, batchSize, this.cpu.registers);
+            const result = this.cpu.executeSteps(this.memory, this.ioMap, numberOfInstructions, this.cpu.registers);
             this.instructionCount += result.instructionsExecuted;
             if (result.error) {
                 userMessageAboutBug('CPU error during run', `${result.error}`);
@@ -1269,7 +1398,7 @@ class Simulator {
     }
 
     executeOneInstruction() {
-        const result = this.cpu.execute(this.memory, 1, this.cpu.registers);
+        const result = this.cpu.executeSteps(this.memory, this.ioMap, 1, this.cpu.registers);
         this.instructionCount += result.instructionsExecuted;
         this.updateHardwareDisplay();
 
@@ -1282,9 +1411,87 @@ class Simulator {
         // Stay in stepping state as per README specification
     }
 
+    highlightCurrentLine() {
+        if (this.lineAddresses.length === 0) {
+            userMessageAboutBug('Line highlighting failed - no line address mapping', 'highlightCurrentLine() called but lineAddresses array is empty - assembly should have provided line mapping');
+            return;
+        }
+
+        const currentPC = this.cpu.registers.PC;
+        
+        // Find the source line that corresponds to the current PC
+        let targetLine = -1;
+        for (let i = 0; i < this.lineAddresses.length; i++) {
+            if (this.lineAddresses[i] === currentPC) {
+                targetLine = i + 1; // Convert to 1-based line number
+                break;
+            }
+        }
+
+        // If we found a matching line, highlight it
+        if (targetLine > 0 && targetLine !== this.currentHighlightedLine) {
+            this.clearLineHighlight();
+            this.setLineHighlight(targetLine);
+            this.currentHighlightedLine = targetLine;
+        }
+    }
+
+    setLineHighlight(lineNumber) {
+        const textarea = document.getElementById('assemblyInput');
+        if (!textarea) {
+            userMessageAboutBug('Line highlighting failed - assembly textarea not found', 'setLineHighlight() called but assemblyInput element missing from DOM');
+            return;
+        }
+
+        // Split the textarea content into lines
+        const lines = textarea.value.split('\n');
+        if (lineNumber < 1 || lineNumber > lines.length) return;
+
+        // Replace leftmost space with cursor, or add cursor if no leading spaces
+        const targetLineIndex = lineNumber - 1;
+        const originalLine = lines[targetLineIndex];
+        
+        // Simple cursor logic: if first char is space, replace with '>'; if '>', do nothing; else prepend '>'
+        if (originalLine[0] === ' ') {
+            lines[targetLineIndex] = '>' + originalLine.substring(1);
+        } else if (originalLine[0] === '>') {
+            // Do nothing - cursor already there
+        } else {
+            lines[targetLineIndex] = '>' + originalLine;
+        }
+        textarea.value = lines.join('\n');
+
+        // Scroll the highlighted line to about 1/2 of the screen
+        const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight) || 20;
+        const textareaHeight = textarea.clientHeight;
+        const targetScrollTop = (targetLineIndex * lineHeight) - (textareaHeight / 2);
+        textarea.scrollTop = Math.max(0, targetScrollTop);
+    }
+
+    clearLineHighlight() {
+        const textarea = document.getElementById('assemblyInput');
+        if (!textarea) {
+            userMessageAboutBug('Line highlighting clear failed - assembly textarea not found', 'clearLineHighlight() called but assemblyInput element missing from DOM');
+            return;
+        }
+        
+        // Remove all cursor markers (>) from the text and restore original spacing
+        const lines = textarea.value.split('\n');
+        const cleanedLines = lines.map(line => {
+            // Replace any > character with a space to restore original formatting
+            return line.replace(/>/g, ' ');
+        });
+        textarea.value = cleanedLines.join('\n');
+        
+        this.currentHighlightedLine = -1;
+    }
+
     expandElement(elementId) {
         const element = document.getElementById(elementId);
-        if (!element) return;
+        if (!element) {
+            userMessageAboutBug('Element expansion failed - element not found', `expandElement('${elementId}') called but element not found in DOM`);
+            return;
+        }
 
         // Find the expansion handler for this element
         const expandedElements = document.querySelectorAll('.expanded-element');
@@ -1347,7 +1554,10 @@ class Simulator {
 
     restoreElement(elementId) {
         const element = document.getElementById(elementId);
-        if (!element) return;
+        if (!element) {
+            userMessageAboutBug('Element restore failed - element not found', `restoreElement('${elementId}') called but element not found in DOM`);
+            return;
+        }
 
         // Restore original styles
         const originalStyles = JSON.parse(element.dataset.originalStyles || '{}');

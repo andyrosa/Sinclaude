@@ -1,3 +1,100 @@
+/**
+ * Z80 Assembler grammar specification
+ * 
+ * The assembler returns:
+ * - machineCode: Array of bytes representing the assembled program
+ * - loadAddress: The starting address where the program should be loaded
+ * - lineAddresses: Array mapping each source line number to its memory address
+ * 
+ * GRAMMAR SPECIFICATION (EBNF):
+ * 
+ * program = { line } ;
+ * line = [ white_space ] [ statement ] [ comment ] EOL ;
+ * statement = [ code_label ] [ directive | instruction ] | constant_def ;
+ * 
+ * (* Labels *)
+ * code_label = identifier ":" ;
+ * constant_def = identifier white_space "EQU" white_space arithmetic_expression ;
+ * 
+ * (* Comments *)
+ * comment = ";" { any_character } ;
+ * 
+ * (* Directives *)
+ * directive = org_directive | equ_directive | data_directive | end_directive ;
+ * org_directive = "ORG" white_space arithmetic_expression ;
+ * equ_directive = "EQU" white_space arithmetic_expression ;
+ * data_directive = db_directive | dw_directive | ds_directive ;
+ * db_directive = ( "DB" | "DEFB" ) white_space operand_list ;
+ * dw_directive = "DEFW" white_space operand_list ;
+ * ds_directive = "DEFS" white_space arithmetic_expression [ "," white_space arithmetic_expression ] ;
+ * end_directive = "END" ;
+ * 
+ * (* Instructions *)
+ * instruction = mnemonic [ white_space operand_list ] ;
+ * mnemonic = identifier ;
+ * operand_list = operand { "," white_space operand } ;
+ * operand = register | memory_ref | immediate | relative | string_literal ;
+ * 
+ * (* Registers and Register Pairs *)
+ * register = "A" | "B" | "C" | "D" | "E" | "H" | "L" | "BC" | "DE" | "HL" | "SP" | "AF" | "AF'" ;
+ * 
+ * (* Memory References - Indirect Addressing *)
+ * memory_ref = "(" arithmetic_expression ")" | indirect_register ;
+ * indirect_register = "(BC)" | "(DE)" | "(HL)" ;
+ * 
+ * (* Immediate Values *)
+ * immediate = arithmetic_expression ;
+ * relative = arithmetic_expression ;
+ * 
+ * (* Arithmetic Expressions - Parentheses here are ONLY for mathematical grouping *)
+ * arithmetic_expression = term { ( "+" | "-" ) term } ;
+ * term = factor { ( "*" | "/" ) factor } ;
+ * factor = "(" arithmetic_expression ")" | atom ;
+ * atom = number | symbol | character_literal | function_call ;
+ * 
+ * (* Numbers *)
+ * number = decimal | hexadecimal | binary ;
+ * decimal = [ "-" ] digit { digit } ;
+ * hexadecimal = "$" hex_digit { hex_digit } | "0x" hex_digit { hex_digit } | hex_digit { hex_digit } "H" ;
+ * binary = "%" binary_digit { binary_digit } ;
+ * 
+ * (* String and Character Literals *)
+ * character_literal = "'" ( printable_character | escape_sequence ) "'" ;
+ * string_literal = '"' { string_character } '"' ;
+ * string_character = printable_character | escape_sequence ;
+ * escape_sequence = "\" ( "n" | "t" | "r" | "0" | "\" | "'" | '"' ) ;
+ * 
+ * (* Function Calls *)
+ * function_call = "len" "(" symbol ")" | "chr" "(" arithmetic_expression ")" ;
+ * 
+ * (* Symbols and Identifiers *)
+ * symbol = identifier ;
+ * identifier = letter { letter | digit | "_" } ;
+ * 
+ * - Code labels: LOOP:    (require colon)
+ * - Constants:   SIZE EQU 100   (no colon)
+ * 
+ * PARENTHESES USAGE:
+ * - Indirect addressing: LD A, (HL)      ; Load from address in HL
+ * - Memory reference:    LD A, ($8000)   ; Load from address $8000  
+ * - Memory reference:    LD A, (1+2)     ; Load from address 3
+ * - Immediate value:     LD A, (1+2)*3   ; Load immediate value 9
+ * - Math grouping:       LD A, 5+(3*2)   ; Load immediate value 11
+ * 
+ * EXPRESSION EVALUATION:
+ * Operators: + - * / () with standard precedence
+ * Functions: len(symbol) returns string length, chr(n) returns character with ASCII code n
+ * 
+ * ESCAPE SEQUENCES:
+ * \n = newline (10), \t = tab (9), \r = carriage return (13), \0 = null (0)
+ * \\ = backslash (92), \' = single quote (39), \" = double quote (34)
+ * 
+ * EXAMPLES:
+ * HELLO: DB "Hello\nWorld\0"     ; String with newline and null terminator
+ * NEWLINE: EQU '\n'              ; Character literal with escape sequence  
+ * NULLTERM: DB "test", chr(0)    ; String followed by null character
+ * TABCHAR: EQU chr(9)            ; Tab character using chr() function
+ */
 class Z80Assembler {
     // --- Constants for operand patterns ---
     static OPERAND = {
@@ -32,9 +129,9 @@ class Z80Assembler {
      * Assembles Z80 source code into machine code.
      *
      * @param {string} sourceCode The Z80 assembly source code.
-     * @returns {{success: boolean, machineCode?: number[], loadAddress?: number, errors?: {line: number, message: string}[]}}
+     * @returns {{success: boolean, machineCode?: number[], loadAddress?: number, lineAddresses?: number[], errors?: {line: number, message: string}[]}}
      *          An object indicating success or failure. On success, it includes the
-     *          machine code and load address. On failure, it includes an array of errors.
+     *          machine code, load address, and line addresses. On failure, it includes an array of errors.
      */
     assemble(sourceCode) {
         this.sourceLines = sourceCode.split('\n');
@@ -44,6 +141,7 @@ class Z80Assembler {
         this.loadAddress = 0; // Default to address 0
         this.currentAddress = 0; // Default to address 0
         this.parsedLines = [];
+        this.lineAddresses = []; // Track the address for each source line
 
         try {
             // --- First Pass: Parse lines, define symbols, and calculate addresses ---
@@ -65,6 +163,7 @@ class Z80Assembler {
                 success: true,
                 machineCode,
                 loadAddress: this.loadAddress,
+                lineAddresses: this.lineAddresses,
             };
         } catch (e) {
             // This catches fatal errors or explicitly thrown ones.
@@ -87,9 +186,15 @@ class Z80Assembler {
      * - Reports syntax errors and undefined equates.
      */
     _performFirstPass() {
+        // Initialize line addresses array with the same length as source lines
+        this.lineAddresses = new Array(this.sourceLines.length);
+        
         for (let i = 0; i < this.sourceLines.length; i++) {
             const lineNum = i + 1;
             const line = this.sourceLines[i];
+
+            // Record the current address for this line (before processing)
+            this.lineAddresses[i] = this.currentAddress;
 
             const parsed = this._parseLine(line, lineNum);
             if (!parsed) continue; // Skip empty/comment lines
@@ -102,6 +207,8 @@ class Z80Assembler {
                 }
                 this.loadAddress = this._parseValue(parsed.operands[0], lineNum, this.symbols);
                 this.currentAddress = this.loadAddress;
+                // Update the line address for this ORG line to reflect the new address
+                this.lineAddresses[i] = this.currentAddress;
             }
 
             this.parsedLines.push(parsed);
@@ -110,8 +217,9 @@ class Z80Assembler {
             if (parsed.label) {
                 const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
                 if (mnemonic !== 'EQU') {
-                    if (this.symbols[parsed.label.toUpperCase()]) {
+                    if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
                         this._reportError(lineNum, `Duplicate label definition: '${parsed.label}'`);
+                        return; // Stop processing on duplicate label error
                     } else {
                         this.symbols[parsed.label.toUpperCase()] = this.currentAddress;
                     }
@@ -128,8 +236,15 @@ class Z80Assembler {
                     case 'EQU':
                         if (!parsed.label) {
                             this._reportError(lineNum, `EQU directive requires a label.`);
+                        } else if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
+                            this._reportError(lineNum, `Duplicate symbol definition: '${parsed.label}'`);
+                            return; // Stop processing on duplicate symbol error
                         } else {
-                            this.symbols[parsed.label.toUpperCase()] = this._parseValue(parsed.operands[0], lineNum, this.symbols);
+                            const value = this._parseValue(parsed.operands[0], lineNum, this.symbols);
+                            if (isNaN(value)) {
+                                return; // Error already reported, stop processing
+                            }
+                            this.symbols[parsed.label.toUpperCase()] = value;
                         }
                         break;
                     case 'DB':
@@ -179,7 +294,11 @@ class Z80Assembler {
             // Skip directives that don't generate code
             if (!mnemonic || ['ORG', 'EQU', 'END'].includes(mnemonic)) {
                 if (mnemonic === 'ORG') {
-                    this.currentAddress = this._parseValue(parsed.operands[0], parsed.lineNum, this.symbols);
+                    const address = this._parseValue(parsed.operands[0], parsed.lineNum, this.symbols);
+                    if (isNaN(address)) {
+                        return machineCode; // Error already reported, stop assembly
+                    }
+                    this.currentAddress = address;
                 }
                 continue;
             }
@@ -195,7 +314,18 @@ class Z80Assembler {
                     break;
                 case 'DEFS':
                     const size = this._parseValue(parsed.operands[0], parsed.lineNum, this.symbols);
-                    const fill = parsed.operands.length > 1 ? this._parseValue(parsed.operands[1], parsed.lineNum, this.symbols) : 0;
+                    let fill = 0;
+                    if (parsed.operands.length > 1) {
+                        fill = this._parseValue(parsed.operands[1], parsed.lineNum, this.symbols);
+                        if (isNaN(fill)) {
+                            bytes = []; // Error already reported by _parseValue
+                            break;
+                        }
+                    }
+                    if (isNaN(size)) {
+                        bytes = []; // Error already reported by _parseValue
+                        break;
+                    }
                     bytes = Array(size).fill(fill & 0xFF);
                     break;
                 default:
@@ -273,8 +403,21 @@ class Z80Assembler {
                 .map(op => op.trim())
                 .filter(op => op)
                 .map(op => {
-                    const match = op.match(/^__STRING_PLACEHOLDER_(\d+)__$/);
-                    return match ? placeholders[parseInt(match[1], 10)] : op;
+                    // Only restore if it's an exact match (pure string literal)
+                    const exactMatch = op.match(/^__STRING_PLACEHOLDER_(\d+)__$/);
+                    if (exactMatch) {
+                        return placeholders[parseInt(exactMatch[1], 10)];
+                    }
+                    
+                    // If it contains placeholders but isn't an exact match (i.e., it's an expression),
+                    // restore all placeholders in the expression
+                    if (op.includes('__STRING_PLACEHOLDER_')) {
+                        return op.replace(/__STRING_PLACEHOLDER_(\d+)__/g, (match, index) => {
+                            return placeholders[parseInt(index, 10)];
+                        });
+                    }
+                    
+                    return op;
                 });
         } else {
             result.operands = [];
@@ -326,12 +469,14 @@ class Z80Assembler {
                     case Z80Assembler.OPERAND.IMM8:
                     case Z80Assembler.OPERAND.IMM16:
                     case Z80Assembler.OPERAND.RELATIVE:
-                        // These patterns match non-parenthesized operands
-                        return !operand.startsWith('(') || !operand.endsWith(')');
+                        // These patterns match immediate values (not memory references)
+                        // Memory reference: entire operand is (expression) with balanced parens
+                        // Immediate: either no outer parens, or arithmetic with parens for grouping
+                        return !this._isMemoryReference(operand);
                     case Z80Assembler.OPERAND.MEM16:
                     case Z80Assembler.OPERAND.MEM8:
-                        // These patterns match parenthesized operands like (1234)
-                        return operand.startsWith('(') && operand.endsWith(')');
+                        // These patterns match memory references: (expression)
+                        return this._isMemoryReference(operand);
                     case Z80Assembler.OPERAND.STRING:
                         return operand.startsWith('"') && operand.endsWith('"');
                     default:
@@ -364,6 +509,7 @@ class Z80Assembler {
     _generateInstructionBytes(instruction, parsedLine) {
         const bytes = [...instruction.opcodes];
         const symbols = this.symbols;
+        let failed = false;
 
         instruction.operands.forEach((pattern, i) => {
             const operandStr = parsedLine.operands[i];
@@ -371,15 +517,42 @@ class Z80Assembler {
             switch (pattern) {
                 case Z80Assembler.OPERAND.IMM8: {
                     const value = this._parseValue(operandStr, parsedLine.lineNum, symbols);
-                    bytes.push(isNaN(value) ? 0 : (value & 0xFF));
+                    if (isNaN(value)) {
+                        this._reportError(parsedLine.lineNum, `Invalid 8-bit immediate: '${operandStr}'`);
+                        failed = true;
+                    } else if (value < -128 || value > 255) {
+                        this._reportError(parsedLine.lineNum, `8-bit immediate value out of range (-128 to 255): ${value}`);
+                        failed = true;
+                    } else {
+                        bytes.push(value & 0xFF);
+                    }
                     break;
                 }
                 case Z80Assembler.OPERAND.IMM16: {
                     const value = this._parseValue(operandStr, parsedLine.lineNum, symbols);
                     if (isNaN(value)) {
-                        bytes.push(0, 0);
+                        this._reportError(parsedLine.lineNum, `Invalid 16-bit immediate: '${operandStr}'`);
+                        failed = true;
+                    } else if (value < -32768 || value > 65535) {
+                        this._reportError(parsedLine.lineNum, `16-bit immediate value out of range (-32768 to 65535): ${value}`);
+                        failed = true;
                     } else {
                         bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+                    }
+                    break;
+                }
+                case Z80Assembler.OPERAND.MEM8: {
+                    // Extract value from inside parentheses, e.g., "(255)" for I/O port
+                    const portStr = operandStr.slice(1, -1);
+                    const value = this._parseValue(portStr, parsedLine.lineNum, symbols);
+                    if (isNaN(value)) {
+                        this._reportError(parsedLine.lineNum, `Invalid 8-bit port address: '${operandStr}'`);
+                        failed = true;
+                    } else if (value < 0 || value > 255) {
+                        this._reportError(parsedLine.lineNum, `8-bit port address out of range (0-255): ${value}`);
+                        failed = true;
+                    } else {
+                        bytes.push(value & 0xFF);
                     }
                     break;
                 }
@@ -388,7 +561,8 @@ class Z80Assembler {
                     const addrStr = operandStr.slice(1, -1);
                     const value = this._parseValue(addrStr, parsedLine.lineNum, symbols);
                     if (isNaN(value)) {
-                        bytes.push(0, 0);
+                        this._reportError(parsedLine.lineNum, `Invalid 16-bit address: '${operandStr}'`);
+                        failed = true;
                     } else {
                         bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
                     }
@@ -398,17 +572,18 @@ class Z80Assembler {
                     const targetAddr = this._parseValue(operandStr, parsedLine.lineNum, symbols);
                     if (isNaN(targetAddr)) {
                         // Parse failed (undefined symbol already reported)
-                        bytes.push(0); // Push dummy value
+                        this._reportError(parsedLine.lineNum, `Invalid relative address: '${operandStr}'`);
+                        failed = true;
                     } else {
                         // Relative offset is from the address *after* the instruction
                         if (this.currentAddress === undefined) {
                             this._reportError(parsedLine.lineNum, `Internal error: currentAddress undefined during relative jump calculation.`);
-                            bytes.push(0);
+                            failed = true;
                         } else {
                             const offset = targetAddr - (this.currentAddress + instruction.size);
                             if (offset < -128 || offset > 127) {
                                 this._reportError(parsedLine.lineNum, `Relative jump target out of range. Offset is ${offset}.`);
-                                bytes.push(0); // Push a dummy value
+                                failed = true;
                             } else {
                                 bytes.push(offset & 0xFF); // Two's complement representation
                             }
@@ -422,7 +597,7 @@ class Z80Assembler {
             }
         });
 
-        return bytes;
+        return failed ? [] : bytes;
     }
 
 
@@ -467,169 +642,12 @@ class Z80Assembler {
      * @returns {number} The evaluated result.
      */
     _evaluateExpression(expr, symbols, lineNum) {
-        // Remove all spaces
-        expr = expr.replace(/\s+/g, '');
-        
-        // Handle parentheses first (recursive evaluation)
-        // Skip function calls like len(...) - look for parentheses that are not preceded by a letter/underscore
-        while (expr.includes('(')) {
-            // Match parentheses that are not part of function calls (not preceded by word characters)
-            const match = expr.match(/(?<![a-zA-Z_])\(([^()]+)\)/);
-            if (!match) break;
-            
-            const subResult = this._evaluateExpression(match[1], symbols, lineNum);
-            if (isNaN(subResult)) {
-                this._reportError(lineNum, 'Invalid subexpression');
-                return 0;
-            }
-            
-            expr = expr.replace(match[0], subResult.toString());
-        }
-        
-        // Now handle operators in order of precedence: *, / then +, -
-        expr = this._evaluateOperators(expr, ['*', '/'], symbols, lineNum);
-        expr = this._evaluateOperators(expr, ['+', '-'], symbols, lineNum);
-        
-        // Final result should be a single number or symbol
-        return this._parseAtom(expr, symbols, lineNum);
+        // Use pure grammar-based parser - no regex preprocessing needed
+        const parser = new ExpressionParser(expr, [], symbols, lineNum, this);
+        return parser.parseExpression();
     }
     
-    /**
-     * Evaluates operators of the same precedence level from left to right.
-     */
-    _evaluateOperators(expr, operators, symbols, lineNum) {
-        for (const op of operators) {
-            // Check if the operator exists outside of quotes
-            let hasOperatorOutsideQuotes = false;
-            let inSingleQuotes = false;
-            let inDoubleQuotes = false;
-            
-            for (let i = 0; i < expr.length; i++) {
-                const char = expr[i];
-                if (char === "'" && !inDoubleQuotes) {
-                    inSingleQuotes = !inSingleQuotes;
-                } else if (char === '"' && !inSingleQuotes) {
-                    inDoubleQuotes = !inDoubleQuotes;
-                } else if (char === op && !inSingleQuotes && !inDoubleQuotes) {
-                    hasOperatorOutsideQuotes = true;
-                    break;
-                }
-            }
-            
-            if (!hasOperatorOutsideQuotes) continue; // Skip this operator if it's only inside quotes
-            
-            while (expr.includes(op)) {
-                const regex = new RegExp(`([^+\\-*/]+)\\${op}([^+\\-*/]+)`);
-                const match = expr.match(regex);
-                if (!match) break;
-                
-                const left = this._parseAtom(match[1], symbols, lineNum);
-                const right = this._parseAtom(match[2], symbols, lineNum);
-                
-                if (isNaN(left) || isNaN(right)) {
-                    this._reportError(lineNum, 'Invalid operands in expression');
-                    return expr;
-                }
-                
-                let result;
-                switch (op) {
-                    case '+': result = left + right; break;
-                    case '-': result = left - right; break;
-                    case '*': result = left * right; break;
-                    case '/': 
-                        if (right === 0) {
-                            this._reportError(lineNum, 'Division by zero in expression');
-                            result = 0;
-                        } else {
-                            result = Math.floor(left / right);
-                        }
-                        break;
-                    default: 
-                        this._reportError(lineNum, `Unknown operator: ${op}`);
-                        return expr;
-                }
-                
-                expr = expr.replace(match[0], result.toString());
-            }
-        }
-        return expr;
-    }
     
-    /**
-     * Consolidated number parsing logic to eliminate duplication.
-     * Handles decimal, hex ($, 0x, h), binary (%), and symbol lookup.
-     */
-    _parseNumber(numberStr, symbols, lineNum, errorMessagePrefix = 'Unknown symbol') {
-        const trimmed = numberStr.trim();
-        const upper = trimmed.toUpperCase();
-        
-        // Character literals (single quoted)
-        if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-            if (trimmed.length === 3) {
-                // Single character: 'A', '[', etc.
-                return trimmed.charCodeAt(1);
-            } else if (trimmed.length === 2) {
-                // Empty quotes: ''
-                this._reportError(lineNum, `Empty character literal: '${trimmed}'`);
-                return NaN;
-            } else if (trimmed.length > 3) {
-                // Multiple characters: 'AB'
-                this._reportError(lineNum, `Character literal can only contain one character: '${trimmed}'`);
-                return NaN;
-            } else {
-                // Unclosed quote: '
-                this._reportError(lineNum, `Malformed character literal: '${trimmed}'`);
-                return NaN;
-            }
-        }
-        
-        // Length function: len(symbol)
-        if (trimmed.startsWith('len(') && trimmed.endsWith(')')) {
-            const symbolName = trimmed.slice(4, -1).trim().toUpperCase();
-            if (symbolName in this.dbLengths) {
-                return this.dbLengths[symbolName];
-            }
-            this._reportError(lineNum, `len() function: symbol '${symbolName}' not found or not a DB statement`);
-            return NaN;
-        }
-        
-        // Symbol lookup
-        if (upper in symbols) {
-            return symbols[upper];
-        }
-        
-        // Decimal numbers (including negative)
-        if (/^-?[0-9]+$/.test(trimmed)) {
-            return parseInt(trimmed, 10);
-        }
-        
-        // Hex formats
-        if (upper.startsWith('$')) {
-            return parseInt(trimmed.substring(1), 16);
-        }
-        if (upper.startsWith('0X')) {
-            return parseInt(trimmed.substring(2), 16);
-        }
-        if (upper.endsWith('H')) {
-            return parseInt(trimmed.slice(0, -1), 16);
-        }
-        
-        // Binary format
-        if (trimmed.startsWith('%')) {
-            return parseInt(trimmed.substring(1), 2);
-        }
-        
-        // Unknown format
-        this._reportError(lineNum, `${errorMessagePrefix}: '${trimmed}'`);
-        return NaN;
-    }
-
-    /**
-     * Parses a single atom (number, hex, binary, or symbol).
-     */
-    _parseAtom(atom, symbols, lineNum) {
-        return this._parseNumber(atom, symbols, lineNum, 'Unknown symbol');
-    }
 
     // --- Helper methods for data directives (DB, DW, DS) ---
 
@@ -652,35 +670,49 @@ class Z80Assembler {
 
     _generateDataBytes(parsed) {
         let bytes = [];
+        let failed = false;
         const symbols = this.symbols;
         for (const op of parsed.operands) {
             if (op.startsWith('"') && op.endsWith('"')) {
-                const str = op.slice(1, -1);
-                for (let i = 0; i < str.length; i++) {
-                    bytes.push(str.charCodeAt(i));
+                const rawStr = op.slice(1, -1);
+                const processedStr = this._processEscapeSequences(rawStr);
+                for (let i = 0; i < processedStr.length; i++) {
+                    bytes.push(processedStr.charCodeAt(i));
                 }
             } else {
-                bytes.push(this._parseValue(op, parsed.lineNum, symbols) & 0xFF);
+                const val = this._parseValue(op, parsed.lineNum, symbols);
+                if (isNaN(val)) {
+                    this._reportError(parsed.lineNum, `Invalid byte value: '${op}'`);
+                    failed = true;
+                } else {
+                    bytes.push(val & 0xFF);
+                }
             }
         }
-        return bytes;
+        return failed ? [] : bytes;
     }
 
     _generateDataWords(parsed) {
         let bytes = [];
+        let failed = false;
         const symbols = this.symbols;
         for (const op of parsed.operands) {
              const value = this._parseValue(op, parsed.lineNum, symbols);
-             bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+             if (isNaN(value)) {
+                 this._reportError(parsed.lineNum, `Invalid word value: '${op}'`);
+                 failed = true;
+             } else {
+                 bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+             }
         }
-        return bytes;
+        return failed ? [] : bytes;
     }
 
     /**
      * Populates the instruction map with Z80 instruction definitions.
      */
     _buildInstructionSet() {
-        const { IMM8, IMM16, MEM16, RELATIVE } = Z80Assembler.OPERAND;
+        const { IMM8, IMM16, MEM8, MEM16, RELATIVE } = Z80Assembler.OPERAND;
         const definitions = [
             // Basic instructions
             { m: 'NOP', ops: [], opc: [0x00] },
@@ -723,7 +755,7 @@ class Z80Assembler {
             { m: 'LD', ops: ['L', 'A'], opc: [0x6F] },
             { m: 'LD', ops: ['A', 'D'], opc: [0x7A] },
             { m: 'LD', ops: ['D', 'A'], opc: [0x57] },
-            { m: 'LD', ops: ['DE', 'HL'], opc: [0xEB] },
+            // NOTE: 0xEB is EX DE,HL, not LD DE,HL. Keep EX mapping only.
             
             // Exchange instructions
             { m: 'EX', ops: ['AF', "AF'"], opc: [0x08] },
@@ -797,8 +829,8 @@ class Z80Assembler {
             { m: 'ADD', ops: ['A', IMM8], opc: [0xC6] },
             { m: 'ADC', ops: ['A', 'H'], opc: [0x8C] },
             { m: 'ADC', ops: ['A', IMM8], opc: [0xCE] },
-            { m: 'SUB', ops: ['A', 'A'], opc: [0x97] }, // SUB A is shorthand for SUB A, A
-            { m: 'SUB', ops: ['A', IMM8], opc: [0xD6] },
+            { m: 'SUB', ops: ['A'], opc: [0x97] },
+            { m: 'SUB', ops: [IMM8], opc: [0xD6] },
             { m: 'SUB', ops: ['B'], opc: [0x90] },
             { m: 'SUB', ops: ['C'], opc: [0x91] },
             { m: 'SUB', ops: ['D'], opc: [0x92] },
@@ -853,6 +885,10 @@ class Z80Assembler {
             { m: 'POP', ops: ['HL'], opc: [0xE1] },
             { m: 'POP', ops: ['AF'], opc: [0xF1] },
             
+            // I/O operations
+            { m: 'IN', ops: ['A', MEM8], opc: [0xDB] },
+            { m: 'OUT', ops: [MEM8, 'A'], opc: [0xD3] },
+            
             // Shift and rotate instructions
             { m: 'SLA', ops: ['A'], opc: [0xCB, 0x27] },
             { m: 'SLA', ops: ['B'], opc: [0xCB, 0x20] },
@@ -892,9 +928,6 @@ class Z80Assembler {
             { m: 'BIT', ops: ['7', 'A'], opc: [0xCB, 0x7F] },
             { m: 'BIT', ops: ['7', 'E'], opc: [0xCB, 0x7B] },
             { m: 'BIT', ops: ['7', 'D'], opc: [0xCB, 0x7A] },
-            
-            // NEG instruction
-            { m: 'NEG', ops: [], opc: [0xED, 0x44] },
         ];
 
         definitions.forEach(def => {
@@ -907,6 +940,80 @@ class Z80Assembler {
                 opcodes: def.opc
             });
         });
+    }
+
+    /**
+     * Processes escape sequences in a string, converting them to their ASCII values.
+     * @param {string} str - The string containing potential escape sequences.
+     * @returns {string} The string with escape sequences converted to actual characters.
+     */
+    _processEscapeSequences(str) {
+        let result = '';
+        let i = 0;
+        while (i < str.length) {
+            if (str[i] === '\\' && i + 1 < str.length) {
+                const escapeChar = str[i + 1];
+                switch (escapeChar) {
+                    case 'n': result += '\n'; break;      // newline (10)
+                    case 't': result += '\t'; break;      // tab (9)
+                    case 'r': result += '\r'; break;      // carriage return (13)
+                    case '0': result += '\0'; break;      // null (0)
+                    case '\\': result += '\\'; break;     // backslash (92)
+                    case "'": result += "'"; break;       // single quote (39)
+                    case '"': result += '"'; break;       // double quote (34)
+                    default:
+                        // Unknown escape sequence, keep the backslash and character
+                        result += '\\' + escapeChar;
+                        break;
+                }
+                i += 2; // Skip both the backslash and the escape character
+            } else {
+                result += str[i];
+                i++;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Determines if an operand represents a memory reference vs immediate value with parentheses.
+     * Memory reference: (expression) - entire operand wrapped in balanced parentheses
+     * Immediate: expressions that may contain parentheses for mathematical grouping
+     * Examples:
+     *   (1+2)     -> memory reference (load from address 3)
+     *   (1)+(2)   -> immediate value (arithmetic: 1+2=3)
+     *   5+(3*2)   -> immediate value (arithmetic: 5+6=11)
+     *   ($8000)   -> memory reference (load from address $8000)
+     * @param {string} operand - The operand to analyze
+     * @returns {boolean} True if operand is a memory reference, false if immediate
+     */
+    _isMemoryReference(operand) {
+        if (!operand.startsWith('(') || !operand.endsWith(')')) {
+            return false;
+        }
+        
+        // Check if the entire operand is wrapped in balanced parentheses
+        let depth = 0;
+        let firstOpenFound = false;
+        
+        for (let i = 0; i < operand.length; i++) {
+            if (operand[i] === '(') {
+                depth++;
+                if (!firstOpenFound) {
+                    firstOpenFound = true;
+                }
+            } else if (operand[i] === ')') {
+                depth--;
+                // If we close the first opening paren before the end, it's not a pure memory ref
+                if (firstOpenFound && depth === 0 && i < operand.length - 1) {
+                    return false;
+                }
+            }
+        }
+        
+        // Memory reference: entire operand is wrapped in parentheses
+        // The first '(' should only be closed by the last ')'
+        return depth === 0 && operand.startsWith('(') && operand.endsWith(')');
     }
 
     /**
@@ -976,7 +1083,388 @@ class Z80Assembler {
         return output;
     }
 }
+
+/**
+ * Recursive descent parser for Z80 assembly expressions
+ * Grammar:
+ *   Expression := Term (('+'|'-') Term)*
+ *   Term := Factor (('*'|'/') Factor)*
+ *   Factor := Number | Symbol | '(' Expression ')' | '-' Factor | FunctionCall
+ *   FunctionCall := Identifier '(' Expression ')'
+ */
+class ExpressionParser {
+    constructor(expr, literals, symbols, lineNum, assembler) {
+        this.expr = expr;
+        this.literals = literals;
+        this.symbols = symbols;
+        this.lineNum = lineNum;
+        this.assembler = assembler;
+        this.pos = 0;
+    }
+
+    // Get current character
+    peek() {
+        return this.pos < this.expr.length ? this.expr[this.pos] : '';
+    }
+
+    // Advance position and return current character
+    next() {
+        return this.pos < this.expr.length ? this.expr[this.pos++] : '';
+    }
+
+    // Skip whitespace
+    skipWhitespace() {
+        while (this.peek() === ' ' || this.peek() === '\t' || this.peek() === '\n' || this.peek() === '\r') {
+            this.next();
+        }
+    }
+
+    // Parse a complete expression
+    parseExpression() {
+        try {
+            const result = this.parseAddSubtract();
+            if (this.pos < this.expr.length) {
+                this.error(`Unexpected character '${this.peek()}' at position ${this.pos}`);
+                return NaN;
+            }
+            return result;
+        } catch (e) {
+            this.error(e.message);
+            return NaN;
+        }
+    }
+
+    // Parse addition and subtraction (lowest precedence)
+    parseAddSubtract() {
+        this.skipWhitespace();
+        let left = this.parseMultiplyDivide();
+        
+        this.skipWhitespace();
+        while (this.peek() === '+' || this.peek() === '-') {
+            const op = this.next();
+            this.skipWhitespace();
+            const right = this.parseMultiplyDivide();
+            
+            if (isNaN(left) || isNaN(right)) {
+                throw new Error(`Invalid operands in expression`);
+            }
+            
+            if (op === '+') {
+                left = left + right;
+            } else {
+                left = left - right;
+            }
+            this.skipWhitespace();
+        }
+        
+        return left;
+    }
+
+    // Parse multiplication and division (higher precedence)
+    parseMultiplyDivide() {
+        let left = this.parseFactor();
+        
+        this.skipWhitespace();
+        while (this.peek() === '*' || this.peek() === '/') {
+            const op = this.next();
+            this.skipWhitespace();
+            const right = this.parseFactor();
+            
+            if (isNaN(left) || isNaN(right)) {
+                throw new Error(`Invalid operands in expression`);
+            }
+            
+            if (op === '*') {
+                left = left * right;
+            } else {
+                if (right === 0) {
+                    throw new Error('Division by zero');
+                }
+                left = Math.floor(left / right);
+            }
+            this.skipWhitespace();
+        }
+        
+        return left;
+    }
+
+    // Parse factors (highest precedence)
+    parseFactor() {
+        this.skipWhitespace();
+        
+        // Handle unary minus
+        if (this.peek() === '-') {
+            this.next();
+            const factor = this.parseFactor();
+            if (isNaN(factor)) {
+                throw new Error('Invalid operand after unary minus');
+            }
+            return -factor;
+        }
+        
+        // Handle parentheses
+        if (this.peek() === '(') {
+            this.next(); // consume '('
+            this.skipWhitespace();
+            const result = this.parseAddSubtract();
+            this.skipWhitespace();
+            if (this.peek() !== ')') {
+                throw new Error(`Missing closing parenthesis, found '${this.peek()}' at position ${this.pos}`);
+            }
+            this.next(); // consume ')'
+            return result;
+        }
+        
+        // Handle function calls and identifiers
+        if (this.isIdentifierStart(this.peek())) {
+            return this.parseIdentifierOrFunction();
+        }
+        
+        // Handle numbers
+        if (this.isDigit(this.peek()) || this.peek() === '$' || this.peek() === '%' || this.peek() === '0') {
+            return this.parseNumber();
+        }
+        
+        // Handle character literals
+        if (this.peek() === "'") {
+            this.next(); // consume opening '
+            if (this.peek() === "'") {
+                throw new Error('Empty character literal');
+            }
+            
+            let charContent = '';
+            
+            // Handle escape sequence
+            if (this.peek() === '\\') {
+                this.next(); // consume backslash
+                const escapeChar = this.next(); // get escape character
+                if (escapeChar === '') {
+                    throw new Error('Unterminated escape sequence in character literal');
+                }
+                charContent = '\\' + escapeChar;
+            } else {
+                charContent = this.next(); // get regular character
+            }
+            
+            if (this.peek() !== "'") {
+                throw new Error('Unterminated character literal');
+            }
+            this.next(); // consume closing '
+            
+            // Process escape sequences and get the resulting character
+            const processedChar = this.assembler._processEscapeSequences(charContent);
+            if (processedChar.length !== 1) {
+                throw new Error('Character literals must resolve to exactly one character');
+            }
+            return processedChar.charCodeAt(0);
+        }
+        
+        // Handle string literals (not allowed in arithmetic expressions)
+        if (this.peek() === '"') {
+            throw new Error('String literals not allowed in arithmetic expressions');
+        }
+        
+        throw new Error(`Unexpected character '${this.peek()}'`);
+    }
+
+    // Parse identifier or function call
+    parseIdentifierOrFunction() {
+        let identifier = '';
+        while (this.isIdentifierChar(this.peek())) {
+            identifier += this.next();
+        }
+        
+        // Check if it's a function call
+        if (this.peek() === '(') {
+            this.next(); // consume '('
+            
+            if (identifier.toLowerCase() === 'len') {
+                // For len(), we need the symbol name, not its value
+                const symbolName = this.parseSymbolName();
+                if (this.peek() !== ')') {
+                    throw new Error('Missing closing parenthesis in function call');
+                }
+                this.next(); // consume ')'
+                
+                // Handle len() function
+                return this.handleLenFunction(symbolName);
+            } else if (identifier.toLowerCase() === 'chr') {
+                // For chr(), we need to evaluate the expression
+                this.skipWhitespace();
+                const charCode = this.parseAddSubtract();
+                this.skipWhitespace();
+                if (this.peek() !== ')') {
+                    throw new Error('Missing closing parenthesis in chr() function call');
+                }
+                this.next(); // consume ')'
+                
+                // Handle chr() function
+                return this.handleChrFunction(charCode);
+            } else {
+                throw new Error(`Unknown function: ${identifier}`);
+            }
+        }
+        
+        // Regular symbol lookup
+        return this.lookupSymbol(identifier);
+    }
+
+    // Parse symbol name for function arguments (don't evaluate, just return name)
+    parseSymbolName() {
+        if (!this.isIdentifierStart(this.peek())) {
+            throw new Error('Expected symbol name');
+        }
+        
+        let symbolName = '';
+        while (this.isIdentifierChar(this.peek())) {
+            symbolName += this.next();
+        }
+        
+        return symbolName;
+    }
+
+    // Handle len() function
+    handleLenFunction(symbolName) {
+        if (typeof symbolName !== 'string') {
+            throw new Error('len() function requires a symbol name');
+        }
+        
+        const upperName = symbolName.toUpperCase();
+        
+        // Check if it's in the DB lengths dictionary
+        if (upperName in this.assembler.dbLengths) {
+            return this.assembler.dbLengths[upperName];
+        }
+        
+        // Check if symbol exists at all
+        const symbol = this.symbols[upperName];
+        if (!symbol) {
+            throw new Error(`Symbol '${symbolName}' not found`);
+        }
+        
+        throw new Error(`Symbol '${symbolName}' is not a DB statement`);
+    }
+
+    // Handle chr() function
+    handleChrFunction(charCode) {
+        if (isNaN(charCode)) {
+            throw new Error('chr() function requires a numeric argument');
+        }
+        
+        // Ensure the character code is within valid ASCII range
+        if (charCode < 0 || charCode > 255) {
+            throw new Error(`chr() function argument out of range (0-255): ${charCode}`);
+        }
+        
+        return Math.floor(charCode);
+    }
+
+    // Look up symbol value
+    lookupSymbol(identifier) {
+        const upperName = identifier.toUpperCase();
+        
+        
+        // Regular symbol lookup
+        const symbol = this.symbols[upperName];
+        if (symbol !== undefined) {
+            return symbol;
+        }
+        
+        throw new Error(`Unknown symbol: '${identifier}'`);
+    }
+
+    // Parse numbers (decimal, hex, binary)
+    parseNumber() {
+        let numStr = '';
+        let base = 10;
+        
+        // Handle hex prefix $
+        if (this.peek() === '$') {
+            this.next();
+            base = 16;
+            while (this.isHexDigit(this.peek())) {
+                numStr += this.next();
+            }
+        }
+        // Handle hex prefix 0x
+        else if (this.peek() === '0' && this.pos + 1 < this.expr.length && this.expr[this.pos + 1].toLowerCase() === 'x') {
+            this.next(); // consume '0'
+            this.next(); // consume 'x'
+            base = 16;
+            while (this.isHexDigit(this.peek())) {
+                numStr += this.next();
+            }
+        }
+        // Handle binary prefix %
+        else if (this.peek() === '%') {
+            this.next();
+            base = 2;
+            while (this.peek() === '0' || this.peek() === '1') {
+                numStr += this.next();
+            }
+        }
+        // Handle decimal or hex suffix
+        else {
+            while (this.isAlphaNum(this.peek())) {
+                numStr += this.next();
+            }
+            
+            // Check for hex suffix H
+            if (numStr.toUpperCase().endsWith('H')) {
+                base = 16;
+                numStr = numStr.slice(0, -1);
+            }
+        }
+        
+        if (numStr === '') {
+            throw new Error('Invalid number format');
+        }
+        
+        const result = parseInt(numStr, base);
+        if (isNaN(result)) {
+            throw new Error(`Invalid number: ${numStr}`);
+        }
+        
+        return result;
+    }
+
+    // Helper functions
+    isDigit(c) {
+        return c >= '0' && c <= '9';
+    }
+    
+    isHexDigit(c) {
+        return this.isDigit(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+    }
+    
+    isAlpha(c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+    
+    isAlphaNum(c) {
+        return this.isAlpha(c) || this.isDigit(c);
+    }
+    
+    isIdentifierStart(c) {
+        return this.isAlpha(c) || c === '_';
+    }
+    
+    isIdentifierChar(c) {
+        return this.isAlphaNum(c) || c === '_';
+    }
+    
+    // Report error through assembler
+    error(message) {
+        this.assembler._reportError(this.lineNum, message);
+    }
+}
+
 // Export for Node.js if running in Node environment
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Z80Assembler;
+}
+
+// Also make available as global for browser use
+if (typeof window !== "undefined") {
+    window.Z80Assembler = Z80Assembler;
 }

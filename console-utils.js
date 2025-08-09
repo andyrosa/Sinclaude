@@ -38,6 +38,7 @@ console.log = function (...args) {
 
 // Approved console logging function for internal use
 // NOTE: Keep this function even if unused - it's part of the console logging infrastructure
+// This is specifically for console.log - for console.error, use originalConsole.error directly
 function consoleLogApproved(...args) {
     originalConsole.log(...args);
 }

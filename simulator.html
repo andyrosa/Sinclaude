@@ -7,7 +7,7 @@
     <title>Sinclaude Sinclair Simulator</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Load constants first so they're available everywhere -->
-    <script src="constants.js"></script>
+    <script src="constants.js" onerror="handleScriptError('constants.js')"></script>
 </head>
 
 <body>
@@ -91,6 +91,8 @@
                     <div>BC: <span id="regBC">-</span></div>
                     <div>DE: <span id="regDE">-</span></div>
                     <div>HL: <span id="regHL">-</span></div>
+                    <div>Mem@PC: <span id="memoryAtPC">-</span></div>
+                    <div>Ports: <span id="portsDisplay">-</span></div>
                     <div>Key: <span id="keyCodeCurrent">-</span></div>
                     <div>MIPS: <span id="mips">-</span></div>
                     <div>Refresh: <span id="refreshRate">-</span>Hz</div>
@@ -100,6 +102,12 @@
     </div>
 
     <script>
+        // Handle script loading errors
+        function handleScriptError(scriptName) {
+            console.error(`Failed to load script: ${scriptName}`);
+            alert(`Error: Failed to load required script ${scriptName}. The simulator may not work correctly.`);
+        }
+
         // Constants
         const LOCAL_HINT = "git";
         
@@ -200,19 +208,59 @@
             var cacheBust = (typeof BUILD_VERSION_BY_YAML !== 'undefined' && BUILD_VERSION_BY_YAML.buildDate) ? BUILD_VERSION_BY_YAML.buildDate : Date.now();
             var scripts = [
                 "console-utils.js",
-                "assembler.js",
-                "z80cpu.js",
+                "z80_assembler.js",
+                "z80_cpu_emulator.js",
+                "z80_assembler_test.js",
+                "z80_cpu_emulator_test.js",
                 "default_asm.js",
                 "benchmark_asm.js",
                 "space_invader_asm.js",
-                "simulator.js",
-                "initialization.js"
+                "simulator.js"
+                // Note: initialization.js is loaded separately after all other scripts
             ];
-            scripts.forEach(function (src) {
+            
+            var scriptIndex = 0;
+            
+            function loadNextScript() {
+                if (scriptIndex >= scripts.length) {
+                    // All scripts loaded, now load initialization.js
+                    loadInitializationScript();
+                    return;
+                }
+                
+                var src = scripts[scriptIndex];
                 var script = document.createElement('script');
                 script.src = src + '?cb=' + cacheBust;
+                script.onload = function() {
+                    scriptIndex++;
+                    loadNextScript();
+                };
+                script.onerror = function() {
+                    if (typeof userMessageAboutBug === 'function') {
+                        userMessageAboutBug(`Failed to load script: ${src}`, `Script loading error for ${src}`);
+                    } else {
+                        console.error(`Failed to load script: ${src}`);
+                        alert(`Error: Failed to load required script ${src}. The simulator may not work correctly.`);
+                    }
+                    // Continue loading even if one script fails
+                    scriptIndex++;
+                    loadNextScript();
+                };
                 document.body.appendChild(script);
-            });
+            }
+            
+            function loadInitializationScript() {
+                var script = document.createElement('script');
+                script.src = 'initialization.js?cb=' + cacheBust;
+                script.onerror = function() {
+                    console.error('Failed to load initialization.js');
+                    alert('Error: Failed to load initialization script. The simulator will not start.');
+                };
+                document.body.appendChild(script);
+            }
+            
+            // Start loading scripts sequentially
+            loadNextScript();
             
             // HACK: Visual ID for when this is being run locally by developer
             if (window.location.pathname.toLowerCase().includes(LOCAL_HINT)) {
