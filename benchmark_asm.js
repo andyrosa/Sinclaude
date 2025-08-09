@@ -39,9 +39,10 @@ print_hex_a_at_de:
 ; increments DE; clobbers af
 print_hex_a_nibble_at_de:
     add  a, '0'
-    cp   ':'
+    cp   '9'+1
     jr   c, print_hex_a_nibble_at_de_print
     add  a, 7               ; 'A'..'F'
+
 print_hex_a_nibble_at_de_print:
     ld   (de), a
     inc  de

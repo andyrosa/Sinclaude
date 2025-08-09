@@ -8,6 +8,15 @@ window.addEventListener('load', () => {
         console.error('Z80Assembler class not found!');
         return;
     }
+    
+    // Check for test suites (non-critical)
+    if (typeof Z80AssemblerTestSuite === 'undefined') {
+        console.warn('Z80AssemblerTestSuite not loaded - assembler tests will be skipped');
+    }
+    if (typeof Z80CPUTestSuite === 'undefined') {
+        console.warn('Z80CPUTestSuite not loaded - CPU tests will be skipped');
+    }
+    
     window.sinclaude = new Simulator();
 
     // Load assembly: from URL if present, otherwise default
