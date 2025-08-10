@@ -6,6 +6,8 @@ const FRAME_COUNT_PORT = 0;
 const KEYBOARD_PORT = 1;
 const KBD_NO_KEY_PRESSED = -1;
 
+const pc_pointer = '*';//too fat '🢂';
+
 class Simulator {
     constructor() {
         this.assembler = new Z80Assembler();
@@ -27,9 +29,12 @@ class Simulator {
         this.easterEggEnabled = false;
 
         // Line highlighting for stepping
-        this.sourceLines = [];
-        this.lineAddresses = [];
-        this.currentHighlightedLine = -1;
+        this.instructionDetails = [];
+        this.highlightedPC = null;
+        this.lastPC= null;
+        
+        // Magazine listing display format
+        this.magazineListingHexMode = false;
 
         // Screen optimization tracking
         this.lastScreenState = new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT);
@@ -94,10 +99,10 @@ class Simulator {
         this.flagCDisplay = document.getElementById('flagC');
         this.flagZDisplay = document.getElementById('flagZ');
         this.currentInstructionDisplay = document.getElementById('currentInstruction');
-        this.memoryAtPCDisplay = document.getElementById('memoryAtPC');
-        this.portsDisplay = document.getElementById('portsDisplay');
-        this.mipsDisplay = document.getElementById('mips');
         this.refreshRateDisplay = document.getElementById('refreshRate');
+        this.mipsDisplay = document.getElementById('mips');
+        this.RAMatPCDisplay = document.getElementById('RAMatPC');
+        this.portsDisplay = document.getElementById('ports');
 
         // Generate program buttons and key inputs
         this.createGameButtons();
@@ -105,6 +110,9 @@ class Simulator {
         // Initialize edit toggle text by triggering the two-state function
         toggleButtonEdit();
         toggleButtonEdit();
+        
+        // Setup magazine listing double-click toggle
+        this.setupMagazineListingToggle();
         
         // Setup touch hints for touch-enabled devices
         this.setupTouchHints();
@@ -379,6 +387,15 @@ class Simulator {
             const touchHints = document.querySelectorAll('.touch-hint');
             touchHints.forEach(hint => {
                 hint.style.display = 'block';
+            });
+        }
+    }
+
+    setupMagazineListingToggle() {
+        const machineCodeDiv = document.getElementById('machineCode');
+        if (machineCodeDiv) {
+            machineCodeDiv.addEventListener('dblclick', () => {
+                this.toggleMagazineListingFormat();
             });
         }
     }
@@ -919,7 +936,7 @@ class Simulator {
     return this.unicodeToSinclair(' ');
     }
 
-        updateHardwareDisplay() {
+    updateHardwareDisplay() {
         const regs = this.cpu.registers;
 
         if (!regs) {
@@ -929,11 +946,6 @@ class Simulator {
 
         if (this.pcDisplay) {
             this.pcDisplay.textContent = regs.PC.toString(16).padStart(4, '0').toUpperCase();
-        }
-        
-        // Update line highlighting when PC changes in stepping mode
-        if (this.state === STATE.STEPPING) {
-            this.highlightCurrentLine();
         }
         if (this.spDisplay) {
             this.spDisplay.textContent = regs.SP.toString(16).padStart(4, '0').toUpperCase();
@@ -957,18 +969,13 @@ class Simulator {
             this.flagZDisplay.textContent = regs.F.Z ? '1' : '0';
         }
         if (this.currentInstructionDisplay) {
-            const memVal = this.memory[regs.PC];
-            this.currentInstructionDisplay.textContent = '0x' + memVal.toString(16).padStart(2, '0').toUpperCase();
-        }
-        if (this.memoryAtPCDisplay) {
-            // Display 4 bytes of memory starting at PC
-            const memoryBytes = [];
-            for (let i = 0; i < 4; i++) {
-                const addr = (regs.PC + i) & 0xFFFF; // Wrap around at 16-bit boundary
-                const byte = this.memory[addr];
-                memoryBytes.push(byte.toString(16).padStart(2, '0').toUpperCase());
+            // Show 3 bytes at PC as hex, e.g. 3E4242H
+            const bytes = [];
+            for (let i = 0; i < 3; i++) {
+                const addr = (regs.PC + i) & 0xFFFF;
+                bytes.push(this.memory[addr].toString(16).padStart(2, '0').toUpperCase());
             }
-            this.memoryAtPCDisplay.textContent = memoryBytes.join(' ');
+            this.currentInstructionDisplay.textContent = bytes.join('') + "H";
         }
         if (this.portsDisplay) {
             // Display ports 0-3
@@ -998,6 +1005,15 @@ class Simulator {
         if (this.refreshRateDisplay) {
             this.refreshRateDisplay.textContent = Math.round(this.refreshRate);
         }
+        if (this.lastPC == null || regs.PC != this.lastPC) {
+            this.lastPC = regs.PC;
+            if (this.lastPC !== this.highlightedPC && this.highlightedPC !== null) {
+                this.clearHighlight();
+            }
+            if (this.state === STATE.STEPPING) {
+                this.setHighlight();
+            }
+        }
     }
 
     clearMagazineListing() {
@@ -1011,9 +1027,7 @@ class Simulator {
     clearAssembly() {
         document.getElementById('assemblyInput').value = '';
         this.clearMagazineListing();
-        this.clearLineHighlight();
-        this.sourceLines = [];
-        this.lineAddresses = [];
+        this.instructionDetails = [];
         this.setState(STATE.NOT_READY);
         this.updateURL('');
     }
@@ -1040,19 +1054,67 @@ class Simulator {
         this.loadAssemblyCode(typeof SPACE_INVADER_ASM !== 'undefined' ? SPACE_INVADER_ASM : null);
     }
 
+    // Update assembly display to show hex addresses and opcodes when in stepping mode
+    updateAssemblyDisplayForStepping() {
+        
+        const assemblyInput = document.getElementById('assemblyInput');
+        const currentCode = assemblyInput.value;
+        const lines = currentCode.split('\n');
+        
+        const linesWithAddresses = lines.map((line, index) => {
+            // Check if we have instruction details for this line from the assembler
+            const details = this.instructionDetails[index];
+            const hexAddr = details.startAddress !== null
+                ? details.startAddress.toString(16).toUpperCase()
+                : '----';
+            const opcodeString = details.opcodes.map(byte =>
+                    byte.toString(16).toUpperCase().padStart(2, '0')
+                ).join('');
+            return `${hexAddr.padStart(4, '0')} ${opcodeString.padEnd(8, ' ')} ${line}`;
+        });
+
+        assemblyInput.value = linesWithAddresses.join('\n');
+    }
+
+    // Remove hex addresses from assembly display when leaving stepping mode
+    removeAddressesFromAssemblyDisplay() {
+        const assemblyInput = document.getElementById('assemblyInput');
+        const currentCode = assemblyInput.value;
+        const lines = currentCode.split('\n');
+        
+        // Check if addresses are prepended and remove them
+        const linesWithoutAddresses = lines.map(line => {
+            // Match pattern: 4 hex digits, space, opcodes (or spaces), space, then capture the rest
+            // This handles both: "1234 AB CD EF  instruction" and "1234             instruction"
+            const match = line.match(/^[0-9A-Fa-f]{4}\s+[0-9A-Fa-f\s]*\s+(.*)$/);
+            if (match) {
+                return match[1]; // Return the part after the address and opcodes
+            }
+            // Also handle lines that start with just spaces (comments, labels)
+            const spaceMatch = line.match(/^\s{16,}(.*)$/);
+            if (spaceMatch) {
+                return spaceMatch[1];
+            }
+            return line; // Return unchanged if no address pattern found
+        });
+
+        assemblyInput.value = linesWithoutAddresses.join('\n');
+    }
+
 
     assembleAndRun() {
+        this.clearHighlight();
+        this.removeAddressesFromAssemblyDisplay();
         const sourceCode = document.getElementById('assemblyInput').value;
         const machineCodeDiv = document.getElementById('machineCode');
+
 
         const result = this.assembler.assemble(sourceCode);
         this.loadAddress = result.loadAddress;
 
         if (result.success) {
-            // Store source lines and line addresses for stepping highlights
-            this.sourceLines = sourceCode.split('\n');
-            this.lineAddresses = result.lineAddresses || [];
-            this.clearLineHighlight(); // Clear any previous highlighting
+            // Store instruction details for opcode display and line mapping
+            this.instructionDetails = result.instructionDetails || [];
 
             // Load machine code into memory (without clearing existing memory)
             for (let i = 0; i < result.machineCode.length; i++) {
@@ -1067,8 +1129,10 @@ class Simulator {
                 sinclaude.cpu.set(this.loadAddress, 0xFFFF);
                 this.setState(STATE.FREE_RUNNING);
             }
-
+            this.lastPC = null;
             machineCodeDiv.textContent = this.assembler.displayMachineCode(result.machineCode, result.loadAddress);
+            this.updateAssemblyDisplayForStepping();
+
             machineCodeDiv.classList.remove('error');
 
             // Update URL with encoded program
@@ -1081,10 +1145,8 @@ class Simulator {
                 executionSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         } else {
-            // Clear line address data on assembly failure
-            this.sourceLines = [];
-            this.lineAddresses = [];
-            this.clearLineHighlight();
+            // Clear instruction details on assembly failure
+            this.instructionDetails = [];
             
             // Show all errors in machine code window
             let errorText = 'Assembly Errors:\n\n';
@@ -1187,6 +1249,7 @@ class Simulator {
 
     // Set state and update UI accordingly
     setState(newState) {
+        const previousState = this.state;
         this.state = newState;
         this.renderButtons();
 
@@ -1194,20 +1257,14 @@ class Simulator {
         switch (newState) {
             case STATE.NOT_READY:
                 this.stopContinuousExecution();
-                this.clearLineHighlight();
                 break;
 
             case STATE.FREE_RUNNING:
-                // Per README: "Any time the state changes to state_running, the CPU is reset and the assembled program is started"
-                this.clearLineHighlight(); // Clear highlighting when running continuously
                 this.startContinuousExecution();
                 break;
 
             case STATE.STEPPING:
                 this.stopContinuousExecution();
-                // Don't clear highlighting in stepping mode - we want to show current line
-                // When entering stepping mode, highlight the current line immediately
-                this.highlightCurrentLine();
                 break;
         }
 
@@ -1264,7 +1321,6 @@ class Simulator {
             this.cpu.registers.PC = this.loadAddress;
         }
         this.instructionCount = 0;
-        this.clearLineHighlight(); // Clear any line highlighting
         this.updateHardwareDisplay();
         // Clear any animation timers during reset
         this.clearNonEssentialTimers();
@@ -1411,79 +1467,77 @@ class Simulator {
         // Stay in stepping state as per README specification
     }
 
-    highlightCurrentLine() {
-        if (this.lineAddresses.length === 0) {
-            userMessageAboutBug('Line highlighting failed - no line address mapping', 'highlightCurrentLine() called but lineAddresses array is empty - assembly should have provided line mapping');
+    setHighlight() {
+        if (!this.instructionDetails || this.instructionDetails.length === 0) {
+            userMessageAboutBug('Line highlighting failed - no instruction details mapping', 'setHighlight() called but instructionDetails array is empty - assembly should have provided instruction mapping');
             return;
         }
 
-        const currentPC = this.cpu.registers.PC;
+        // Only act if PC has changed from what's currently highlighted
+        if (this.highlightedPC === this.cpu.registers.PC) {
+            return;
+        }
         
-        // Find the source line that corresponds to the current PC
-        let targetLine = -1;
-        for (let i = 0; i < this.lineAddresses.length; i++) {
-            if (this.lineAddresses[i] === currentPC) {
-                targetLine = i + 1; // Convert to 1-based line number
+        this.highlightedPC = this.cpu.registers.PC;
+        // Find the last source line that corresponds to the current PC (to skip labels)
+        let targetLine = null;
+        for (let i = 0; i < this.instructionDetails.length; i++) {
+            const detail = this.instructionDetails[i];
+            if (detail && detail.startAddress === this.highlightedPC) {
+                targetLine = i;
+            } else if (detail && detail.startAddress !== null && detail.startAddress > this.highlightedPC) {
                 break;
             }
         }
 
-        // If we found a matching line, highlight it
-        if (targetLine > 0 && targetLine !== this.currentHighlightedLine) {
-            this.clearLineHighlight();
-            this.setLineHighlight(targetLine);
-            this.currentHighlightedLine = targetLine;
+        // Only highlight if we found a matching line
+        if (targetLine !== null) {
+            const textarea = document.getElementById('assemblyInput');
+            if (!textarea) {
+                userMessageAboutBug('Line highlighting failed - assembly textarea not found', 'setHighlight() called but assemblyInput element missing from DOM');
+                return;
+            }
+
+            // Split the textarea content into lines
+            const lines = textarea.value.split('\n');
+            if (targetLine < lines.length) {
+                const originalLine = lines[targetLine];
+                // Replace the first space (anywhere in the line) with '►'
+                const firstSpaceIdx = originalLine.indexOf(' ');
+                if (firstSpaceIdx !== -1) {
+                    lines[targetLine] = originalLine.substring(0, firstSpaceIdx) + pc_pointer + originalLine.substring(firstSpaceIdx + 1);
+                } else {
+                    lines[targetLine] = pc_pointer + originalLine;
+                }
+                textarea.value = lines.join('\n');
+
+                // Use the browser's built-in scrolling to make the line visible
+                // Set cursor position to the beginning of the target line
+                const lineStart = lines.slice(0, targetLine).join('\n').length + (targetLine > 0 ? 1 : 0);
+                textarea.setSelectionRange(lineStart, lineStart);
+
+                // Scroll the cursor into view - this automatically centers it
+                textarea.focus();
+                textarea.blur(); // Remove focus to avoid interfering with other interactions
+            }
         }
     }
 
-    setLineHighlight(lineNumber) {
+    clearHighlight() {
         const textarea = document.getElementById('assemblyInput');
         if (!textarea) {
-            userMessageAboutBug('Line highlighting failed - assembly textarea not found', 'setLineHighlight() called but assemblyInput element missing from DOM');
-            return;
-        }
-
-        // Split the textarea content into lines
-        const lines = textarea.value.split('\n');
-        if (lineNumber < 1 || lineNumber > lines.length) return;
-
-        // Replace leftmost space with cursor, or add cursor if no leading spaces
-        const targetLineIndex = lineNumber - 1;
-        const originalLine = lines[targetLineIndex];
-        
-        // Simple cursor logic: if first char is space, replace with '>'; if '>', do nothing; else prepend '>'
-        if (originalLine[0] === ' ') {
-            lines[targetLineIndex] = '>' + originalLine.substring(1);
-        } else if (originalLine[0] === '>') {
-            // Do nothing - cursor already there
-        } else {
-            lines[targetLineIndex] = '>' + originalLine;
-        }
-        textarea.value = lines.join('\n');
-
-        // Scroll the highlighted line to about 1/2 of the screen
-        const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight) || 20;
-        const textareaHeight = textarea.clientHeight;
-        const targetScrollTop = (targetLineIndex * lineHeight) - (textareaHeight / 2);
-        textarea.scrollTop = Math.max(0, targetScrollTop);
-    }
-
-    clearLineHighlight() {
-        const textarea = document.getElementById('assemblyInput');
-        if (!textarea) {
-            userMessageAboutBug('Line highlighting clear failed - assembly textarea not found', 'clearLineHighlight() called but assemblyInput element missing from DOM');
+            userMessageAboutBug('Line highlighting clear failed - assembly textarea not found', 'clearHighlight() called but assemblyInput element missing from DOM');
             return;
         }
         
-        // Remove all cursor markers (>) from the text and restore original spacing
+        // Remove pc_pointer from the text and restore original spacing
         const lines = textarea.value.split('\n');
         const cleanedLines = lines.map(line => {
-            // Replace any > character with a space to restore original formatting
-            return line.replace(/>/g, ' ');
+            return line.split(pc_pointer).join(' ');
         });
         textarea.value = cleanedLines.join('\n');
         
-        this.currentHighlightedLine = -1;
+        this.highlightedPC = null; // Wipe the saved PC
     }
 
     expandElement(elementId) {

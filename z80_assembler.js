@@ -4,7 +4,7 @@
  * The assembler returns:
  * - machineCode: Array of bytes representing the assembled program
  * - loadAddress: The starting address where the program should be loaded
- * - lineAddresses: Array mapping each source line number to its memory address
+ * - instructionDetails: Array with details for each source line (address, source, opcodes)
  * 
  * GRAMMAR SPECIFICATION (EBNF):
  * 
@@ -141,7 +141,7 @@ class Z80Assembler {
         this.loadAddress = 0; // Default to address 0
         this.currentAddress = 0; // Default to address 0
         this.parsedLines = [];
-        this.lineAddresses = []; // Track the address for each source line
+        this.instructionDetails = []; // Track instruction details for each source line
 
         try {
             // --- First Pass: Parse lines, define symbols, and calculate addresses ---
@@ -163,7 +163,7 @@ class Z80Assembler {
                 success: true,
                 machineCode,
                 loadAddress: this.loadAddress,
-                lineAddresses: this.lineAddresses,
+                instructionDetails: this.instructionDetails,
             };
         } catch (e) {
             // This catches fatal errors or explicitly thrown ones.
@@ -186,15 +186,24 @@ class Z80Assembler {
      * - Reports syntax errors and undefined equates.
      */
     _performFirstPass() {
-        // Initialize line addresses array with the same length as source lines
-        this.lineAddresses = new Array(this.sourceLines.length);
+        // Initialize instruction details array with all source lines
+        this.instructionDetails = new Array(this.sourceLines.length);
+        
+        // First, populate instructionDetails with all source lines
+        for (let i = 0; i < this.sourceLines.length; i++) {
+            this.instructionDetails[i] = {
+                startAddress: null, // Will be filled during processing
+                sourceString: this.sourceLines[i],
+                opcodes: [] // Will be filled in second pass
+            };
+        }
         
         for (let i = 0; i < this.sourceLines.length; i++) {
             const lineNum = i + 1;
             const line = this.sourceLines[i];
 
             // Record the current address for this line (before processing)
-            this.lineAddresses[i] = this.currentAddress;
+            this.instructionDetails[i].startAddress = this.currentAddress;
 
             const parsed = this._parseLine(line, lineNum);
             if (!parsed) continue; // Skip empty/comment lines
@@ -205,10 +214,10 @@ class Z80Assembler {
                     this._reportError(lineNum, `ORG directive can only be used when current address is zero. Current address is ${this.currentAddress}.`);
                     return;
                 }
-                this.loadAddress = this._parseValue(parsed.operands[0], lineNum, this.symbols);
+                this.loadAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
                 this.currentAddress = this.loadAddress;
-                // Update the line address for this ORG line to reflect the new address
-                this.lineAddresses[i] = this.currentAddress;
+                // Update the instruction details for this ORG line
+                this.instructionDetails[i].startAddress = this.currentAddress;
             }
 
             this.parsedLines.push(parsed);
@@ -240,7 +249,7 @@ class Z80Assembler {
                             this._reportError(lineNum, `Duplicate symbol definition: '${parsed.label}'`);
                             return; // Stop processing on duplicate symbol error
                         } else {
-                            const value = this._parseValue(parsed.operands[0], lineNum, this.symbols);
+                            const value = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
                             if (isNaN(value)) {
                                 return; // Error already reported, stop processing
                             }
@@ -289,12 +298,14 @@ class Z80Assembler {
         this.currentAddress = this.loadAddress;
 
         for (const parsed of this.parsedLines) {
+            const lineNum = parsed.lineNum;
+            const sourceLineIndex = lineNum - 1; // Convert to 0-based index
             const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
             
             // Skip directives that don't generate code
             if (!mnemonic || ['ORG', 'EQU', 'END'].includes(mnemonic)) {
                 if (mnemonic === 'ORG') {
-                    const address = this._parseValue(parsed.operands[0], parsed.lineNum, this.symbols);
+                    const address = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
                     if (isNaN(address)) {
                         return machineCode; // Error already reported, stop assembly
                     }
@@ -304,6 +315,7 @@ class Z80Assembler {
             }
 
             let bytes = [];
+            
             switch (mnemonic) {
                 case 'DB':
                 case 'DEFB':
@@ -313,17 +325,17 @@ class Z80Assembler {
                     bytes = this._generateDataWords(parsed);
                     break;
                 case 'DEFS':
-                    const size = this._parseValue(parsed.operands[0], parsed.lineNum, this.symbols);
+                    const size = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
                     let fill = 0;
                     if (parsed.operands.length > 1) {
-                        fill = this._parseValue(parsed.operands[1], parsed.lineNum, this.symbols);
+                        fill = this._evaluateExpression(parsed.operands[1], this.symbols, parsed.lineNum);
                         if (isNaN(fill)) {
-                            bytes = []; // Error already reported by _parseValue
+                            bytes = []; // Error already reported by _evaluateExpression
                             break;
                         }
                     }
                     if (isNaN(size)) {
-                        bytes = []; // Error already reported by _parseValue
+                        bytes = []; // Error already reported by _evaluateExpression
                         break;
                     }
                     bytes = Array(size).fill(fill & 0xFF);
@@ -334,6 +346,11 @@ class Z80Assembler {
                        bytes = this._generateInstructionBytes(instruction, parsed);
                     }
                     break;
+            }
+            
+            // Store the opcodes in the instruction details for this source line
+            if (sourceLineIndex >= 0 && sourceLineIndex < this.instructionDetails.length) {
+                this.instructionDetails[sourceLineIndex].opcodes = bytes.slice(); // Copy the bytes array
             }
             
             machineCode.push(...bytes);
@@ -364,7 +381,7 @@ class Z80Assembler {
         }
         
         // Second try: label without colon (for EQU statements)
-        match = line.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+(EQU)\s+(.*?)\s*(?:;.*)?$/);
+        match = line.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+(EQU)\s+(.*?)\s*(?:;.*)?$/i);
         if (match) {
             const [, label, mnemonic, operandStr] = match;
             return this._buildParsedLine(lineNum, label, mnemonic, operandStr);
@@ -516,7 +533,7 @@ class Z80Assembler {
             
             switch (pattern) {
                 case Z80Assembler.OPERAND.IMM8: {
-                    const value = this._parseValue(operandStr, parsedLine.lineNum, symbols);
+                    const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
                     if (isNaN(value)) {
                         this._reportError(parsedLine.lineNum, `Invalid 8-bit immediate: '${operandStr}'`);
                         failed = true;
@@ -529,7 +546,7 @@ class Z80Assembler {
                     break;
                 }
                 case Z80Assembler.OPERAND.IMM16: {
-                    const value = this._parseValue(operandStr, parsedLine.lineNum, symbols);
+                    const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
                     if (isNaN(value)) {
                         this._reportError(parsedLine.lineNum, `Invalid 16-bit immediate: '${operandStr}'`);
                         failed = true;
@@ -544,7 +561,7 @@ class Z80Assembler {
                 case Z80Assembler.OPERAND.MEM8: {
                     // Extract value from inside parentheses, e.g., "(255)" for I/O port
                     const portStr = operandStr.slice(1, -1);
-                    const value = this._parseValue(portStr, parsedLine.lineNum, symbols);
+                    const value = this._evaluateExpression(portStr, symbols, parsedLine.lineNum);
                     if (isNaN(value)) {
                         this._reportError(parsedLine.lineNum, `Invalid 8-bit port address: '${operandStr}'`);
                         failed = true;
@@ -559,7 +576,7 @@ class Z80Assembler {
                 case Z80Assembler.OPERAND.MEM16: {
                     // Extract value from inside parentheses, e.g., "(1234)"
                     const addrStr = operandStr.slice(1, -1);
-                    const value = this._parseValue(addrStr, parsedLine.lineNum, symbols);
+                    const value = this._evaluateExpression(addrStr, symbols, parsedLine.lineNum);
                     if (isNaN(value)) {
                         this._reportError(parsedLine.lineNum, `Invalid 16-bit address: '${operandStr}'`);
                         failed = true;
@@ -569,7 +586,7 @@ class Z80Assembler {
                     break;
                 }
                 case Z80Assembler.OPERAND.RELATIVE: {
-                    const targetAddr = this._parseValue(operandStr, parsedLine.lineNum, symbols);
+                    const targetAddr = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
                     if (isNaN(targetAddr)) {
                         // Parse failed (undefined symbol already reported)
                         this._reportError(parsedLine.lineNum, `Invalid relative address: '${operandStr}'`);
@@ -602,59 +619,22 @@ class Z80Assembler {
 
 
     /**
-     * Parses a string representation of a value into a number.
-     * Handles decimal, hex ($, 0x, h), binary (%), labels, and basic arithmetic expressions.
-     * @param {string} valueStr - The string to parse.
-     * @param {number} lineNum - The current line number for error reporting.
-     * @param {object} symbols - A map of known symbols (labels, equates).
-     * @returns {number} The parsed numeric value.
-     */
-    _parseValue(valueStr, lineNum, symbols) {
-        // First try to evaluate as a simple expression with basic arithmetic
-        const errorCountBefore = this.errors.length;
-        const result = this._evaluateExpression(valueStr.trim(), symbols, lineNum);
-        if (!isNaN(result)) {
-            return result;
-        }
-        
-        // If expression evaluation reported an error, don't try legacy parsing
-        if (this.errors.length > errorCountBefore) {
-            return NaN; // Return NaN to indicate parse failure (error already reported)
-        }
-
-        // Handle simple expressions like LABEL + 5 (legacy support)
-        const parts = valueStr.split('+').map(p => p.trim());
-        let total = 0;
-        for (const part of parts) {
-            const value = this._parseNumber(part, symbols, lineNum, 'Unknown symbol or invalid number format');
-            if (isNaN(value)) {
-                return NaN; // Error already reported by _parseNumber
-            }
-            total += value;
-        }
-        return total;
-    }
-
-    /**
      * Evaluates basic arithmetic expressions with parentheses, +, -, *, /.
      * @param {string} expr - The expression to evaluate.
      * @param {object} symbols - Symbol table for label/equate lookup.
      * @returns {number} The evaluated result.
      */
-    _evaluateExpression(expr, symbols, lineNum) {
-        // Use pure grammar-based parser - no regex preprocessing needed
-        const parser = new ExpressionParser(expr, [], symbols, lineNum, this);
+    _evaluateExpression(expr, symbols, lineNum) {    
+        const parser = new ExpressionParser(expr.trim(), [], symbols, lineNum, this);
         return parser.parseExpression();
     }
     
-    
-
     // --- Helper methods for data directives (DB, DW, DS) ---
 
     _calculateDataSize(parsed) {
         const { mnemonic, operands } = parsed;
         if (mnemonic.toUpperCase() === 'DEFS') {
-            return this._parseValue(operands[0], parsed.lineNum, this.symbols);
+            return this._evaluateExpression(operands[0], this.symbols, parsed.lineNum);
         }
 
         let size = 0;
@@ -680,7 +660,7 @@ class Z80Assembler {
                     bytes.push(processedStr.charCodeAt(i));
                 }
             } else {
-                const val = this._parseValue(op, parsed.lineNum, symbols);
+                const val = this._evaluateExpression(op, symbols, parsed.lineNum);
                 if (isNaN(val)) {
                     this._reportError(parsed.lineNum, `Invalid byte value: '${op}'`);
                     failed = true;
@@ -697,7 +677,7 @@ class Z80Assembler {
         let failed = false;
         const symbols = this.symbols;
         for (const op of parsed.operands) {
-             const value = this._parseValue(op, parsed.lineNum, symbols);
+             const value = this._evaluateExpression(op, symbols, parsed.lineNum);
              if (isNaN(value)) {
                  this._reportError(parsed.lineNum, `Invalid word value: '${op}'`);
                  failed = true;
@@ -765,8 +745,6 @@ class Z80Assembler {
             { m: 'LD', ops: ['BC', IMM16], opc: [0x01] },
             { m: 'LD', ops: ['DE', IMM16], opc: [0x11] },
             { m: 'LD', ops: ['SP', IMM16], opc: [0x31] },
-            { m: 'LD', ops: ['(BC)', 'A'], opc: [0x02] },
-            { m: 'LD', ops: ['(DE)', 'A'], opc: [0x12] },
             { m: 'LD', ops: ['(HL)', IMM8], opc: [0x36] },
 
             // Control flow
@@ -1272,6 +1250,18 @@ class ExpressionParser {
         let identifier = '';
         while (this.isIdentifierChar(this.peek())) {
             identifier += this.next();
+        }
+        
+        // Check if this might be a hex number with H suffix
+        if (identifier.toUpperCase().endsWith('H')) {
+            const hexPart = identifier.slice(0, -1);
+            // Check if all characters except the H are valid hex digits
+            if (hexPart.length > 0 && /^[0-9A-Fa-f]+$/.test(hexPart)) {
+                const result = parseInt(hexPart, 16);
+                if (!isNaN(result)) {
+                    return result;
+                }
+            }
         }
         
         // Check if it's a function call

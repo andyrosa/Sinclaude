@@ -1,4 +1,7 @@
-const DEFAULT_ASM = `
+const DEFAULT_ASM = `halt`;
+
+const xDEFAULT_ASM = `
+    
     ;Assembler basic test
 
     SCREEN_START  EQU 60000
@@ -20,8 +23,6 @@ inc_all:
     inc de
     inc bc
     jp inc_all
-
-
 
 `;
 
