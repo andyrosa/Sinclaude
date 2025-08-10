@@ -18,15 +18,22 @@ window.addEventListener('load', () => {
     }
     
     window.sinclaude = new Simulator();
+    
+    // Initialize retro fonts from localStorage
+    if (typeof initializeRetroFonts === 'function') {
+        initializeRetroFonts();
+    }
 
     // Load assembly: from URL if present, otherwise default
     if (!window.sinclaude.loadFromURL()) {
         window.sinclaude.loadDefaultAssembly();
     }
 
-    // Auto-assemble if run parameter is truthy
+    window.sinclaude.setupAssemblyContentObserver();
+
+    // Auto-assemble if assemble parameter is truthy
     const urlParams = new URLSearchParams(window.location.search);
-    if (isTruthy(urlParams.get('run'))) {
+    if (isTruthy(urlParams.get('assemble'))) {
         window.sinclaude.assembleAndRun();
     }
 });

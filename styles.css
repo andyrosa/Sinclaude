@@ -1,74 +1,193 @@
+/* Semantic color scheme */
+:root {
+    /* Primary base colors */
+    --surface-bgc: black;
+    --surface-text-c: white;
+    --surface-muted-text-c: gray;
+    --editable-text-bgc: white;
+    --editable-text-fgc: black;
+
+    /* Button */
+    --button-bgc: white;
+    --button-text-c: black;
+    --button-border-c: darkgray;
+    --button-hover-bgc: whitesmoke;
+    --button-active-bgc: lightgray;
+    --button-shadow-c: gray;
+    --important-button-bgc: dimgray;
+
+    --button-elevation: 2px;
+    --button-elevation-pressed: 1px;
+    
+    /* UI elements */
+    --border-c: silver;
+    --attention-c: gold;
+
+    /* Status colors */
+    --sensors-c: lime;
+    --error-c: red;
+
+    /* Scrollbar colors */
+    --scroll-bar-track-c: silver;
+    --scrollbar-thumb-c: gray;
+
+    /* Derived values */
+    --_button-bgc-inverted-grayscale: oklch(from var(--button-bgc) calc(1 - l) 0 0);
+    /* darker yellow for text if button bg is white */
+    --attention-button-text-c: color-mix(in lch, var(--attention-c), var(--_button-bgc-inverted-grayscale) 30%);
+    
+    /* Screen sizing */
+    --screen-height: min(360px, calc(100vw * 3 / 4));
+}
+
+
+/* WebKit scrollbar styling for Safari, iOS, and Chrome */
+body::-webkit-scrollbar-corner,
+body::-webkit-scrollbar {
+    background: var(--scroll-bar-track-c);
+}
+body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-c);
+}
+body {
+    scrollbar-color: var(--scrollbar-thumb-c) var(--scroll-bar-track-c);
+}
+
+/* Modern CSS Reset */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+}
+
+body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+    font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
+}
 /* Layout scaffolding */
 body {
-    background: black;
-    box-sizing: border-box;
-    color: white;
+    background: var(--surface-bgc);
+    color: var(--surface-text-c);
     display: flex;
     flex-direction: column;
     font-family: monospace;
+    font-size: 12px;
     margin: 0;
     min-height: 100vh;
-    padding: 10px;
+    padding: 4px;
     position: relative;
 }
 
 /* Buttons */
 button {
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-c: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
-    background: lightgray;
-    border: 2px inset #ccc;
-    border-radius: 0;
-    box-shadow:
-        inset 1px 1px 2px rgba(255, 255, 255, .8),
-        inset -1px -1px 2px rgba(0, 0, 0, .2);
+    background: var(--button-bgc);
+    border: 2px solid var(--button-border-c);
+    border-radius: 12px;
+    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
     box-sizing: border-box;
-    color: black;
+    color: var(--button-text-c);
     cursor: pointer;
     flex: 1;
     font-family: monospace;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     margin: 2px;
     min-width: 60px;
     padding: 8px 2px;
+    text-align: center;
     touch-action: manipulation;
     transition: .1s ease;
     user-select: none;
 }
 
 button:hover {
-    background: #e8e8e8;
-    box-shadow:
-        inset 1px 1px 3px rgba(255, 255, 255, .9),
-        inset -1px -1px 3px rgba(0, 0, 0, .3);
+    background: var(--button-hover-bgc);
+    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
 }
 
 button:active {
-    background: #d0d0d0;
-    border: 2px inset #999;
-    box-shadow:
-        inset 2px 2px 4px rgba(0, 0, 0, .3),
-        inset -1px -1px 2px rgba(255, 255, 255, .5);
+    background: var(--button-active-bgc);
     transform: translateY(1px);
+    box-shadow: 0 var(--button-elevation-pressed) 0 var(--button-shadow-c);
+}
+
+button:focus-visible {
+    outline: 3px solid var(--button-text-c);
+    outline-offset: 2px;
+}
+
+/* Assemble and Run button special styling - darker monochrome */
+#assemble-run-btn {
+    background: var(--important-button-bgc);
+    color: var(--surface-text-c);
+    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+}
+
+#assemble-run-btn:hover {
+    background: var(--button-hover-bgc);
+    color: var(--button-text-c);
+    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+}
+
+#assemble-run-btn:active {
+    background: var(--button-active-bgc);
+    transform: translateY(1px);
+    box-shadow: 0 var(--button-elevation-pressed) 0 var(--button-shadow-c);
 }
 
 /* Menu */
 .touch-hint,
-.header-menu-item {
+.header-item {
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: .3s;
+    background: var(--button-bgc);
+    border: none;
+    border-radius: 4px;
+    box-shadow: none;
+    color: var(--button-text-c);
 }
 
 .menu-dropdown {
-    background: rgba(0, 0, 0, .95);
-    border: 2px solid white;
+    background: var(--surface-bgc);
+    border: 2px solid var(--border-c);
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, .3);
+    box-shadow: 0 4px 8px var(--button-shadow-c);
     display: none;
     min-width: 120px;
     position: absolute;
@@ -78,12 +197,12 @@ button:active {
 }
 
 .menu-item {
-    border-bottom: 1px solid rgba(255, 255, 255, .2);
-    color: white;
+    border-bottom: 1px solid var(--border-c);
+    color: var(--surface-text-c);
     display: block;
     padding: 10px 15px;
     text-decoration: none;
-    transition: background-color .3s;
+    transition: background-c .3s;
 }
 
 .menu-item:last-child {
@@ -91,27 +210,12 @@ button:active {
 }
 
 .menu-item:hover {
-    background: rgba(255, 255, 255, .1);
-    color: lime;
-}
-
-/* Section headers and controls */
-.section-header-flex {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.touch-hint,
-.header-menu-item {
-    background: rgba(0, 0, 0, .8);
-    border: 1px solid gray;
-    border-radius: 4px;
-    color: gray;
+    background: var(--button-hover-bgc);
+    color: var(--surface-bgc);
 }
 
 .touch-hint {
-    font-size: 10px;
+    font-size: 9px;
     gap: 0;
     height: 40px;
     line-height: 1.1;
@@ -120,45 +224,176 @@ button:active {
 }
 
 .touch-hint:hover,
-.header-menu-item:hover {
-    background: rgba(255, 255, 255, .1);
-    border-color: white;
-    color: white;
+.header-item:hover {
+    background: var(--button-hover-bgc);
+    border-color: var(--button-bgc);
 }
 
-.header-menu-item:hover {
+.header-item:hover {
     transform: scale(1.1);
 }
 
 .section-main-flex {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 10px;
+    height: 100%;
 }
 
 .flex-textarea {
     flex: 1;
 }
 
-/* Screen */
-#screen {
-    background: black;
-    border: 2px solid white;
-    box-sizing: border-box;
-    color: white;
-    contain: layout style;
-    display: grid;
-    flex-shrink: 0;
+/* Assembly Editor - 3 Column Layout */
+.assembly-editor {
+    background: var(--editable-text-bgc);
+    border: 1px solid var(--border-c);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    font-family: monospace;
+    font-size: 12px;
+    min-height: 200px;
+    position: relative;
+    touch-action: pan-y;
+}
+
+.assembly-columns {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+.address-column,
+.opcodes-column,
+.assembly-column {
+    color: var(--editable-text-fgc);
     font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
     font-size: 12px;
+    max-height: 100%;
+    line-height: 12px;
+    overflow-y: auto;
+    padding: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.address-column {
+    border-right: 1px solid var(--border-c);
+    color: var(--surface-muted-text-c);
+    flex: 0 0 27px;
+    font-size: 9px;
+    line-height: 12px;
+    overflow: hidden;
+    padding: 10px 2px;
+    text-align: center;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.opcodes-column {
+    border-right: 1px solid var(--border-c);
+    color: var(--surface-muted-text-c);
+    flex: 0 0 53px;
+    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-size: 9px;
+    line-height: 12px;
+    overflow: hidden;
+    padding: 10px 2px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.assembly-column {
+    flex: 1;
+    outline: none;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.assembly-column:empty::before {
+    color: var(--surface-muted-text-c);
+    content: attr(data-placeholder);
+    font-style: italic;
+    pointer-events: none;
+}
+
+/* Assembly editor highlighting */
+.highlighted-line {
+    background: var(--editable-text-fgc);
+    color: var(--editable-text-bgc);
+    font-weight: bold;
+    display: inline;
+}
+
+/* Hide address and opcodes columns by default */
+.assembly-editor .address-column,
+.assembly-editor .opcodes-column {
+    display: none;
+}
+
+/* Show address and opcodes columns when explicitly enabled */
+.assembly-editor.show-address-opcodes .address-column,
+.assembly-editor.show-address-opcodes .opcodes-column {
+    display: block;
+}
+
+/* When showing address/opcodes, enable no-wrap for assembly column */
+.assembly-editor.show-address-opcodes .assembly-column {
+    white-space: pre;
+    overflow-x: auto;
+    word-wrap: normal;
+    word-break: normal;
+}
+
+/* Hide address and opcodes columns when assembly editor is expanded */
+.expanded-element .address-column,
+.expanded-element .opcodes-column {
+    display: none;
+}
+
+/* Adjust assembly column when expanded to take full width */
+.expanded-element .assembly-column {
+    flex: 1;
+}
+
+/* Note shown when an element is expanded telling user how to restore size */
+.restore-size-note {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5vh;
+    background: var(--surface-bgc);
+    color: var(--surface-text-c);
+    text-align: center;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* z-index set dynamically in JS to use constant */
+}
+
+/* Screen */
+#screen {
+    background: var(--editable-text-bgc);
+    border: 2px solid var(--border-c);
+    box-sizing: border-box;
+    color: var(--editable-text-fgc);
+    contain: layout style;
+    display: grid;
+    flex: 0 0 auto;
+    flex-shrink: 0;
     grid-template-columns: repeat(32, 1fr);
-    grid-template-rows: repeat(24, 1fr);
+    grid-template-rows: repeat(24, calc(100% / 24));
+    /* Responsive sizing: 50% container width, height = 3/4 width */
+    width: 480px;
     height: 360px;
-    max-height: 80vh;
-    max-width: calc(100vw - 25px);
     overflow: hidden;
     padding: 5px;
-    width: 480px;
     will-change: contents;
 }
 
@@ -169,18 +404,38 @@ button:active {
     align-items: center;
     justify-content: center;
     line-height: 1;
+    overflow: hidden;
 }
 
 .screen-char.inverted {
-    background: white;
-    color: black;
+    background: var(--editable-text-fgc);
+    color: var(--editable-text-bgc);
 }
+
+.screen-char.sinclair-font {
+    font-family: 'VT323';
+    font-size: calc(360px / 18);
+}
+.screen-char:not(.sinclair-font) {
+    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-size: calc(360px / 22);
+}
+
+.screen-char.sinclair-font.inverted {
+    transform: scaleX(1.2);
+}
+
+.screen-char.sinclair-font:not(.inverted) {
+    transform: scaleX(2);
+}
+
+
 
 /* Layout sections */
 .top-row {
     display: flex;
     gap: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
 }
 
 .top-row .assembly-section {
@@ -188,24 +443,24 @@ button:active {
 }
 
 .top-row .listing-section {
-    flex: 1;
+    flex: 0.67;
 }
 
 .section {
-    border: 1px solid dimgray;
+    border: 1px solid var(--border-c);
     border-radius: 5px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    margin-bottom: 10px;
+    margin-bottom: 4px;
     overflow-y: auto;
-    padding: 10px;
+    padding: 4px;
 }
 
-.section h2 {
-    color: #ccc;
+.section h3 {
+    color: var(--surface-text-c);
     flex-shrink: 0;
-    margin: 0 0 10px;
+    margin: 0 0 4px;
 }
 
 .section-content,
@@ -222,38 +477,54 @@ button:active {
 .section-controls {
     display: flex;
     flex-direction: column;
-    min-width: 200px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    min-width: 160px;
     overflow-y: auto;
+}
+
+.execution-section .section-content {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+
+.execution-controls {
+    flex: 1;
+    min-width: 300px;
 }
 
 /* Text areas and outputs */
 textarea,
 #machineCode,
 #console {
-    background: darkslategray;
-    border: 1px solid dimgray;
-    color: white;
+    background: var(--editable-text-bgc);
+    border: 1px solid var(--border-c);
+    color: var(--editable-text-fgc);
     flex: 1;
     font-family: monospace;
     padding: 10px;
 }
 
 textarea {
-    font-size: 14px;
+    font-size: 12px;
     min-height: 100px;
     resize: none;
-    width: 100%;
 }
 
 #machineCode,
 #console {
-    font-size: 12px;
+    font-size: 11px;
     overflow-y: auto;
     white-space: pre-wrap;
 }
 
 #machineCode.error {
-    color: #ff6666;
+    /* Increase contrast vs light background by darkening error red slightly */
+    color: color-mix(in srgb, var(--error-c), black 25%);
 }
 
 /* Heights */
@@ -271,17 +542,57 @@ textarea {
 
 .assembly-section,
 .listing-section {
-    height: 33.33vh;
-    min-height: max(100px, 33.33vh);
+    height: 33vh;
+    min-height: max(100px, 33vh);
 }
 
 .listing-section {
-    max-height: 60vh;
+    max-height: 50vh;
+}
+
+/* Collapsed sections */
+.listing-section.collapsed,
+.console-section.collapsed {
+    height: auto;
+    min-height: 0;
+    max-height: 50px;
+    overflow: hidden;
+}
+
+.listing-section.collapsed .section-content,
+.console-section.collapsed .section-content {
+    display: none;
+}
+
+/* Clickable headers for collapsible sections */
+.listing-section h2,
+.console-section h2 {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    position: relative;
+}
+
+.listing-section h3:hover,
+.console-section h3:hover {
+    background: var(--button-hover-bgc);
+    border-radius: 3px;
+}
+
+/* Expand hint for collapsed listing section */
+.listing-section.collapsed h3::after,
+.console-section.collapsed h3::after {
+    content: "▼ Expand";
+    position: absolute;
+    right: 0;
+    top: 0;
+    color: var(--surface-muted-text-c);
+    white-space: nowrap;
 }
 
 .console-section {
-    height: 20vh;
-    min-height: max(100px, 20vh);
+    height: 12vh;
+    min-height: max(100px, 12vh);
 }
 
 /* Controls */
@@ -289,8 +600,8 @@ textarea {
     display: flex;
     flex-shrink: 0;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 10px;
+    gap: 2px;
+    margin-top: 0;
     text-align: center;
 }
 
@@ -302,56 +613,62 @@ textarea {
     flex: none;
 }
 
+/* Assembly button lifecycle states */
+.assembly-empty-state .load-btn {
+    display: inline-block;
+}
+
+.assembly-empty-state #assemble-run-btn,
+.assembly-empty-state .clear-btn {
+    display: none;
+}
+
+.assembly-content-state .clear-btn,
+.assembly-content-state #assemble-run-btn {
+    display: inline-block;
+}
+
+.assembly-content-state .load-btn {
+    display: none;
+}
+
 /* Keyboard status */
 .keyboard-status {
-    background: lightgray;
+    border: 2px solid transparent;
     border-radius: 4px;
-    color: #888;
+    color: var(--surface-muted-text-c);
     font-style: italic;
     margin: 10px 0 0;
     padding: 5px;
     text-align: center;
     transition: .3s;
-    width: 470px;
 }
 
-.keyboard-status.hover-state {
-    animation: pulseGlow 2s ease-in-out infinite;
-    background: #fff3e0;
-    border: 2px solid orange;
-    color: orange;
+.keyboard-status.get-attention {
+    background: var(--attention-c);
+    border: 2px solid var(--border-c);
     font-weight: bold;
-    width: 455px;
+    font-style: normal;
+    color: var(--button-text-c)
 }
 
 /* Animations */
-@keyframes pulseGlow {
-
-    0%,
-    100% {
-        box-shadow: 0 0 5px rgba(255, 107, 53, .3);
-        transform: scale(.95);
-    }
+@keyframes colorAwayFromBgToAttention {
 
     50% {
-        box-shadow: 0 0 15px rgba(255, 107, 53, .6);
-        transform: scale(1);
+        color: var(--attention-button-text-c);
     }
 }
 
-@keyframes pulsateText {
-
-    0%,
-    100% {
-        font-size: 100%;
-    }
-
-    50% {
-        font-size: 200%;
+/* Hide expand button on wide screens where there's enough space */
+@media (min-width: 769px) {
+    .header-item[title="Expand Editor"] {
+        display: none;
     }
 }
 
 /* Responsive */
+/* not working @media (max-width: var(--narrow-max-width, 768px)) { */
 @media (max-width: 768px) {
     body {
         padding: 0;
@@ -361,9 +678,9 @@ textarea {
         gap: 0;
     }
 
-    .header-menu {
-        right: 5px;
-        top: 5px;
+    body .header-items {
+        right: 3px;
+        top: 0px;
     }
 
     .top-row {
@@ -378,17 +695,49 @@ textarea {
         flex-direction: column;
     }
 
+    .execution-section .section-content {
+        flex-direction: column;
+        gap: 0;
+    }
+
     .section-controls {
+        margin-left: 0;
         min-width: auto;
     }
 
     .execution-controls {
+        margin-left: 0;
         min-width: auto;
+        max-width: none;
         padding-left: 0;
+        width: 100%;
+    }
+
+    #screen {
+        width: 100cqw;
+        height: calc(100cqw * 3 / 4);
+    }
+    
+    .screen-char:not(.sinclair-font) {
+        font-size: calc(100cqw * 3 / 4 / 22);
+    }
+    
+    .screen-char.sinclair-font {
+        font-size: calc(100cqw * .75* 3 / 4 / 18);
     }
 
     .assembly-section {
         min-height: 60vh;
+        max-height: 60vh;
+    }
+
+     .assembly-columns {
+       overflow-y: auto;
+    }
+
+    .console-section {
+        height: 15vh;
+        min-height: max(100px, 15vh);
     }
 
     .listing-section {
@@ -399,6 +748,11 @@ textarea {
         display: flex;
         height: 33.33vh;
     }
+
+    /* Hide load buttons when stepping */
+    body.stepping .load-btn {
+        display: none;
+    }
 }
 
 /* Touch-only devices */
@@ -408,67 +762,84 @@ textarea {
     }
 }
 
-/* Edit toggle */
-.edit-toggle {
-    background: white;
-    border: none;
-    border-radius: 0;
-    box-shadow:
-        inset 1px 1px 2px rgba(255, 255, 255, .8),
-        inset -1px -1px 2px rgba(0, 0, 0, .2);
-    color: red;
+
+/* Edit toggle and not-ready message shared styles */
+.edit-toggle,
+.not-ready-message {
+    color: var(--button-text-c);
     cursor: pointer;
-    font-family: monospace;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
-    margin: 4px 0;
-    padding: 4px;
-    transition: .2s;
-    width: 100%;
+    margin: 10px 0 0;
+    text-align: center;
+    transition: .3s;
 }
 
-.edit-toggle:hover {
-    background: #f0f0f0;
+.edit-toggle {
+    background: var(--button-bgc);
+    border: 2px solid var(--attention-c);
+}
+
+.not-ready-message {
+    background: var(--attention-c);
+    border: 2px solid var(--attention-c);
+}
+
+.edit-toggle:hover,
+.not-ready-message:hover {
+    background: var(--attention-c);
 }
 
 .edit-toggle.active {
-    background: red;
-    color: white;
+    background: var(--attention-c);
 }
 
 .edit-toggle.active:hover {
-    background: #cc0000;
+    background: var(--attention-c);
+}
+
+/* Edit toggle specific adjustments */
+.edit-toggle {
+    border-radius: 0;
+    box-shadow:
+        inset 1px 1px 2px color-mix(in srgb, var(--button-shadow-c), black 30%),
+        inset -1px -1px 2px color-mix(in srgb, var(--button-shadow-c), white 30%);
+    font-style: normal;
+    margin: 4px 0;
+    padding: 4px;
+    transition: .2s;
 }
 
 /* Header menu */
-.header-menu {
-    position: fixed;
-    right: 10px;
-    top: 10px;
+.header-items {
+    position: absolute;
+    right: 6px;
+    top: 2px;
     z-index: 1000;
     display: flex;
     gap: 2px;
 }
 
-.header-menu-item {
-    font-size: 16px;
-    height: 30px;
-    width: 30px;
+.header-item {
+    font-size: 12px;
+    height: 24px;
+    min-width: 72px;
+    width: 72px;
 }
 
 /* Debug */
 .debug {
-    background: #1a1a1a;
-    border: 1px solid dimgray;
+    background: var(--surface-bgc);
+    border: 1px solid var(--border-c);
     border-radius: 6px;
-    color: #ccc;
+    color: var(--surface-muted-text-c);
     display: grid;
     flex-shrink: 0;
     font-family: 'Courier New', monospace;
-    font-size: 11px;
-    gap: 4px 16px;
+    font-size: 10px;
+    gap: 4px 10px;
     grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    margin-top: 15px;
+    margin-top: 4px;
     padding: 12px;
 }
 
@@ -480,9 +851,10 @@ textarea {
 }
 
 .debug span {
-    color: #4caf50;
+    color: var(--sensors-c);
     font-weight: bold;
     letter-spacing: .5px;
+    text-align: right;
 }
 
 /* Game buttons */
@@ -495,13 +867,17 @@ textarea {
 
 .game-buttons button {
     flex: 1;
+    height: 32px;
     margin: 0;
 }
 
 .game-buttons button.edit-mode {
-    animation: pulsateText 3s ease-in-out infinite;
-    color: red;
-    height: 32px;
+    font-size: 125%;
+    animation: colorAwayFromBgToAttention 1s ease-in-out infinite;
     overflow: hidden;
     padding: 0;
+}
+
+.game-buttons button .edit-input {
+    text-align: center;
 }

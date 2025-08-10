@@ -1,0 +1,18 @@
+// .hintrc configuration file
+// - "extends": Inherits rules from the "development" preset.
+// - "browserslist": Specifies supported browsers for the project.
+//   - "defaults": Includes browsers with >0.5% market share, last 2 versions, not dead.
+//   - "not ie 11": Excludes Internet Explorer 11 (released 2013, end of support 2022).
+//   - "not chrome <= 109": Excludes Chrome versions 109 and below (Chrome 109 released Jan 2023).
+//   - "not ios_saf <= 15.8": Excludes iOS Safari versions 15.8 and below (iOS 15.8 released Sept 2023).
+{
+  "extends": [
+    "development"
+  ],
+  "browserslist": [
+    "defaults",
+    "not ie 11",
+    "not chrome <= 109",
+    "not ios_saf <= 15.8"
+  ]
+}
