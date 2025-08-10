@@ -14,7 +14,7 @@ function userMessage(message) {
 
 // Bug detection messages - both user and console logging for debugging
 function userMessageAboutBug(userMsg, consoleMsg) {
-    consoleLogApproved(`BUG: ${consoleMsg}`);
+    console.error(`BUG: ${consoleMsg}`);
     userMessage(`BUG: ${userMsg}`);
 }
 

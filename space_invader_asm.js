@@ -25,6 +25,14 @@ SCREEN_ROWS         EQU 24
 
 FRAME_COUNT_PORT    EQU 0
 KEYBOARD_PORT       EQU 1
+BEEP_10HZ_PORT      EQU 2
+BEEP_MS_PORT        EQU 3
+
+MISSILE_10HZ        EQU 40
+MISSILE_DURATION    EQU 1
+
+BOMB_10HZ           EQU 20
+BOMB_DURATION       EQU 1
 
 PLAYER_ROW          EQU SCREEN_ROWS-3
 PLAYER_START_COL    EQU SCREEN_COLS/2
@@ -38,49 +46,46 @@ PLAYER_MAX_COL      EQU SCREEN_COLS-2
 RIGHTMOST_COL       EQU SCREEN_COLS-1
 BOMB_DROP_THRESHOLD EQU 26
 FRAME_DELAY_COUNT   EQU 2
+
 LEVEL_INCREMENT     EQU 3
 SCREEN_SIZE         EQU SCREEN_COLS * SCREEN_ROWS
 BOTTOM_ROW          EQU SCREEN_ROWS-1
 MESSAGE_ROW         EQU SCREEN_ROWS/2
+INVADER_MOVE_DELAY  EQU 2
 
 ;vars
-player_col:         DB PLAYER_START_COL
-invader_col:        DB INVADER_START_COL
-invader_start_row:  DB INITIAL_INVADER_ROW
-invader_row:        DB INITIAL_INVADER_ROW
-invader_dir:        DB MOVE_RIGHT
-missile_col:        DB 0
-missile_row:        DB MISSILE_OFF_ROW
-missile_active:     DB FALSE
-bomb_col:           DB 0
-bomb_row:           DB 0
-is_bomb_active:     DB FALSE
-game_over:          DB FALSE
-player_won:         DB FALSE
-invisible_mode:     DB FALSE
-random_seed:        DB 0
-
-inc_random_seed:
-  LD   A, (random_seed)
-  INC  A
-  LD   (random_seed), A
-  RET
+player_col:             DB PLAYER_START_COL
+invader_col:            DB INVADER_START_COL
+invader_start_row:      DB INITIAL_INVADER_ROW
+invader_row:            DB INITIAL_INVADER_ROW
+invader_dir:            DB MOVE_RIGHT
+missile_col:            DB 0
+missile_row:            DB MISSILE_OFF_ROW
+missile_active:         DB FALSE
+bomb_col:               DB 0
+bomb_row:               DB 0
+is_bomb_active:         DB FALSE
+game_over:              DB FALSE
+player_won:             DB FALSE
+invisible_mode:         DB FALSE
+random_seed:            DB 0
+invader_move_delay_cnt: DB 0
 
 game_start:
-  CALL clear_SCREEN
+  CALL clear_screen
 
 game_loop:
   LD   A, (game_over)
   AND  A
   JP   NZ, end_game
 
+  CALL game_delay
   CALL handle_keyboard
   CALL update_player_missile
   CALL update_invader_bomb
   CALL update_invader
   CALL draw_game
   CALL check_collisions
-  CALL game_delay
 
   JR   game_loop
 
@@ -135,6 +140,12 @@ fire_missile:
   LD   (missile_row), A
   LD   A, TRUE
   LD   (missile_active), A
+  
+  ; Play missile sound
+  LD   A, MISSILE_10HZ
+  OUT  (BEEP_10HZ_PORT), A
+  LD   A, MISSILE_DURATION
+  OUT  (BEEP_MS_PORT), A
   RET
 
 quit_game:
@@ -175,6 +186,16 @@ deactivate_bomb:
   RET
 
 update_invader:
+  LD   A, (invader_move_delay_cnt)
+  INC  A
+  LD   (invader_move_delay_cnt), A
+  CP   INVADER_MOVE_DELAY
+  RET  NZ
+  
+  ; Reset counter after delay reached
+  XOR  A
+  LD   (invader_move_delay_cnt), A
+  
   LD   A, (invader_row)
   CP   PLAYER_ROW
   JR   Z, invader_reached_player
@@ -184,7 +205,7 @@ update_invader:
   LD   A, (invader_col)
   ADD  A, B
 
-  CP   KBD_NO_KEY_PRESSED
+  CP   0
   JR   Z, invader_hit_left
   CP   SCREEN_COLS
   JR   Z, invader_hit_right
@@ -231,6 +252,12 @@ random_bomb_drop:
   LD   (bomb_row), A
   LD   A, TRUE
   LD   (is_bomb_active), A
+  
+  ; Play bomb sound
+  LD   A, BOMB_10HZ
+  OUT  (BEEP_10HZ_PORT), A
+  LD   A, BOMB_DURATION
+  OUT  (BEEP_MS_PORT), A
   RET
 
 invader_reached_player:
@@ -339,7 +366,7 @@ bomb_hit_player:
   RET
 
 draw_game:
-  CALL clear_SCREEN
+  CALL clear_screen
 
   LD   A, (invader_col)
   DEC  A
@@ -425,7 +452,7 @@ draw_char:
   LD   DE, 0
   LD   B, A
   AND  A
-  JR   Z, add_SCREEN_BASE 
+  JR   Z, add_screen_base 
 char_mult_loop:
   LD   A, E
   ADD  A, SCREEN_COLS
@@ -434,7 +461,7 @@ char_mult_loop:
   ADC  A, 0
   LD   D, A
   DJNZ char_mult_loop
-add_SCREEN_BASE:
+add_screen_base:
   LD   HL, SCREEN_BASE
   ADD  HL, DE
   POP  AF
@@ -444,22 +471,22 @@ add_SCREEN_BASE:
   LD   (HL), C
   RET
 
-SCREEN_string:
+print_string:
   LD   A, (DE)
   LD   (HL), A
   INC  HL
   INC  DE
-  DJNZ SCREEN_string
+  DJNZ print_string
   RET
 
 draw_controls:
   LD   HL, SCREEN_BASE + (BOTTOM_ROW * SCREEN_COLS)
   LD   DE, controls_msg
   LD   B, len(controls_msg)
-  CALL SCREEN_string
+  CALL print_string
   RET
 
-clear_SCREEN:
+clear_screen:
   LD   HL, SCREEN_BASE
   LD   BC, SCREEN_SIZE
 clear_loop:
@@ -471,6 +498,7 @@ clear_loop:
   JR   NZ, clear_loop
   RET
 
+
 game_delay:
   CALL inc_random_seed
   IN   A, (FRAME_COUNT_PORT)
@@ -480,6 +508,12 @@ game_delay:
 delay_done:
   XOR  A
   OUT  (FRAME_COUNT_PORT), A
+  RET
+
+inc_random_seed:
+  LD   A, (random_seed)
+  INC  A
+  LD   (random_seed), A
   RET
 
 end_game:
@@ -498,13 +532,13 @@ SCREEN_humans_won:
 
 SCREEN_end_message:
   LD   HL, SCREEN_BASE + (MESSAGE_ROW * SCREEN_COLS)
-  CALL SCREEN_string
+  CALL print_string
 
 SCREEN_show_press_to_play:
   LD   HL, SCREEN_BASE + (BOTTOM_ROW * SCREEN_COLS)
   LD   DE, press_to_play
   LD   B, len(press_to_play)
-  CALL SCREEN_string
+  CALL print_string
 
 wait_for_key:
   CALL inc_random_seed
@@ -566,6 +600,7 @@ set_new_start_row:
   LD   (game_over), A
   LD   (player_won), A
   LD   (invisible_mode), A
+  LD   (invader_move_delay_cnt), A
   RET
 
   END start

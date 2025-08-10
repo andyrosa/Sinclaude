@@ -36,14 +36,26 @@ class Z80AssemblerTestSuite {
     }
   }
 
+  // Helper method to extract all machine code bytes from instructionDetails
+  getMachineCodeFromInstructions(instructionDetails) {
+    const machineCode = [];
+    for (const instruction of instructionDetails) {
+      if (instruction.opcodes && instruction.opcodes.length > 0) {
+        machineCode.push(...instruction.opcodes);
+      }
+    }
+    return machineCode;
+  }
+
   assertAssemblySuccess(code, expectedBytes) {
     const result = this.assembler.assemble(code);
     if (result.success) {
-      if (!this.arraysEqual(result.machineCode, expectedBytes)) {
+      const actualBytes = this.getMachineCodeFromInstructions(result.instructionDetails);
+      if (!this.arraysEqual(actualBytes, expectedBytes)) {
         this.assert(
           false,
           code,
-          `Expected bytes: [${expectedBytes}], got: [${result.machineCode}]`
+          `Expected bytes: [${expectedBytes}], got: [${actualBytes}]`
         );
       } else {
         this.assert(true, code);
@@ -127,6 +139,7 @@ class Z80AssemblerTestSuite {
     this.testCaseInsensitivity();
     this.testLineAddresses();
     this.testBranchRange();
+    this.testMultipleOrg();
 
     this.printResults();
   }
@@ -516,6 +529,96 @@ LOOP:
     // Character literals in expressions
     this.assertAssemblySuccess("LD A, 'A' + 1", [0x3e, 66]);
 
+    // Test DB strings with trailing spaces for address tracking
+    this.assertAssemblySuccess('DB "Hello "', [72, 101, 108, 108, 111, 32]); // String with one trailing space
+    this.assertAssemblySuccess('DB "Test  "', [84, 101, 115, 116, 32, 32]); // String with two trailing spaces
+    this.assertAssemblySuccess('DB " Start"', [32, 83, 116, 97, 114, 116]); // String with leading space
+    this.assertAssemblySuccess('DB " Mid "', [32, 77, 105, 100, 32]); // String with both leading and trailing space
+
+    // Test that address tracking works correctly with trailing spaces in DB strings
+    const trailingSpacesProgram = `NOP
+DB "Hi "
+DEFW $1234
+HALT`;
+    
+    const result5 = this.assembler.assemble(trailingSpacesProgram);
+    this.assert(result5.success, "Trailing spaces program assembles successfully");
+    this.assert(result5.instructionDetails[0].startAddress === 0, "NOP at address 0");
+    this.assert(result5.instructionDetails[1].startAddress === 1, "DB 'Hi ' at address 1");
+    this.assert(result5.instructionDetails[2].startAddress === 4, "DEFW at address 4 (after 3-byte string with space)");
+    this.assert(result5.instructionDetails[3].startAddress === 6, "HALT at address 6 (after 2-byte word)");
+
+    // Test multiple DB strings with trailing spaces
+    const multipleSpacesProgram = `START:
+    DB "A "
+    DB "BB  "
+    DB "CCC   "
+LOOP:
+    LD A, 42
+    HALT`;
+    
+    const result6 = this.assembler.assemble(multipleSpacesProgram);
+    this.assert(result6.success, "Multiple trailing spaces program assembles successfully");
+    this.assert(result6.instructionDetails[0].startAddress === 0, "START label at address 0");
+    this.assert(result6.instructionDetails[1].startAddress === 0, "First DB 'A ' at address 0");
+    this.assert(result6.instructionDetails[2].startAddress === 2, "Second DB 'BB  ' at address 2 (after 2-byte string)");
+    this.assert(result6.instructionDetails[3].startAddress === 6, "Third DB 'CCC   ' at address 6 (after 4-byte string)");
+    this.assert(result6.instructionDetails[4].startAddress === 12, "LOOP label at address 12 (after 6-byte string)");
+    this.assert(result6.instructionDetails[5].startAddress === 12, "LD A, 42 at address 12");
+    this.assert(result6.instructionDetails[6].startAddress === 14, "HALT at address 14");
+
+    // Test DB string with only spaces
+    const onlySpacesProgram = `NOP
+DB "   "
+NOP`;
+    
+    const result7 = this.assembler.assemble(onlySpacesProgram);
+    this.assert(result7.success, "Only spaces string program assembles successfully");
+    this.assert(result7.instructionDetails[0].startAddress === 0, "First NOP at address 0");
+    this.assert(result7.instructionDetails[1].startAddress === 1, "DB '   ' at address 1");
+    this.assert(result7.instructionDetails[2].startAddress === 4, "Second NOP at address 4 (after 3-space string)");
+
+    // CRITICAL TEST: Verify that we can access bytes at specific addresses
+    // This test would have caught the original issue where address 0x337 returned 0
+    const addressAccessProgram = `
+MSG1: DB "Hello World     "  ; 16 bytes, ends at address 15
+MSG2: DB "Test Message    "  ; 16 bytes, ends at address 31
+CODE:
+    LD A, 42      ; Should be at address 32 (0x20)
+    LD (100), A   ; Should be at address 34 (0x22)
+    NOP           ; Should be at address 37 (0x25)
+`;
+    
+    const result8 = this.assembler.assemble(addressAccessProgram);
+    this.assert(result8.success, "Address access test program assembles successfully");
+    
+    // Test accessing bytes at specific addresses through instruction details
+    const getByteAtAddress = (addr) => {
+      for (const detail of result8.instructionDetails) {
+        const startAddr = detail.startAddress;
+        const endAddr = startAddr + (detail.opcodes?.length || 0) - 1;
+        if (startAddr <= addr && endAddr >= addr && detail.opcodes) {
+          return detail.opcodes[addr - startAddr];
+        }
+      }
+      return null; // Address not found
+    };
+    
+    // Test that we can correctly access bytes at specific addresses
+    this.assert(getByteAtAddress(0) === 72, "Address 0 contains 'H' (72)"); // First byte of "Hello World"
+    this.assert(getByteAtAddress(15) === 32, "Address 15 contains space (32)"); // Last trailing space of MSG1
+    this.assert(getByteAtAddress(16) === 84, "Address 16 contains 'T' (84)"); // First byte of "Test Message"
+    this.assert(getByteAtAddress(31) === 32, "Address 31 contains space (32)"); // Last trailing space of MSG2
+    this.assert(getByteAtAddress(32) === 0x3E, "Address 32 contains LD A,n opcode (0x3E)"); // LD A, 42
+    this.assert(getByteAtAddress(33) === 42, "Address 33 contains immediate value (42)"); // LD A, 42
+    this.assert(getByteAtAddress(34) === 0x32, "Address 34 contains LD (nn),A opcode (0x32)"); // LD (100), A
+    this.assert(getByteAtAddress(35) === 100, "Address 35 contains address low byte (100)"); // LD (100), A
+    this.assert(getByteAtAddress(36) === 0, "Address 36 contains address high byte (0)"); // LD (100), A
+    this.assert(getByteAtAddress(37) === 0x00, "Address 37 contains NOP opcode (0x00)"); // NOP
+    
+    // Test that accessing invalid addresses returns null
+    this.assert(getByteAtAddress(1000) === null, "Invalid address returns null");
+
     // Error cases
     this.assertAssemblyError("LD A, 'AB'", "Unterminated character literal");
     this.assertAssemblyError("LD A, ''", "Empty character literal");
@@ -597,14 +700,15 @@ LOOP:
       "out of range"
     );
 
-    // Multiple ORG directives
-    this.assertAssemblyError(
+    // Multiple ORG directives should now be allowed
+    this.assertAssemblySuccess(
       `
             ORG 100
             NOP
             ORG 200
+            HALT
         `,
-      "can only be used when current address is zero"
+      [0x00, 0x76] // NOP at 100, HALT at 200
     );
   }
 
@@ -1115,7 +1219,7 @@ SKIP:
       // JR from 32768 to 32771: offset = 32771 - (32768 + 2) = 1
       // Expected: JR rel = [0x18, 0x01], NOP = [0x00], HALT = [0x76]
       const expectedBytes = [0x18, 0x01, 0x00, 0x76];
-      const actualBytes = resultSimpleSkip.machineCode;
+      const actualBytes = this.getMachineCodeFromInstructions(resultSimpleSkip.instructionDetails);
       
       this.assert(
         JSON.stringify(actualBytes) === JSON.stringify(expectedBytes),
@@ -1123,6 +1227,96 @@ SKIP:
         `Expected: [${expectedBytes.join(', ')}], Got: [${actualBytes.join(', ')}]`
       );
     }
+  }
+
+  // Test multiple ORG directives functionality
+  testMultipleOrg() {
+    this.consoleLogIfNode("\nTesting Multiple ORG Directives");
+    
+    // Test 0 ORG directives - default address 0
+    const noOrgProgram = `; No ORG directive
+NOP
+LD A, 42
+HALT`;
+    
+    const result0 = this.assembler.assemble(noOrgProgram);
+    this.assert(result0.success, "Program with 0 ORG directives assembles successfully");
+    this.assert(result0.loadAddress === 0, "Default load address is 0 when no ORG");
+    this.assert(result0.instructionDetails[1].startAddress === 0, "First instruction starts at address 0");
+    this.assert(result0.instructionDetails[2].startAddress === 1, "Second instruction at address 1");
+    this.assert(result0.instructionDetails[3].startAddress === 3, "Third instruction at address 3");
+    
+    // Test 1 ORG directive
+    const oneOrgProgram = `; One ORG directive
+ORG 1000H
+START:
+    LD A, 55H
+    NOP
+    HALT`;
+    
+    const result1 = this.assembler.assemble(oneOrgProgram);
+    this.assert(result1.success, "Program with 1 ORG directive assembles successfully");
+    this.assert(result1.loadAddress === 0x1000, "Load address is 0x1000 with ORG 1000H");
+    this.assert(result1.instructionDetails[1].startAddress === 0x1000, "ORG line at address 0x1000");
+    this.assert(result1.instructionDetails[2].startAddress === 0x1000, "Label at address 0x1000");
+    this.assert(result1.instructionDetails[3].startAddress === 0x1000, "First instruction at address 0x1000");
+    this.assert(result1.instructionDetails[4].startAddress === 0x1002, "Second instruction at address 0x1002");
+    this.assert(result1.instructionDetails[5].startAddress === 0x1003, "Third instruction at address 0x1003");
+    
+    // Test 2 ORG directives - multiple memory segments
+    const twoOrgProgram = `; Two ORG directives
+ORG 1000H
+MAIN:
+    LD A, 42H
+    NOP
+
+ORG 2000H
+SUBROUTINE:
+    LD B, 55H
+    RET
+
+ORG 1002H
+    JP SUBROUTINE`;
+    
+    const result2 = this.assembler.assemble(twoOrgProgram);
+    this.assert(result2.success, "Program with 2 ORG directives assembles successfully");
+    this.assert(result2.loadAddress === 0x1000, "Load address is first ORG address 0x1000");
+    
+    // Check first segment (ORG 1000H)
+    this.assert(result2.instructionDetails[1].startAddress === 0x1000, "First ORG at address 0x1000");
+    this.assert(result2.instructionDetails[2].startAddress === 0x1000, "MAIN label at address 0x1000");
+    this.assert(result2.instructionDetails[3].startAddress === 0x1000, "LD A, 42H at address 0x1000");
+    this.assert(result2.instructionDetails[4].startAddress === 0x1002, "NOP at address 0x1002");
+    
+    // Check second segment (ORG 2000H)
+    this.assert(result2.instructionDetails[6].startAddress === 0x2000, "Second ORG at address 0x2000");
+    this.assert(result2.instructionDetails[7].startAddress === 0x2000, "SUBROUTINE label at address 0x2000");
+    this.assert(result2.instructionDetails[8].startAddress === 0x2000, "LD B, 55H at address 0x2000");
+    this.assert(result2.instructionDetails[9].startAddress === 0x2002, "RET at address 0x2002");
+    
+    // Check third segment (ORG 1002H)
+    this.assert(result2.instructionDetails[11].startAddress === 0x1002, "Third ORG at address 0x1002");
+    this.assert(result2.instructionDetails[12].startAddress === 0x1002, "JP SUBROUTINE at address 0x1002");
+    
+    // Verify machine code contains bytes for all segments
+    const machineCodeBytes = this.getMachineCodeFromInstructions(result2.instructionDetails);
+    this.assert(machineCodeBytes.length > 0, "Machine code generated for multiple ORG program");
+    
+    // Test that instruction details contain opcodes for each instruction
+    const mainLdInstruction = result2.instructionDetails[3]; // LD A, 42H
+    this.assert(mainLdInstruction.opcodes.length === 2, "LD A, 42H generates 2 opcodes");
+    this.assert(mainLdInstruction.opcodes[0] === 0x3E, "LD A, 42H first opcode is 0x3E");
+    this.assert(mainLdInstruction.opcodes[1] === 0x42, "LD A, 42H second opcode is 0x42");
+    
+    const nopInstruction = result2.instructionDetails[4]; // NOP
+    this.assert(nopInstruction.opcodes.length === 1, "NOP generates 1 opcode");
+    this.assert(nopInstruction.opcodes[0] === 0x00, "NOP opcode is 0x00");
+    
+    const jumpInstruction = result2.instructionDetails[12]; // JP SUBROUTINE
+    this.assert(jumpInstruction.opcodes.length === 3, "JP SUBROUTINE generates 3 opcodes");
+    this.assert(jumpInstruction.opcodes[0] === 0xC3, "JP first opcode is 0xC3");
+    this.assert(jumpInstruction.opcodes[1] === 0x00, "JP address low byte is 0x00 (0x2000 & 0xFF)");
+    this.assert(jumpInstruction.opcodes[2] === 0x20, "JP address high byte is 0x20 (0x2000 >> 8)");
   }
 
   printResults() {

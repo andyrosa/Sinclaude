@@ -2,7 +2,6 @@
  * Z80 Assembler grammar specification
  * 
  * The assembler returns:
- * - machineCode: Array of bytes representing the assembled program
  * - loadAddress: The starting address where the program should be loaded
  * - instructionDetails: Array with details for each source line (address, source, opcodes)
  * 
@@ -129,9 +128,9 @@ class Z80Assembler {
      * Assembles Z80 source code into machine code.
      *
      * @param {string} sourceCode The Z80 assembly source code.
-     * @returns {{success: boolean, machineCode?: number[], loadAddress?: number, lineAddresses?: number[], errors?: {line: number, message: string}[]}}
+     * @returns {{success: boolean, loadAddress?: number, instructionDetails?: object[], errors?: {line: number, message: string}[]}}
      *          An object indicating success or failure. On success, it includes the
-     *          machine code, load address, and line addresses. On failure, it includes an array of errors.
+     *          load address and instruction details. On failure, it includes an array of errors.
      */
     assemble(sourceCode) {
         this.sourceLines = sourceCode.split('\n');
@@ -142,6 +141,7 @@ class Z80Assembler {
         this.currentAddress = 0; // Default to address 0
         this.parsedLines = [];
         this.instructionDetails = []; // Track instruction details for each source line
+        this.firstOrgFound = false; // Track if we've seen the first ORG directive
 
         try {
             // --- First Pass: Parse lines, define symbols, and calculate addresses ---
@@ -153,7 +153,7 @@ class Z80Assembler {
             }
 
             // --- Second Pass: Generate machine code ---
-            const machineCode = this._performSecondPass();
+            this._performSecondPass();
 
             if (this.errors.length > 0) {
                 throw new Error("Assembly failed due to errors on second pass.");
@@ -161,7 +161,6 @@ class Z80Assembler {
 
             return {
                 success: true,
-                machineCode,
                 loadAddress: this.loadAddress,
                 instructionDetails: this.instructionDetails,
             };
@@ -210,12 +209,12 @@ class Z80Assembler {
 
             // Process ORG directive first to set addresses before processing labels
             if (parsed.mnemonic && parsed.mnemonic.toUpperCase() === 'ORG') {
-                if (this.currentAddress !== 0) {
-                    this._reportError(lineNum, `ORG directive can only be used when current address is zero. Current address is ${this.currentAddress}.`);
-                    return;
+                this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
+                // Only set load address on the first ORG directive
+                if (!this.firstOrgFound) {
+                    this.loadAddress = this.currentAddress;
+                    this.firstOrgFound = true;
                 }
-                this.loadAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
-                this.currentAddress = this.loadAddress;
                 // Update the instruction details for this ORG line
                 this.instructionDetails[i].startAddress = this.currentAddress;
             }
@@ -294,7 +293,6 @@ class Z80Assembler {
      * - Reports errors related to undefined labels or out-of-range values.
      */
     _performSecondPass() {
-        const machineCode = [];
         this.currentAddress = this.loadAddress;
 
         for (const parsed of this.parsedLines) {
@@ -307,7 +305,7 @@ class Z80Assembler {
                 if (mnemonic === 'ORG') {
                     const address = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
                     if (isNaN(address)) {
-                        return machineCode; // Error already reported, stop assembly
+                        return; // Error already reported, stop assembly
                     }
                     this.currentAddress = address;
                 }
@@ -353,11 +351,8 @@ class Z80Assembler {
                 this.instructionDetails[sourceLineIndex].opcodes = bytes.slice(); // Copy the bytes array
             }
             
-            machineCode.push(...bytes);
             this.currentAddress += bytes.length;
         }
-
-        return machineCode;
     }
 
 
@@ -506,7 +501,7 @@ class Z80Assembler {
                 // Calculate size for the first pass
                 let size = inst.opcodes.length;
                 inst.operands.forEach(p => {
-                    if (p === Z80Assembler.OPERAND.IMM8 || p === Z80Assembler.OPERAND.RELATIVE) size += 1;
+                    if (p === Z80Assembler.OPERAND.IMM8 || p === Z80Assembler.OPERAND.RELATIVE || p === Z80Assembler.OPERAND.MEM8) size += 1;
                     if (p === Z80Assembler.OPERAND.IMM16 || p === Z80Assembler.OPERAND.MEM16) size += 2;
                 });
                 return { ...inst, size };
@@ -995,12 +990,16 @@ class Z80Assembler {
     }
 
     /**
-     * Records an error with its line number.
+     * Records an error with its line number and current address when known.
      * @param {number} lineNum - The line number where the error occurred.
      * @param {string} message - The error description.
      */
     _reportError(lineNum, message) {
-        this.errors.push({ line: lineNum, address: this.currentAddress || 0, message });
+        this.errors.push({ 
+            line: lineNum, 
+            address: this.currentAddress !== undefined ? this.currentAddress : null, 
+            message 
+        });
     }
 
 
@@ -1027,35 +1026,86 @@ class Z80Assembler {
 
     /**
      * Formats the machine code into a human-readable hex dump.
-     * @param {number[]} machineCode - The array of bytes.
+     * @param {object[]} instructionDetails - The array of instruction details.
      * @param {number} loadAddress - The starting address for the display.
      * @returns {string} A formatted string representation of the machine code.
      */
-    displayMachineCode(machineCode, loadAddress) {
-        if (!machineCode || machineCode.length === 0) {
+    generateMachineCodeListing(instructionDetails, loadAddress) {
+        if (!instructionDetails || instructionDetails.length === 0) {
+            return "No machine code generated.";
+        }
+
+        // Build sparse memory array from instruction details (like simulator does)
+        const memory = {};
+        let minAddress = null;
+        let maxAddress = null;
+
+        instructionDetails.forEach(detail => {
+            if (detail.startAddress !== null && detail.opcodes.length > 0) {
+                for (let i = 0; i < detail.opcodes.length; i++) {
+                    const addr = detail.startAddress + i;
+                    memory[addr] = detail.opcodes[i];
+                    
+                    if (minAddress === null || addr < minAddress) minAddress = addr;
+                    if (maxAddress === null || addr > maxAddress) maxAddress = addr;
+                }
+            }
+        });
+
+        if (minAddress === null) {
             return "No machine code generated.";
         }
 
         let output = "";
         const hex = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 
-        for (let i = 0; i < machineCode.length; i += 8) {
-            const rowBytes = machineCode.slice(i, i + 8);
-            const address = loadAddress + i;
+        // Iterate through addresses, handling sparse memory with gaps between ORG segments
+        let currentAddress = minAddress;
+        
+        while (currentAddress <= maxAddress) {
+            // Find next group of consecutive bytes (up to 8)
+            const rowBytes = [];
+            const rowStartAddress = currentAddress;
+            
+            for (let i = 0; i < 8 && currentAddress <= maxAddress; i++) {
+                if (memory.hasOwnProperty(currentAddress)) {
+                    rowBytes.push(memory[currentAddress]);
+                    currentAddress++;
+                } else {
+                    // Skip gap in memory (between ORG segments)
+                    currentAddress++;
+                    while (currentAddress <= maxAddress && !memory.hasOwnProperty(currentAddress)) {
+                        currentAddress++;
+                    }
+                    break; // Start new row at next memory segment
+                }
+            }
+            
+            // Only output row if we found bytes
+            if (rowBytes.length > 0) {
+                if (this.useHexFormat) {
+                    // Address part (hex, little-endian format)
+                    output += `${hex(rowStartAddress & 0xFF)}${hex((rowStartAddress >> 8) & 0xFF)} `;
 
-            // Calculate CRC16 for this line (address bytes + data bytes)
-            const addressBytes = [address & 0xFF, (address >> 8) & 0xFF];
-            const lineBytes = [...addressBytes, ...rowBytes];
-            const lineCRC16 = this._calculateCRC16(lineBytes);
+                    // Data column - hex values separated by commas (no CRC)
+                    const hexData = rowBytes.map(b => hex(b)).join(',');
+                    output += `Data ${hexData}`;
+                } else {
+                    // Calculate CRC16 for this line (address bytes + data bytes)
+                    const addressBytes = [rowStartAddress & 0xFF, (rowStartAddress >> 8) & 0xFF];
+                    const lineBytes = [...addressBytes, ...rowBytes];
+                    const lineCRC16 = this._calculateCRC16(lineBytes);
 
-            // Address part (decimal)
-            output += `${address} `;
+                    // Address part (decimal)
+                    output += `${rowStartAddress} `;
 
-            // Data column - decimal values separated by commas, plus line CRC16
-            const decimalData = rowBytes.map(b => b.toString()).join(',');
-            output += `Data ${decimalData},${lineCRC16}`;
+                    // Data column - decimal values separated by commas, plus line CRC16
+                    const decimalData = rowBytes.map(b => b.toString()).join(',');
+                    output += `Data ${decimalData},${lineCRC16}`;
+                }
 
-            output += '\n';
+                output += '\n';
+            }
         }
 
         return output;
@@ -1448,6 +1498,17 @@ class ExpressionParser {
         this.assembler._reportError(this.lineNum, message);
     }
 }
+
+// Static utility method for loading opcodes into memory
+Z80Assembler.loadOpcodesIntoMemory = function(memory, instructionDetails) {
+    instructionDetails.forEach(detail => {
+        if (detail.startAddress !== null && detail.opcodes.length > 0) {
+            for (let i = 0; i < detail.opcodes.length; i++) {
+                memory[detail.startAddress + i] = detail.opcodes[i];
+            }
+        }
+    });
+};
 
 // Export for Node.js if running in Node environment
 if (typeof module !== 'undefined' && module.exports) {

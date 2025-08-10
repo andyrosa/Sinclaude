@@ -12,7 +12,7 @@ Every block of refactoring work must:
 
 Never leave the codebase in a broken state.
 
-### NEVER RETURN FAKE VALUES
+### NEVER RETURN FALLBACK VALUES
 
 **If you cannot do the real thing, don't pretend you can by returning made-up data.**
 
@@ -144,4 +144,3 @@ if (isNaN(this.mipsValue) || isNaN(instantMips)) {
 ```
 
 **Principle**: Add logging to understand WHY the problem occurs, then fix the root cause. Defensive code often masks symptoms instead of solving the underlying issue.
-

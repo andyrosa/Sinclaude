@@ -1,50 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- this page has bocome 95.4% vibe coded, unlike the simulator, where 95.4% of the code was human (tm) reviewed -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sinclaude Sinclair Simple Simulator - Home</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="constants_and_css_vars.js"></script>
     <style>
+        /* Base styles */
         body {
-            background: black;
-            color: white;
+            background: var(--surface-bgc);
+            color: var(--surface-text-c);
             font-family: monospace;
+            font-size: 16px;
+            line-height: 1.6;
             margin: 0;
             padding: 20px;
             text-align: center;
         }
+
         .container {
             max-width: 800px;
             margin: 0 auto;
             padding: 40px 20px;
         }
+
+        /* Typography */
         h1 {
-            color: #00ff00;
-            font-size: 2.5em;
-            margin-bottom: 30px;
+            font-size: 2em;
+            margin-bottom: 1em;
         }
+
         h2 {
-            color: #00ff00;
-            font-size: 1.8em;
-            margin: 30px 0 20px 0;
-            text-align: left;
+            font-size: 1.5em;
+            margin: 1.5em 0 1em 0;
         }
+
         h3 {
-            color: #00ff00;
-            font-size: 1.4em;
-            margin: 25px 0 15px 0;
-            text-align: left;
-        }
-        .content {
             font-size: 1.2em;
-            line-height: 1.6;
-            margin: 30px 0;
-            text-align: left;
+            margin: 1.2em 0 0.8em 0;
         }
+
+        p {
+            margin: 1em 0;
+        }
+
+        /* Content area */
+        .content {
+            font-size: 1em;
+            text-align: left;
+            margin: 2em 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Button styles */
         .launch-button {
-            background: #333;
-            color: white;
-            border: 2px solid #00ff00;
+            background: var(--button-bgc);
+            color: var(--button-text-c);
+            border: 2px solid var(--button-border-c);
             padding: 15px 30px;
             font-family: monospace;
             font-size: 1.2em;
@@ -52,106 +67,333 @@
             margin: 20px;
             text-decoration: none;
             display: inline-block;
+            border-radius: 4px;
         }
+
         .launch-button:hover {
-            background: #00ff00;
-            color: black;
+            background: var(--button-hover-bgc);
+            color: var(--button-text-c);
         }
+
+        /* Links */
+        a {
+            color: var(--attention-c);
+            text-decoration: underline;
+        }
+
+        a:hover {
+            color: var(--surface-text-c);
+            text-decoration: underline;
+        }
+
+        a:visited {
+            color: var(--surface-muted-text-c);
+        }
+
+        /* Lists */
         ul {
             list-style-type: none;
             padding-left: 0;
         }
+
         ul li:before {
             content: "> ";
-            color: #00ff00;
+            color: var(--surface-muted-text-c);
         }
+
         ul ul {
             margin-left: 20px;
             font-size: 0.9em;
         }
+
+        /* Code blocks */
         code {
-            background: #333;
-            padding: 2px 4px;
+            background: var(--editable-text-bgc);
+            color: var(--editable-text-fgc);
+            padding: 2px 6px;
             border-radius: 3px;
+            font-size: 0.9em;
         }
-        p {
-            margin: 15px 0;
+
+        pre {
+            background: var(--editable-text-bgc);
+            color: var(--editable-text-fgc);
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
         }
-        a {
-            color: #00ff00;
-        }
-        .magazine-ad {
-            margin: 40px 0 0 0;
+
+        pre code {
+            background: none;
             padding: 0;
+            font-size: inherit;
+        }
+
+        /* Magazine ad section */
+        .magazine-ad-container {
+            text-align: center;
+            margin: 2em 0;
+        }
+
+        .magazine-ad-top {
+            max-width: min(80%, 800px);
+            width: 80%;
+            height: auto;
+            border: 2px solid var(--border-c);
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Media content and images */
+        .media-content {
+            margin: 3em 0 0 0;
             text-align: center;
             display: none;
         }
-        .magazine-ad.loaded {
+
+        .media-content.loaded {
             display: block;
         }
-        .magazine-ad img {
-            max-width: 80%;
-            width: 80%;
+
+        .media-content h2 {
+            color: var(--surface-text-c);
+            font-size: 1.8em;
+            margin: 0 0 2em 0;
+        }
+
+        .media-content img {
             height: auto;
-            margin: 0 auto;
-            border: 2px solid #00ff00;
-            box-sizing: border-box;
+            margin: 1.5em auto;
+            border: 2px solid var(--border-c);
+            border-radius: 4px;
             display: block;
         }
+
+        /* Desktop screenshot */
+        .media-content img[alt*="Desktop"] {
+            max-width: min(90%, 1366px);
+            width: 90%;
+        }
+
+        /* Mobile screenshots */
+        .media-content img[alt*="Mobile"] {
+            max-width: min(90%, 412px);
+            width: 30%;
+            border: 3px solid var(--surface-text-c);
+            border-radius: 8px;
+        }
+
+        /* Image labels */
+        .image-label {
+            font-size: 0.85em;
+            color: var(--surface-muted-text-c);
+            margin: -1em auto 2em auto;
+            font-style: italic;
+        }
+
+        /* Attributions */
         .attributions {
             font-size: 0.8em;
-            color: #888;
+            color: var(--surface-muted-text-c);
             text-align: center;
-            margin: 20px 0;
+            margin: 1em 0;
+            font-style: italic;
         }
-        .attributions h4 {
-            color: #00ff00;
-            margin-bottom: 10px;
-        }
-        .attributions p {
-            margin: 5px 0;
+
+        /* Mobile responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 14px;
+            }
+
+            .container {
+                padding: 20px 10px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            h2 {
+                font-size: 1.4em;
+            }
+
+            h3 {
+                font-size: 1.2em;
+            }
+
+            .content {
+                font-size: 1em;
+                margin: 1em 0;
+            }
+
+            .launch-button {
+                font-size: 1em;
+                padding: 12px 20px;
+                margin: 15px 0;
+                display: block;
+            }
+
+            .media-content h2 {
+                font-size: 1.5em;
+                margin: 0 0 1.5em 0;
+            }
+
+            .media-content img[alt*="Desktop"] {
+                width: 95%;
+            }
+
+            .media-content img[alt*="Mobile"] {
+                width: 60%;
+            }
+
+            .magazine-ad-top {
+                width: 95%;
+            }
+
+            .image-label {
+                font-size: 0.8em;
+                margin: -0.8em auto 1.5em auto;
+            }
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" 
-            integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" 
-            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+        integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+"
+        crossorigin="anonymous"></script>
 </head>
+
 <body>
     <div class="container">
         <a href="simulator.html" class="launch-button">LAUNCH SIMULATOR</a>
-        
+
         <div id="content" class="content">
-            Loading README...
+            Loading README.md
         </div>
     </div>
-    
-    <div class="magazine-ad">
-        <div class="attributions">
-            <p>Image credit: <a href="https://archive.org/details/byte-magazine-1981-12/page/n169/mode/2up" target="_blank" rel="noopener">Byte Magazine December 1981</a></p>
-        </div>
-        <img src="magazine_ad.png" alt="Sinclair ZX81 Magazine Advertisement">
+
+    <div class="media-content">
+        <h2>Screenshots</h2>
+        <img src="desktop_screenshot.PNG" alt="Sinclaude Desktop View">
+        <div class="image-label">Desktop View - Full Interface (1366px native width)</div>
+        <img src="phone_screenshot_top.PNG" alt="Sinclaude Mobile Top">
+        <div class="image-label">Mobile View - Top of Screen</div>
+        <img src="phone_screenshot_bottom.PNG" alt="Sinclaude Mobile Bottom">
+        <div class="image-label">Mobile View - Bottom of Screen</div>
     </div>
 
     <script>
         // Fetch and render README.md
+        // const README_GHPAGES_URL= 'https://andyrosa.github.io/Sinclaude/README.md';
+        const README_REPO_URL = 'https://raw.githubusercontent.com/andyrosa/Sinclaude/main/README.md';
+        //not to be confused with  https://github.com/andyrosa/Sinclaude/blob/main/README.md" which is HTML not raw markdown
         async function loadReadme() {
             try {
-                const response = await fetch('README.md');
+                let response;
+                const filename = README_REPO_URL.split('/').pop(); // Extract filename from URL
+                
+                // Try local folder first, then repo URL as fallback
+                let fetchFailed = false;
+                try {
+                    response = await fetch(filename);
+                    if (!response.ok) {
+                        fetchFailed = true;
+                    }
+                } catch (error) {
+                    fetchFailed = true;
+                }
+                
+                if (fetchFailed) {
+                    response = await fetch(README_REPO_URL);
+                }
+                
                 const markdown = await response.text();
                 const html = marked.parse(markdown);
                 document.getElementById('content').innerHTML = html;
+                
+                // Insert magazine ad after Features section
+                const featuresHeading = document.querySelector('#content h2');
+                if (featuresHeading && featuresHeading.textContent.includes('Features')) {
+                    const adContainer = document.createElement('div');
+                    adContainer.className = 'magazine-ad-container';
+                    adContainer.innerHTML = `
+                        <img src="magazine_ad.png" alt="Sinclair ZX81 Magazine Advertisement" class="magazine-ad-top">
+                        <div class="attributions">
+                            <p>Image credit: <a href="https://archive.org/details/byte-magazine-1981-12/page/n169/mode/2up"
+                                target="_blank" rel="noopener">Byte Magazine December 1981</a></p>
+                        </div>
+                    `;
+                    
+                    // Find the next h2 element (Technical Details) to insert before it
+                    let nextSection = featuresHeading.nextElementSibling;
+                    while (nextSection && nextSection.tagName !== 'H2') {
+                        nextSection = nextSection.nextElementSibling;
+                    }
+                    
+                    if (nextSection) {
+                        nextSection.parentNode.insertBefore(adContainer, nextSection);
+                    } else {
+                        // If no next h2 found, append after features content
+                        document.getElementById('content').appendChild(adContainer);
+                    }
+                }
+                
+                // Move "About This Project" section to after screenshots
+                const aboutHeading = Array.from(document.querySelectorAll('#content h2')).find(h => 
+                    h.textContent.includes('About This Project'));
+                
+                if (aboutHeading) {
+                    // Collect all elements that belong to the "About This Project" section
+                    const aboutElements = [];
+                    let currentElement = aboutHeading;
+                    
+                    while (currentElement) {
+                        const nextElement = currentElement.nextElementSibling;
+                        // Stop if we hit another h2 (next section)
+                        if (nextElement && nextElement.tagName === 'H2') {
+                            aboutElements.push(currentElement);
+                            break;
+                        }
+                        aboutElements.push(currentElement);
+                        currentElement = nextElement;
+                    }
+                    
+                    // Remove the about section from its current position
+                    const aboutContainer = document.createElement('div');
+                    aboutContainer.id = 'about-section-moved';
+                    aboutElements.forEach(el => {
+                        aboutContainer.appendChild(el.cloneNode(true));
+                        el.remove();
+                    });
+                    
+                    // Store it to append after screenshots load
+                    window.aboutSectionToMove = aboutContainer;
+                }
             } catch (error) {
-                console.error('Error loading README.md:', error);
+                // Show fallback message with repo URL
                 document.getElementById('content').innerHTML = marked.parse(
                     "## README.md not available\n" +
-                    "You can view it [here](https://github.com/andyrosa/Sinclaude/blob/main/README.md)."
+                    "You can view it [here](" + README_REPO_URL + ")."
                 );
             } finally {
-                // Show the magazine ad after README loading is complete (success or error)
-                document.querySelector('.magazine-ad').classList.add('loaded');
+                // Show the media content after README loading is complete (success or error)
+                document.querySelectorAll('.media-content').forEach(element => {
+                    element.classList.add('loaded');
+                });
+                
+                // Append the "About This Project" section after screenshots if it was moved
+                if (window.aboutSectionToMove) {
+                    const mediaContent = document.querySelector('.media-content');
+                    if (mediaContent) {
+                        mediaContent.appendChild(window.aboutSectionToMove);
+                    }
+                }
             }
         }
         window.addEventListener('load', loadReadme);
     </script>
 </body>
+
 </html>

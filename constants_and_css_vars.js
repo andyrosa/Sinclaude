@@ -1,4 +1,13 @@
-// Generic application constants
+// Global numeric constants
+const one_million = 1000000; // hard to read so many zeros; get_with_the_program_js!
+const FPS = 60;
+const RUN_LOOP_INTERVAL_MS = 1;
+const fancy_highlight_scroll = true;
+
+// Responsive breakpoints
+const BREAKPOINTS = {
+    MOBILE_MAX: 768    // Maximum width for mobile/phone devices
+};
 
 // State constants
 const STATE = {
@@ -20,9 +29,10 @@ const Z_INDEX = {
     MAXIMUM: 9999               // Maximum z-index for critical overlays
 };
 
-// Function to set CSS custom properties from JavaScript constants
-function initializeZIndexConstants() {
+function setCssVariables() {
     const root = document.documentElement;
+    
+    // Set Z-Index constants
     root.style.setProperty('--z-base', Z_INDEX.BASE);
     root.style.setProperty('--z-menu-dropdown', Z_INDEX.MENU_DROPDOWN);
     root.style.setProperty('--z-modal-backdrop', Z_INDEX.MODAL_BACKDROP);
@@ -32,11 +42,8 @@ function initializeZIndexConstants() {
     root.style.setProperty('--z-notification', Z_INDEX.NOTIFICATION);
     root.style.setProperty('--z-debug-overlay', Z_INDEX.DEBUG_OVERLAY);
     root.style.setProperty('--z-maximum', Z_INDEX.MAXIMUM);
+    
+    // Set breakpoint constants
+    root.style.setProperty('--narrow-max-width', BREAKPOINTS.MOBILE_MAX + 'px');
 }
-
-// Initialize CSS custom properties immediately since constants.js is loaded in head
-initializeZIndexConstants();
-
-// Global numeric constants
-const one_million = 1000000; // 1,000,000 - conversion factor for MIPS
-const FPS = 50;
+setCssVariables();
