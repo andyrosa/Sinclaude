@@ -1,6 +1,6 @@
 const BENCHMARK_ASM = `
 ; Increment and print HL approximately every 4 million T-states,
-; which corresponds to roughly 1 second on an physical 4 MHz Z80A CPU.
+; roughly 1 second on an physical 4 MHz Z80A CPU.
 
     SCREEN_START:  equ 60000
 

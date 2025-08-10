@@ -124,6 +124,7 @@ class Z80AssemblerTestSuite {
     this.testErrorHandling();
     this.testComplexPrograms();
     this.testComprehensiveInstructions();
+    this.testCaseInsensitivity();
     this.testLineAddresses();
     this.testBranchRange();
 
@@ -132,9 +133,9 @@ class Z80AssemblerTestSuite {
 
   // Test 13: Line addresses functionality
   testLineAddresses() {
-    this.consoleLogIfNode("\nTesting Line Addresses");
+    this.consoleLogIfNode("\nTesting Instruction Details");
 
-    // Test that assembler returns line addresses
+    // Test that assembler returns instruction details with addresses
     const simpleProgram = `; Comment
 NOP
 LD A, 42
@@ -142,12 +143,12 @@ HALT`;
     
     const result1 = this.assembler.assemble(simpleProgram);
     this.assert(result1.success, "Simple program assembles successfully");
-    this.assert(Array.isArray(result1.lineAddresses), "lineAddresses is an array");
-    this.assert(result1.lineAddresses.length === 4, "lineAddresses has correct length");
-    this.assert(result1.lineAddresses[0] === 0, "Comment line has address 0");
-    this.assert(result1.lineAddresses[1] === 0, "NOP line has address 0");
-    this.assert(result1.lineAddresses[2] === 1, "LD A, 42 line has address 1");
-    this.assert(result1.lineAddresses[3] === 3, "HALT line has address 3");
+    this.assert(Array.isArray(result1.instructionDetails), "instructionDetails is an array");
+    this.assert(result1.instructionDetails.length === 4, "instructionDetails has correct length");
+    this.assert(result1.instructionDetails[0].startAddress === 0, "Comment line has address 0");
+    this.assert(result1.instructionDetails[1].startAddress === 0, "NOP line has address 0");
+    this.assert(result1.instructionDetails[2].startAddress === 1, "LD A, 42 line has address 1");
+    this.assert(result1.instructionDetails[3].startAddress === 3, "HALT line has address 3");
 
     // Test with ORG directive
     const orgProgram = `; Header
@@ -157,10 +158,10 @@ HALT`;
     
     const result2 = this.assembler.assemble(orgProgram);
     this.assert(result2.success, "ORG program assembles successfully");
-    this.assert(result2.lineAddresses[0] === 0, "Header comment before ORG has address 0");
-    this.assert(result2.lineAddresses[1] === 32768, "ORG line shows new address");
-    this.assert(result2.lineAddresses[2] === 32768, "First instruction after ORG");
-    this.assert(result2.lineAddresses[3] === 32769, "Second instruction incremented");
+    this.assert(result2.instructionDetails[0].startAddress === 0, "Header comment before ORG has address 0");
+    this.assert(result2.instructionDetails[1].startAddress === 32768, "ORG line shows new address");
+    this.assert(result2.instructionDetails[2].startAddress === 32768, "First instruction after ORG");
+    this.assert(result2.instructionDetails[3].startAddress === 32769, "Second instruction incremented");
 
     // Test with data directives
     const dataProgram = `NOP
@@ -170,10 +171,10 @@ HALT`;
     
     const result3 = this.assembler.assemble(dataProgram);
     this.assert(result3.success, "Data program assembles successfully");
-    this.assert(result3.lineAddresses[0] === 0, "NOP at address 0");
-    this.assert(result3.lineAddresses[1] === 1, "DB at address 1");
-    this.assert(result3.lineAddresses[2] === 3, "DEFW at address 3 (after 2-byte string)");
-    this.assert(result3.lineAddresses[3] === 5, "HALT at address 5 (after 2-byte word)");
+    this.assert(result3.instructionDetails[0].startAddress === 0, "NOP at address 0");
+    this.assert(result3.instructionDetails[1].startAddress === 1, "DB at address 1");
+    this.assert(result3.instructionDetails[2].startAddress === 3, "DEFW at address 3 (after 2-byte string)");
+    this.assert(result3.instructionDetails[3].startAddress === 5, "HALT at address 5 (after 2-byte word)");
 
     // Test with labels (labels don't generate code but are at current address)
     const labelProgram = `START:
@@ -184,11 +185,19 @@ LOOP:
     
     const result4 = this.assembler.assemble(labelProgram);
     this.assert(result4.success, "Label program assembles successfully");
-    this.assert(result4.lineAddresses[0] === 0, "START label at address 0");
-    this.assert(result4.lineAddresses[1] === 0, "LD A, 10 at address 0");
-    this.assert(result4.lineAddresses[2] === 2, "LOOP label at address 2");
-    this.assert(result4.lineAddresses[3] === 2, "DEC A at address 2");
-    this.assert(result4.lineAddresses[4] === 3, "JR NZ, LOOP at address 3");
+    this.assert(result4.instructionDetails[0].startAddress === 0, "START label at address 0");
+    this.assert(result4.instructionDetails[1].startAddress === 0, "LD A, 10 at address 0");
+    this.assert(result4.instructionDetails[2].startAddress === 2, "LOOP label at address 2");
+    this.assert(result4.instructionDetails[3].startAddress === 2, "DEC A at address 2");
+    this.assert(result4.instructionDetails[4].startAddress === 3, "JR NZ, LOOP at address 3");
+    
+    // Test that opcodes are included for instructions that generate code
+    this.assert(result1.instructionDetails[0].opcodes.length === 0, "Comment line has no opcodes");
+    this.assert(result1.instructionDetails[1].opcodes.length === 1, "NOP has 1 opcode byte");
+    this.assert(result1.instructionDetails[1].opcodes[0] === 0x00, "NOP opcode is 0x00");
+    this.assert(result1.instructionDetails[2].opcodes.length === 2, "LD A, 42 has 2 opcode bytes");
+    this.assert(result1.instructionDetails[2].opcodes[0] === 0x3E, "LD A, n opcode is 0x3E");
+    this.assert(result1.instructionDetails[2].opcodes[1] === 42, "LD A, 42 immediate value is 42");
   }
 
   // Test 1: Line parsing and comments (Grammar lines 6-7, 14-15)
@@ -831,6 +840,150 @@ LOOP:
 
     // DJNZ instruction
     this.assertAssemblySuccess("DJNZ 10", [0x10, 0x08]);
+  }
+
+  // Test: Case Insensitivity
+  testCaseInsensitivity() {
+    this.consoleLogIfNode("\nTesting Case Insensitivity");
+
+    // Test instructions in different cases
+    this.assertAssemblySuccess("nop", [0x00]);
+    this.assertAssemblySuccess("NOP", [0x00]);
+    this.assertAssemblySuccess("Nop", [0x00]);
+    this.assertAssemblySuccess("nOp", [0x00]);
+
+    this.assertAssemblySuccess("halt", [0x76]);
+    this.assertAssemblySuccess("HALT", [0x76]);
+    this.assertAssemblySuccess("Halt", [0x76]);
+
+    // Test registers in different cases
+    this.assertAssemblySuccess("ld a,b", [0x78]);
+    this.assertAssemblySuccess("LD A,B", [0x78]);
+    this.assertAssemblySuccess("Ld A,b", [0x78]);
+    this.assertAssemblySuccess("LD a,B", [0x78]);
+
+    this.assertAssemblySuccess("inc bc", [0x03]);
+    this.assertAssemblySuccess("INC BC", [0x03]);
+    this.assertAssemblySuccess("Inc Bc", [0x03]);
+
+    this.assertAssemblySuccess("dec hl", [0x2b]);
+    this.assertAssemblySuccess("DEC HL", [0x2b]);
+    this.assertAssemblySuccess("Dec Hl", [0x2b]);
+
+    // Test memory references in different cases
+    this.assertAssemblySuccess("ld a,(hl)", [0x7e]);
+    this.assertAssemblySuccess("LD A,(HL)", [0x7e]);
+    this.assertAssemblySuccess("Ld A,(Hl)", [0x7e]);
+
+    this.assertAssemblySuccess("ld a,(bc)", [0x0a]);
+    this.assertAssemblySuccess("LD A,(BC)", [0x0a]);
+    this.assertAssemblySuccess("Ld a,(Bc)", [0x0a]);
+
+    // Test condition codes in different cases
+    this.assertAssemblySuccess("ret z", [0xc8]);
+    this.assertAssemblySuccess("RET Z", [0xc8]);
+    this.assertAssemblySuccess("Ret Z", [0xc8]);
+    this.assertAssemblySuccess("ret Z", [0xc8]);
+
+    this.assertAssemblySuccess("jp nz,1234", [0xc2, 0xd2, 0x04]);
+    this.assertAssemblySuccess("JP NZ,1234", [0xc2, 0xd2, 0x04]);
+    this.assertAssemblySuccess("Jp Nz,1234", [0xc2, 0xd2, 0x04]);
+
+    this.assertAssemblySuccess("jr nc,10", [0x30, 0x08]);
+    this.assertAssemblySuccess("JR NC,10", [0x30, 0x08]);
+    this.assertAssemblySuccess("Jr Nc,10", [0x30, 0x08]);
+
+    // Test directives in different cases
+    this.assertAssemblySuccess("org $8000", []);
+    this.assertAssemblySuccess("ORG $8000", []);
+    this.assertAssemblySuccess("Org $8000", []);
+
+    // Test with mixed case hex numbers
+    this.assertAssemblySuccess("ld a,$ff", [0x3e, 0xff]);
+    this.assertAssemblySuccess("LD A,$FF", [0x3e, 0xff]);
+    this.assertAssemblySuccess("ld a,$Ff", [0x3e, 0xff]);
+    this.assertAssemblySuccess("ld a,$fF", [0x3e, 0xff]);
+
+    this.assertAssemblySuccess("ld a,0xff", [0x3e, 0xff]);
+    this.assertAssemblySuccess("LD A,0xFF", [0x3e, 0xff]);
+    this.assertAssemblySuccess("ld a,0xFf", [0x3e, 0xff]);
+
+    // Test hex suffix notation
+    this.assertAssemblySuccess("ld a,42h", [0x3e, 0x42]);
+    this.assertAssemblySuccess("LD A,42H", [0x3e, 0x42]);
+    this.assertAssemblySuccess("ld a,42H", [0x3e, 0x42]);
+    this.assertAssemblySuccess("LD A,42h", [0x3e, 0x42]);
+
+    this.assertAssemblySuccess("ld a,ffh", [0x3e, 0xff]);
+    this.assertAssemblySuccess("LD A,FFH", [0x3e, 0xff]);
+    this.assertAssemblySuccess("ld a,FfH", [0x3e, 0xff]);
+
+    // Test labels and constants in different cases
+    const mixedCaseProgram = `
+            start:
+                LD A, value
+                HALT
+            VALUE equ 42
+            Start2:
+                ld b, VALUE
+                halt
+        `;
+    const mixedResult = this.assembler.assemble(mixedCaseProgram);
+    this.assert(mixedResult.success, "Mixed case labels and constants", 
+        mixedResult.error || (mixedResult.errors ? mixedResult.errors.map(e => e.message).join(', ') : ''));
+
+    // Test EQU directive in different cases
+    const equProgram = `
+            value1 EQU 10
+            VALUE2 equ 20
+            Value3 Equ 30
+            LD A, value1
+            LD B, VALUE2
+            LD C, Value3
+        `;
+    const equResult = this.assembler.assemble(equProgram);
+    this.assert(equResult.success, "EQU directive case insensitivity", 
+        equResult.error || (equResult.errors ? equResult.errors.map(e => e.message).join(', ') : ''));
+
+    // Test DB directive with mixed case
+    this.assertAssemblySuccess('db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+    this.assertAssemblySuccess('DB "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+    this.assertAssemblySuccess('Db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+
+    // Test DEFW directive
+    this.assertAssemblySuccess("defw $1234", [0x34, 0x12]);
+    this.assertAssemblySuccess("DEFW $1234", [0x34, 0x12]);
+    this.assertAssemblySuccess("Defw $1234", [0x34, 0x12]);
+
+    // Test complex mixed case program
+    const complexProgram = `
+            ; Mixed case complex program
+            buffer_size equ 16
+            START_ADDR EQU $8000
+
+            org START_ADDR
+
+            main:
+                ld hl, Buffer
+                ld bc, BUFFER_SIZE
+                ld a, 'X'
+
+            Fill_Loop:
+                ld (hl), a
+                inc hl
+                dec bc
+                ld a, b
+                or c
+                jr nz, FILL_LOOP
+
+                halt
+
+            buffer:
+                defs BUFFER_SIZE, 0
+        `;
+    const complexResult = this.assembler.assemble(complexProgram);
+    this.assert(complexResult.success, "Complex mixed case program", 
+        complexResult.error || (complexResult.errors ? complexResult.errors.map(e => e.message).join(', ') : ''));
   }
 
   // Test 14: Branch range limits
