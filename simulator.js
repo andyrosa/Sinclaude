@@ -27,7 +27,7 @@ class Simulator {
     this.mipsInstructionCount = 0;
     this.keyCodeCurrent = 0;
     this.keyCodeCurrentReleased = true;
-    this.runLoopId = null;
+    this.runLoopInterval = null;
     this.fastMode = false;
     this.easterEggEnabled = false;
     this.isBootSequenceRunning = false;
@@ -65,6 +65,7 @@ class Simulator {
     this.setupDOM();
     this.setupKeyboard();
     this.setupDisplayUpdates();
+    this.initializeVersionChecking();
     this.setupCleanupHandlers();
     this.bootShow();
   }
@@ -262,8 +263,8 @@ class Simulator {
     this.setupConsoleToggle();
 
     // Initialize edit toggle text by triggering the two-state function
-    toggleButtonEdit();
-    toggleButtonEdit();
+    toggleButtonCaptionEdit();
+    toggleButtonCaptionEdit();
 
     // Setup touch hints for touch-enabled devices
     this.setupTouchHints();
@@ -1377,6 +1378,21 @@ class Simulator {
     });
     this.activeTimers.clear();
     this.displayUpdateInterval = null;
+    
+    // Clean up version checker timers
+    if (window.versionChecker) {
+      window.versionChecker.cleanup();
+    }
+  }
+
+  initializeVersionChecking() {
+    // Initialize the global version checker with timer management
+    if (window.versionChecker) {
+      window.versionChecker.init({
+        createTimer: (callback, interval, isInterval) => this.createTimer(callback, interval, isInterval),
+        clearTimer: (timerId) => this.clearTimer(timerId)
+      });
+    }
   }
 
   setupDisplayUpdates() {
@@ -1904,9 +1920,9 @@ class Simulator {
 
   // Stop continuous execution
   stopContinuousExecution() {
-    if (this.runLoopId) {
-      this.clearTimer(this.runLoopId);
-      this.runLoopId = null;
+    if (this.runLoopInterval) {
+      this.clearTimer(this.runLoopInterval);
+      this.runLoopInterval = null;
     }
   }
 
@@ -2017,7 +2033,8 @@ class Simulator {
     // Keep display interval and run loop, clear animation timers
     const essentialTimers = new Set([
       this.displayUpdateInterval,
-      this.runLoopId,
+      this.runLoopInterval,
+      this.versionCheckInterval,
     ]);
     this.activeTimers.forEach((timerId) => {
       if (!essentialTimers.has(timerId)) {
@@ -2081,7 +2098,7 @@ class Simulator {
   }
 
   startContinuousExecution() {
-    if (this.runLoopId !== null) {
+    if (this.runLoopInterval !== null) {
       userMessageAboutBug(
         "Already running - ignoring request",
         "startContinuousExecution called while runLoopId != null"
@@ -2131,7 +2148,7 @@ class Simulator {
       }
     }
     // Schedule next execution cycle
-    this.runLoopId = this.createTimer(
+    this.runLoopInterval = this.createTimer(
       () => this.runLoop(),
       RUN_LOOP_INTERVAL_MS,
       false
@@ -2440,19 +2457,19 @@ class Simulator {
 
 window.buttonEditMode = false;
 
-function toggleButtonEdit() {
+function toggleButtonCaptionEdit() {
   window.buttonEditMode = !window.buttonEditMode;
-  const toggle = document.querySelector(".edit-toggle");
+  const button_caption_edit_toggle = document.querySelector(".button-caption-edit-toggle");
   const gameButtons = document.querySelectorAll(".game-buttons button");
 
   if (window.buttonEditMode) {
-    toggle.textContent = "Click here to end button customization";
-    toggle.classList.add("active");
+    button_caption_edit_toggle.textContent = "Click here to end button customization";
+    button_caption_edit_toggle.classList.add("active");
     gameButtons.forEach((button) => button.classList.add("edit-mode"));
   } else {
-    toggle.textContent =
+    button_caption_edit_toggle.textContent =
       "Click here to set the key sent when you click each button";
-    toggle.classList.remove("active");
+    button_caption_edit_toggle.classList.remove("active");
     gameButtons.forEach((button) => button.classList.remove("edit-mode"));
   }
 }

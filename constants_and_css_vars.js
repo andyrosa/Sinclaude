@@ -3,6 +3,7 @@ const one_million = 1000000; // hard to read so many zeros; get_with_the_program
 const FPS = 60;
 const RUN_LOOP_INTERVAL_MS = 1;
 const fancy_highlight_scroll = true;
+const version_update_check_interval_ms = 5000;
 
 // Responsive breakpoints
 const BREAKPOINTS = {

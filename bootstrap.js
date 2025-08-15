@@ -1,21 +1,29 @@
 // Load version.js with fallback strategy: local first, then GitHub, then error
-(function loadVersion() {
+function loadVersionWithCallback(callback) {
+  // Remove any existing version.js script tags to prevent accumulation
+  var existingVersionScripts = document.querySelectorAll('script[src*="version.js"]');
+  existingVersionScripts.forEach(function(script) {
+    if (script.parentNode) {
+      script.parentNode.removeChild(script);
+    }
+  });
+
   function loadVersionGitHubIO() {
     var githubVersionScript = document.createElement("script");
     githubVersionScript.src =
       "https://andyrosa.github.io/Sinclaude/version.js?cb=" + Date.now();
     githubVersionScript.onload = function () {
-      loadScripts();
+      if (callback) callback();
     };
     githubVersionScript.onerror = function () {
-      console.error(
-        "Failed to load version.js from both local and GitHub sources"
-      );
-      userMessageAboutBug(
-        "Unable to load version information from local or remote sources",
-        "Please check your internet connection or contact support."
-      );
-      loadScripts();
+      console.error("Failed to load version.js from GitHub - could be CORS, network, or file not found");
+      if (typeof userMessageAboutBug === "function") {
+        userMessageAboutBug(
+          "Unable to load version information from local or remote sources",
+          "Please check your internet connection or contact support."
+        );
+      }
+      if (callback) callback();
     };
     document.head.appendChild(githubVersionScript);
   }
@@ -24,7 +32,7 @@
   var localVersionScript = document.createElement("script");
   localVersionScript.src = "version.js?cb=" + Date.now();
   localVersionScript.onload = function () {
-    loadScripts();
+    if (callback) callback();
   };
   localVersionScript.onerror = function () {
     // Remove the failed script element from DOM
@@ -32,17 +40,24 @@
     loadVersionGitHubIO();
   };
   document.head.appendChild(localVersionScript);
+}
+
+// Initial version load that starts the application
+(function() {
+  loadVersionWithCallback(function() {
+    loadScripts();
+  });
 })();
 
 function loadScripts() {
   var cacheBust =
-    typeof BUILD_VERSION_BY_YAML !== "undefined" &&
-    BUILD_VERSION_BY_YAML.buildDate
-      ? BUILD_VERSION_BY_YAML.buildDate
+    typeof BUILD_VERSION_BY_YAML !== "undefined"
+      ? BUILD_VERSION_BY_YAML().buildDate
       : Date.now();
   var scripts = [
     "console-utils.js",
     "scroll_target.js",
+    "version_update.js",
     "z80_assembler.js",
     "z80_cpu_emulator.js",
     "z80_assembler_test.js",
