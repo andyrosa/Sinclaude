@@ -59,3 +59,6 @@ jspm_packages/
 
 # Todo files - personal development notes
 todo.md
+
+# Version file
+version.js
