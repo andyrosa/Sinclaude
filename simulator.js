@@ -631,13 +631,12 @@ class Simulator {
       "This area is now sending key presses to Sinclaude";
 
     // Helper function to update keyboardStatus
-    const updateKeyboardStatus = (isActive) => {
+    const updateKeyboardStatus = (isCaptured) => {
       if (keyboardStatus) {
-        keyboardStatus.textContent = isActive
+        keyboardStatus.textContent = isCaptured
           ? KBD_CAPTURED_MSG
           : KBD_NOT_CAPTURED_MSG;
-        // Add attention-grabbing class when showing hover message
-        if (isActive) {
+        if (isCaptured) {
           keyboardStatus.classList.remove("get-attention");
         } else {
           keyboardStatus.classList.add("get-attention");
