@@ -5,7 +5,7 @@ function BUILD_VERSION_BY_YAML() {
     commit: 'ea8824157ed3f08c4d0cf07425c575960bb01a5b',
     shortCommit: 'ea88241',
     branch: 'main',
-    buildDate: '2025-08-24 05:27:39 UTC',
+    buildDate: '2025-08-24 04:27:39 UTC',
     repository: 'andyrosa/Sinclaude'
   };
 }
