@@ -67,27 +67,18 @@ function getFormattedVersionInfo() {
     return null;
   }
 
-  // Convert UTC timestamp to local time with error handling
-  let localBuildDate = "Unknown";
-  if (BUILD_VERSION_BY_YAML.timestamp) {
-    // Use the ISO timestamp which can be properly parsed
-    const buildDate = new Date(BUILD_VERSION_BY_YAML.timestamp);
+  // Convert buildDate to local time with error handling
+  let buildDateLocal = "Unknown";
+  if (BUILD_VERSION_BY_YAML().buildDate) {
+    const buildDate = new Date(BUILD_VERSION_BY_YAML().buildDate);
     if (!isNaN(buildDate.getTime())) {
-      localBuildDate = buildDate.toLocaleString();
-    }
-  } else if (BUILD_VERSION_BY_YAML.buildDate) {
-    // Fallback to buildDate if timestamp is not available
-    // Try to parse the formatted date string
-    const buildDate = new Date(BUILD_VERSION_BY_YAML.buildDate);
-    if (!isNaN(buildDate.getTime())) {
-      localBuildDate = buildDate.toLocaleString();
+      buildDateLocal = buildDate.toLocaleString();
     }
   }
 
   return {
-    buildNumber: BUILD_VERSION_BY_YAML.buildNumber || "Unknown",
-    localBuildDate: localBuildDate,
-    shortCommit: BUILD_VERSION_BY_YAML.shortCommit || "Unknown",
+    localBuildDate: buildDateLocal,
+    shortCommit: BUILD_VERSION_BY_YAML().shortCommit || "Unknown",
   };
 }
 

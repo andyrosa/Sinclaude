@@ -27,15 +27,16 @@ jobs:
       - name: Generate version.js
         run: |
           echo "// Auto-generated version file - $(date -u)" > version.js
-          echo "const BUILD_VERSION_BY_YAML = {" >> version.js
-          echo "  timestamp: '$(date -u +"%Y-%m-%dT%H:%M:%SZ")'," >> version.js
-          echo "  commit: '${{ github.sha }}'," >> version.js
-          echo "  shortCommit: '$(echo ${{ github.sha }} | cut -c1-7)'," >> version.js
-          echo "  branch: '${{ github.ref_name }}'," >> version.js
-          echo "  buildNumber: '${{ github.run_number }}'," >> version.js
-          echo "  buildDate: '$(date -u +"%Y-%m-%d %H:%M:%S UTC")'," >> version.js
-          echo "  repository: '${{ github.repository }}'" >> version.js
-          echo "};" >> version.js
+          echo "function BUILD_VERSION_BY_YAML() {" >> version.js
+          echo "  return {" >> version.js
+          echo "    timestamp: '$(date -u +"%Y-%m-%dT%H:%M:%SZ")'," >> version.js
+          echo "    commit: '${{ github.sha }}'," >> version.js
+          echo "    shortCommit: '$(echo ${{ github.sha }} | cut -c1-7)'," >> version.js
+          echo "    branch: '${{ github.ref_name }}'," >> version.js
+          echo "    buildDate: '$(date -u +"%Y-%m-%d %H:%M:%S UTC")'," >> version.js
+          echo "    repository: '${{ github.repository }}'" >> version.js
+          echo "  };" >> version.js
+          echo "}" >> version.js
           echo "" >> version.js
           echo "// Export for both ES6 and CommonJS" >> version.js
           echo "if (typeof module !== 'undefined' && module.exports) {" >> version.js

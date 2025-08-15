@@ -637,9 +637,10 @@ textarea {
     border: 2px solid transparent;
     border-radius: 4px;
     color: var(--surface-muted-text-c);
+    font-size: 11px;
     font-style: italic;
     margin: 10px 0 0;
-    padding: 5px;
+    padding: 2px 5px;
     text-align: center;
     transition: .3s;
 }
@@ -762,9 +763,18 @@ textarea {
     }
 }
 
+/* Hover effects only on devices that support true hovering */
+@media (hover: hover) {
+    .button-caption-edit-toggle:hover,
+    .button-caption-edit-toggle.active:hover,
+    .not-ready-message:hover {
+        background: var(--attention-c);
+    }
+}
+
 
 /* Edit toggle and not-ready message shared styles */
-.edit-toggle,
+.button-caption-edit-toggle,
 .not-ready-message {
     color: var(--button-text-c);
     cursor: pointer;
@@ -775,7 +785,7 @@ textarea {
     transition: .3s;
 }
 
-.edit-toggle {
+.button-caption-edit-toggle {
     background: var(--button-bgc);
     border: 2px solid var(--attention-c);
 }
@@ -785,21 +795,12 @@ textarea {
     border: 2px solid var(--attention-c);
 }
 
-.edit-toggle:hover,
-.not-ready-message:hover {
-    background: var(--attention-c);
-}
-
-.edit-toggle.active {
-    background: var(--attention-c);
-}
-
-.edit-toggle.active:hover {
+.button-caption-edit-toggle.active {
     background: var(--attention-c);
 }
 
 /* Edit toggle specific adjustments */
-.edit-toggle {
+.button-caption-edit-toggle {
     border-radius: 0;
     box-shadow:
         inset 1px 1px 2px color-mix(in srgb, var(--button-shadow-c), black 30%),
@@ -880,4 +881,24 @@ textarea {
 
 .game-buttons button .edit-input {
     text-align: center;
+}
+
+/* Update Dialog Overlay */
+.update-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: color-mix(in srgb, var(--surface-bgc) 70%, transparent);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: var(--z-maximum);
+}
+
+.update-dialog {
+    max-width: 400px;
+    margin: 0;
+    flex: none;
 }
