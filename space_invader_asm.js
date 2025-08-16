@@ -13,7 +13,7 @@ SCREEN_BLANK_CHAR   EQU 32
 KBD_SPACE           EQU SCREEN_BLANK_CHAR
 KBD_FIRE            EQU KBD_SPACE
 KBD_LEFT            EQU 'A'
-KBD_RIGHT           EQU 'S'
+KBD_RIGHT           EQU 'D'
 KBD_QUIT            EQU 12
 KBD_RESTART         EQU 'W'
 KBD_INVISIBLE       EQU KBD_RESTART
@@ -556,9 +556,9 @@ wait_for_key_release:
   JP   game_loop
 
 humans_won_msg:   DB "          HUMANS WON!           "
-invaders_won_msg: DB "        Invaders won :(         "
+invaders_won_msg: DB "         Invader won :(         "
 press_to_play:    DB "     PRESS W TO PLAY AGAIN      "
-controls_msg:     DB "   A=LEFT S=RIGHT SPACE=FIRE    "
+controls_msg:     DB "   A=LEFT D=RIGHT SPACE=FIRE    "
 
 restart_game:
   LD   A, PLAYER_START_COL
