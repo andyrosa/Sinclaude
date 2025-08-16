@@ -71,7 +71,7 @@ class Simulator {
   }
 
   initializeCharacterMappings() {
-    // Hybrid ZX/Spectrum character set mapping (bytes 0-255 to Unicode)
+    // Spectrum character 0-127 to Unicode
     const sinclairByteToUnicode = [
       // 0-31: Mix of undefined and block graphics
       "⸮",
@@ -170,10 +170,10 @@ class Simulator {
       "[",
       "\\",
       "]",
-      "↑",
+      "↑", // not ^
       "_",
       // 96-127: £, a-z, symbols
-      "£",
+      "£", // not `
       "a",
       "b",
       "c",
@@ -204,7 +204,7 @@ class Simulator {
       "|",
       "}",
       "~",
-      "©",
+      "©", // not DEL
     ];
 
     // Build Sinclair byte -> Unicode char
@@ -501,7 +501,7 @@ class Simulator {
 
   createGameButtons() {
     const gameButtonsDiv = document.getElementById("gameButtons");
-    const defaultKeys = ["A", "S", "Space", "W", "D"];
+    const defaultKeys = ["W", "S", "Space", "A", "D"];
 
     // Clear existing content
     gameButtonsDiv.innerHTML = "";
