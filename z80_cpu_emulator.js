@@ -1,5 +1,36 @@
 // Z80 CPU Emulator
 // Browser provides memory, all registers, and step count. Emulator executes instructions
+//
+// IMPLEMENTED INSTRUCTIONS: NOP; EX AF,AF'; RLCA; SCF; CCF; CPL; HALT; LD A,n; LD (nn),A; LD A,(nn);
+// CALL nn; CALL Z,nn; CALL NZ,nn; CALL C,nn; CALL NC,nn; RET; RET NZ; RET Z; RET NC; RET C; 
+// JR d; JP nn; JP (HL); LD HL,nn; LD (nn),HL; LD HL,(nn); LD (HL),n; LD (HL),A; LD (HL),B;
+// LD (HL),C; LD (HL),D; LD (HL),E; LD (HL),H; LD (HL),L; LD A,(HL); LD A,(BC); LD A,(DE);
+// LD B,n; LD C,n; LD D,n; LD E,n; LD H,n; LD L,n; LD B,(HL); LD C,(HL); LD D,(HL); LD E,(HL);
+// LD H,(HL); LD L,(HL); LD E,A; LD A,E; LD A,C; LD B,A; LD C,A; LD B,C; LD B,H; LD A,B; LD A,H; 
+// LD A,L; LD H,A; LD L,A; LD A,D; LD D,A; LD B,B; LD B,D; LD B,E; LD B,L; LD C,B; LD C,C; LD C,D;
+// LD C,E; LD C,H; LD C,L; LD D,B; LD D,C; LD D,D; LD D,E; LD D,H; LD D,L; LD E,B; LD E,C; LD E,D;
+// LD E,E; LD E,H; LD E,L; LD H,B; LD H,C; LD H,D; LD H,E; LD H,H; LD H,L; LD L,B; LD L,C; LD L,D;
+// LD L,E; LD L,H; LD L,L; EX DE,HL; EX (SP),HL; LD SP,nn; LD BC,nn; LD (BC),A; LD DE,nn; LD (DE),A; 
+// INC B; INC C; INC D; INC E; INC H; INC L; INC A; INC (HL); DEC A; DEC B; DEC C; DEC D; DEC E; 
+// DEC H; DEC L; INC HL; INC SP; INC BC; INC DE; DEC BC; DEC DE; DEC HL; DEC SP; DEC (HL); 
+// ADD HL,BC; ADD HL,DE; ADD HL,HL; ADD HL,SP; ADD A,B; ADD A,C; ADD A,D; ADD A,E; ADD A,H; ADD A,A; 
+// ADD A,L; ADD A,n; ADD A,(HL); ADC A,H; ADC A,n; SUB A; SUB B; SUB C; SUB D; SUB E; SUB H; SUB L; 
+// SUB n; SUB (HL); OUT (n),A; IN A,(n); AND B; AND C; AND D; AND E; AND H; AND L; AND (HL); AND A; 
+// CP n; CP B; CP C; CP D; CP E; CP H; CP L; CP (HL); CP A; OR A; OR B; OR C; OR D; OR E; OR H; OR L; 
+// OR (HL); OR n; XOR A; XOR B; XOR C; XOR D; XOR E; XOR H; XOR L; XOR (HL); XOR n; AND n; JR Z,d; 
+// JR NZ,d; JR C,d; JR NC,d; DJNZ d; JP Z,nn; JP NZ,nn; JP C,nn; JP NC,nn; PUSH BC; POP BC; PUSH DE; 
+// PUSH HL; PUSH AF; POP DE; POP HL; POP AF; NEG; LDIR; SLA B; SLA C; SLA D; SLA E; SLA H; SLA L;
+// SLA (HL); SLA A; SRA B; SRA C; SRA D; SRA E; SRA H; SRA L; SRA (HL); SRA A; SRL B; SRL C;
+// SRL D; SRL E; SRL H; SRL L; SRL (HL); SRL A; RLA; RRCA; RRA; RLC A; RLC B; RLC C; RLC D; RLC E;
+// RLC H; RLC L; RLC (HL); RRC A; RRC B; RRC C; RRC D; RRC E; RRC H; RRC L; RRC (HL); RL A; RL B;
+// RL C; RL D; RL E; RL H; RL L; RL (HL); RR A; RR B; RR C; RR D; RR E; RR H; RR L; RR (HL);
+// SBC A,A; SBC A,B; SBC A,C; SBC A,D; SBC A,E; SBC A,H; SBC A,L; SBC A,(HL); SBC A,n; SET 0,A;
+// SET 0,B; SET 0,C; SET 0,D; SET 0,E; SET 0,H; SET 0,L; SET 0,(HL); SET 1,A; SET 1,B; SET 1,C;
+// SET 1,D; SET 1,E; SET 1,H; SET 1,L; SET 1,(HL); SET 7,A; SET 7,B; SET 7,C; SET 7,D; SET 7,E;
+// SET 7,H; SET 7,L; SET 7,(HL); RES 0,A; RES 0,B; RES 0,C; RES 0,D; RES 0,E; RES 0,H; RES 0,L;
+// RES 0,(HL); RES 1,A; RES 1,B; RES 1,C; RES 1,D; RES 1,E; RES 1,H; RES 1,L; RES 1,(HL);
+// RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL); BIT 0,A; BIT 1,A;
+// BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
 class Z80CPU {
     constructor() {
         // Use reset to initialize to avoid code duplication
@@ -271,6 +302,26 @@ class Z80CPU {
                 this.registers.A = this.adjustFF((this.registers.A << 1) | bit7);
                 this.registers.F.C = bit7 !== 0;
                 break;
+            case 0x0F: // RRCA
+                // Rotate Right Circular Accumulator
+                const bit0 = this.registers.A & 0x01;
+                this.registers.A = this.adjustFF((this.registers.A >> 1) | (bit0 << 7));
+                this.registers.F.C = bit0 !== 0;
+                break;
+            case 0x17: // RLA
+                // Rotate Left Accumulator through carry
+                const oldCarry = this.registers.F.C ? 1 : 0;
+                const newCarry = (this.registers.A & 0x80) !== 0;
+                this.registers.A = this.adjustFF((this.registers.A << 1) | oldCarry);
+                this.registers.F.C = newCarry;
+                break;
+            case 0x1F: // RRA
+                // Rotate Right Accumulator through carry
+                const oldCarryRRA = this.registers.F.C ? 0x80 : 0;
+                const newCarryRRA = (this.registers.A & 0x01) !== 0;
+                this.registers.A = this.adjustFF((this.registers.A >> 1) | oldCarryRRA);
+                this.registers.F.C = newCarryRRA;
+                break;
             case 0x37: // SCF - Set Carry Flag
                 this.registers.F.C = true;
                 break;
@@ -335,6 +386,20 @@ class Z80CPU {
             case 0x21: // LD HL, nn
                 this.registers.L = this.fetchByte();
                 this.registers.H = this.fetchByte();
+                break;
+            case 0x22: // LD (nn), HL
+                {
+                    const addr = this.fetchWord();
+                    memory[addr] = this.registers.L;
+                    memory[this.adjustFFFF(addr + 1)] = this.registers.H;
+                }
+                break;
+            case 0x2A: // LD HL, (nn)
+                {
+                    const addr = this.fetchWord();
+                    this.registers.L = memory[addr];
+                    this.registers.H = memory[this.adjustFFFF(addr + 1)];
+                }
                 break;
             case 0x36: // LD (HL), n
                 memory[this.getHL()] = this.fetchByte();
@@ -434,6 +499,125 @@ class Z80CPU {
             case 0x57: // LD D, A
                 this.registers.D = this.registers.A;
                 break;
+            
+            // Additional register-to-register LD variants
+            case 0x40: // LD B, B
+                this.registers.B = this.registers.B;
+                break;
+            case 0x42: // LD B, D
+                this.registers.B = this.registers.D;
+                break;
+            case 0x43: // LD B, E
+                this.registers.B = this.registers.E;
+                break;
+            case 0x45: // LD B, L
+                this.registers.B = this.registers.L;
+                break;
+            case 0x48: // LD C, B
+                this.registers.C = this.registers.B;
+                break;
+            case 0x49: // LD C, C
+                this.registers.C = this.registers.C;
+                break;
+            case 0x4A: // LD C, D
+                this.registers.C = this.registers.D;
+                break;
+            case 0x4B: // LD C, E
+                this.registers.C = this.registers.E;
+                break;
+            case 0x4C: // LD C, H
+                this.registers.C = this.registers.H;
+                break;
+            case 0x4D: // LD C, L
+                this.registers.C = this.registers.L;
+                break;
+            case 0x4E: // LD C, (HL)
+                this.registers.C = memory[this.getHL()];
+                break;
+            case 0x50: // LD D, B
+                this.registers.D = this.registers.B;
+                break;
+            case 0x51: // LD D, C
+                this.registers.D = this.registers.C;
+                break;
+            case 0x52: // LD D, D
+                this.registers.D = this.registers.D;
+                break;
+            case 0x53: // LD D, E
+                this.registers.D = this.registers.E;
+                break;
+            case 0x54: // LD D, H
+                this.registers.D = this.registers.H;
+                break;
+            case 0x55: // LD D, L
+                this.registers.D = this.registers.L;
+                break;
+            case 0x56: // LD D, (HL)
+                this.registers.D = memory[this.getHL()];
+                break;
+            case 0x58: // LD E, B
+                this.registers.E = this.registers.B;
+                break;
+            case 0x59: // LD E, C
+                this.registers.E = this.registers.C;
+                break;
+            case 0x5A: // LD E, D
+                this.registers.E = this.registers.D;
+                break;
+            case 0x5B: // LD E, E
+                this.registers.E = this.registers.E;
+                break;
+            case 0x5C: // LD E, H
+                this.registers.E = this.registers.H;
+                break;
+            case 0x5D: // LD E, L
+                this.registers.E = this.registers.L;
+                break;
+            case 0x5E: // LD E, (HL)
+                this.registers.E = memory[this.getHL()];
+                break;
+            case 0x60: // LD H, B
+                this.registers.H = this.registers.B;
+                break;
+            case 0x61: // LD H, C
+                this.registers.H = this.registers.C;
+                break;
+            case 0x62: // LD H, D
+                this.registers.H = this.registers.D;
+                break;
+            case 0x63: // LD H, E
+                this.registers.H = this.registers.E;
+                break;
+            case 0x64: // LD H, H
+                this.registers.H = this.registers.H;
+                break;
+            case 0x65: // LD H, L
+                this.registers.H = this.registers.L;
+                break;
+            case 0x66: // LD H, (HL)
+                this.registers.H = memory[this.getHL()];
+                break;
+            case 0x68: // LD L, B
+                this.registers.L = this.registers.B;
+                break;
+            case 0x69: // LD L, C
+                this.registers.L = this.registers.C;
+                break;
+            case 0x6A: // LD L, D
+                this.registers.L = this.registers.D;
+                break;
+            case 0x6B: // LD L, E
+                this.registers.L = this.registers.E;
+                break;
+            case 0x6C: // LD L, H
+                this.registers.L = this.registers.H;
+                break;
+            case 0x6D: // LD L, L
+                this.registers.L = this.registers.L;
+                break;
+            case 0x6E: // LD L, (HL)
+                this.registers.L = memory[this.getHL()];
+                break;
             case 0xEB: // EX DE, HL
                 const temp_D = this.registers.D;
                 const temp_E = this.registers.E;
@@ -441,6 +625,17 @@ class Z80CPU {
                 this.registers.E = this.registers.L;
                 this.registers.H = temp_D;
                 this.registers.L = temp_E;
+                break;
+            case 0xE3: // EX (SP), HL
+                {
+                    const sp = this.registers.SP;
+                    const temp_L = this.registers.L;
+                    const temp_H = this.registers.H;
+                    this.registers.L = memory[sp];
+                    this.registers.H = memory[this.adjustFFFF(sp + 1)];
+                    memory[sp] = temp_L;
+                    memory[this.adjustFFFF(sp + 1)] = temp_H;
+                }
                 break;
             case 0x31: // LD SP, nn
                 this.registers.SP = this.fetchWord();
@@ -569,6 +764,9 @@ class Z80CPU {
             case 0xC6: // ADD A, n
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.fetchByte());
                 break;
+            case 0x86: // ADD A, (HL)
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + memory[this.getHL()]);
+                break;
             case 0x8C: // ADC A, H
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.registers.H + (this.registers.F.C ? 1 : 0));
                 break;
@@ -600,6 +798,38 @@ class Z80CPU {
                 break;
             case 0xD6: // SUB A, n
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.fetchByte());
+                break;
+            case 0x96: // SUB (HL)
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - memory[this.getHL()]);
+                break;
+            
+            // SBC (Subtract with Carry) instructions
+            case 0x9F: // SBC A, A
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.A - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x98: // SBC A, B
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.B - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x99: // SBC A, C
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.C - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x9A: // SBC A, D
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.D - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x9B: // SBC A, E
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.E - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x9C: // SBC A, H
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.H - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x9D: // SBC A, L
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.L - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0x9E: // SBC A, (HL)
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.memory[this.getHL()] - (this.registers.F.C ? 1 : 0));
+                break;
+            case 0xDE: // SBC A, n
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.fetchByte() - (this.registers.F.C ? 1 : 0));
                 break;
             case 0xD3: // OUT (n), A
                 const outPort = this.fetchByte();
@@ -646,12 +876,36 @@ class Z80CPU {
                 this.registers.F.Z = this.registers.A === this.registers.B;
                 this.registers.F.C = this.registers.A < this.registers.B;
                 break;
+            case 0xB9: // CP C
+                this.registers.F.Z = this.registers.A === this.registers.C;
+                this.registers.F.C = this.registers.A < this.registers.C;
+                break;
+            case 0xBA: // CP D
+                this.registers.F.Z = this.registers.A === this.registers.D;
+                this.registers.F.C = this.registers.A < this.registers.D;
+                break;
+            case 0xBB: // CP E
+                this.registers.F.Z = this.registers.A === this.registers.E;
+                this.registers.F.C = this.registers.A < this.registers.E;
+                break;
+            case 0xBC: // CP H
+                this.registers.F.Z = this.registers.A === this.registers.H;
+                this.registers.F.C = this.registers.A < this.registers.H;
+                break;
+            case 0xBD: // CP L
+                this.registers.F.Z = this.registers.A === this.registers.L;
+                this.registers.F.C = this.registers.A < this.registers.L;
+                break;
             case 0xBE: // CP (HL)
                 {
                     const hlValue = memory[this.getHL()];
                     this.registers.F.Z = this.registers.A === hlValue;
                     this.registers.F.C = this.registers.A < hlValue;
                 }
+                break;
+            case 0xBF: // CP A
+                this.registers.F.Z = true;  // A == A is always true
+                this.registers.F.C = false; // A < A is always false
                 break;
             case 0xB7: // OR A
                 this.updateAZC(this.registers.A);
@@ -682,6 +936,27 @@ class Z80CPU {
                 break;
             case 0xAF: // XOR A
                 this.updateAZC(0);
+                break;
+            case 0xA8: // XOR B
+                this.updateAZC(this.registers.A ^ this.registers.B);
+                break;
+            case 0xA9: // XOR C
+                this.updateAZC(this.registers.A ^ this.registers.C);
+                break;
+            case 0xAA: // XOR D
+                this.updateAZC(this.registers.A ^ this.registers.D);
+                break;
+            case 0xAB: // XOR E
+                this.updateAZC(this.registers.A ^ this.registers.E);
+                break;
+            case 0xAC: // XOR H
+                this.updateAZC(this.registers.A ^ this.registers.H);
+                break;
+            case 0xAD: // XOR L
+                this.updateAZC(this.registers.A ^ this.registers.L);
+                break;
+            case 0xAE: // XOR (HL)
+                this.updateAZC(this.registers.A ^ memory[this.getHL()]);
                 break;
             case 0xEE: // XOR n
                 this.updateAZC(this.registers.A ^ this.fetchByte());
@@ -748,6 +1023,63 @@ class Z80CPU {
                 break;
             case 0xC3: // JP nn
                 this.registers.PC = this.fetchWord();
+                break;
+            case 0xE9: // JP (HL)
+                this.registers.PC = this.getHL();
+                break;
+            
+            // Conditional CALL instructions
+            case 0xC4: // CALL NZ, nn
+                {
+                    const jump_address = this.fetchWord();
+                    if (!this.registers.F.Z) {
+                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = msb;
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = lsb;
+                        this.registers.PC = jump_address;
+                    }
+                }
+                break;
+            case 0xCC: // CALL Z, nn
+                {
+                    const jump_address = this.fetchWord();
+                    if (this.registers.F.Z) {
+                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = msb;
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = lsb;
+                        this.registers.PC = jump_address;
+                    }
+                }
+                break;
+            case 0xD4: // CALL NC, nn
+                {
+                    const jump_address = this.fetchWord();
+                    if (!this.registers.F.C) {
+                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = msb;
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = lsb;
+                        this.registers.PC = jump_address;
+                    }
+                }
+                break;
+            case 0xDC: // CALL C, nn
+                {
+                    const jump_address = this.fetchWord();
+                    if (this.registers.F.C) {
+                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = msb;
+                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
+                        memory[this.registers.SP] = lsb;
+                        this.registers.PC = jump_address;
+                    }
+                }
                 break;
                 
             // Stack operations
@@ -836,6 +1168,46 @@ class Z80CPU {
     // CB-prefixed instructions (shift and bit operations)
     executeCBInstruction(cbOpcode) {
         switch(cbOpcode) {
+            // RLC (Rotate Left Circular) instructions
+            case 0x00: this.registers.B = this.rotateLeftCircular(this.registers.B); break;
+            case 0x01: this.registers.C = this.rotateLeftCircular(this.registers.C); break;
+            case 0x02: this.registers.D = this.rotateLeftCircular(this.registers.D); break;
+            case 0x03: this.registers.E = this.rotateLeftCircular(this.registers.E); break;
+            case 0x04: this.registers.H = this.rotateLeftCircular(this.registers.H); break;
+            case 0x05: this.registers.L = this.rotateLeftCircular(this.registers.L); break;
+            case 0x06: this.rotateLeftCircularAtHL(); break;
+            case 0x07: this.registers.A = this.rotateLeftCircular(this.registers.A); break;
+            
+            // RRC (Rotate Right Circular) instructions
+            case 0x08: this.registers.B = this.rotateRightCircular(this.registers.B); break;
+            case 0x09: this.registers.C = this.rotateRightCircular(this.registers.C); break;
+            case 0x0A: this.registers.D = this.rotateRightCircular(this.registers.D); break;
+            case 0x0B: this.registers.E = this.rotateRightCircular(this.registers.E); break;
+            case 0x0C: this.registers.H = this.rotateRightCircular(this.registers.H); break;
+            case 0x0D: this.registers.L = this.rotateRightCircular(this.registers.L); break;
+            case 0x0E: this.rotateRightCircularAtHL(); break;
+            case 0x0F: this.registers.A = this.rotateRightCircular(this.registers.A); break;
+            
+            // RL (Rotate Left through carry) instructions
+            case 0x10: this.registers.B = this.rotateLeftThroughCarry(this.registers.B); break;
+            case 0x11: this.registers.C = this.rotateLeftThroughCarry(this.registers.C); break;
+            case 0x12: this.registers.D = this.rotateLeftThroughCarry(this.registers.D); break;
+            case 0x13: this.registers.E = this.rotateLeftThroughCarry(this.registers.E); break;
+            case 0x14: this.registers.H = this.rotateLeftThroughCarry(this.registers.H); break;
+            case 0x15: this.registers.L = this.rotateLeftThroughCarry(this.registers.L); break;
+            case 0x16: this.rotateLeftThroughCarryAtHL(); break;
+            case 0x17: this.registers.A = this.rotateLeftThroughCarry(this.registers.A); break;
+            
+            // RR (Rotate Right through carry) instructions
+            case 0x18: this.registers.B = this.rotateRightThroughCarry(this.registers.B); break;
+            case 0x19: this.registers.C = this.rotateRightThroughCarry(this.registers.C); break;
+            case 0x1A: this.registers.D = this.rotateRightThroughCarry(this.registers.D); break;
+            case 0x1B: this.registers.E = this.rotateRightThroughCarry(this.registers.E); break;
+            case 0x1C: this.registers.H = this.rotateRightThroughCarry(this.registers.H); break;
+            case 0x1D: this.registers.L = this.rotateRightThroughCarry(this.registers.L); break;
+            case 0x1E: this.rotateRightThroughCarryAtHL(); break;
+            case 0x1F: this.registers.A = this.rotateRightThroughCarry(this.registers.A); break;
+            
             // SLA (Shift Left Arithmetic) instructions
             case 0x20: this.registers.B = this.shiftLeftArithmetic(this.registers.B); break;
             case 0x21: this.registers.C = this.shiftLeftArithmetic(this.registers.C); break;
@@ -877,6 +1249,58 @@ class Z80CPU {
             case 0x7F: this.testBit(7, this.registers.A); break;
             case 0x7B: this.testBit(7, this.registers.E); break;
             case 0x7A: this.testBit(7, this.registers.D); break;
+            
+            // RES (Reset bit) instructions
+            case 0x80: this.registers.B = this.resetBit(0, this.registers.B); break;
+            case 0x81: this.registers.C = this.resetBit(0, this.registers.C); break;
+            case 0x82: this.registers.D = this.resetBit(0, this.registers.D); break;
+            case 0x83: this.registers.E = this.resetBit(0, this.registers.E); break;
+            case 0x84: this.registers.H = this.resetBit(0, this.registers.H); break;
+            case 0x85: this.registers.L = this.resetBit(0, this.registers.L); break;
+            case 0x86: this.resetBitAtHL(0); break;
+            case 0x87: this.registers.A = this.resetBit(0, this.registers.A); break;
+            case 0x88: this.registers.B = this.resetBit(1, this.registers.B); break;
+            case 0x89: this.registers.C = this.resetBit(1, this.registers.C); break;
+            case 0x8A: this.registers.D = this.resetBit(1, this.registers.D); break;
+            case 0x8B: this.registers.E = this.resetBit(1, this.registers.E); break;
+            case 0x8C: this.registers.H = this.resetBit(1, this.registers.H); break;
+            case 0x8D: this.registers.L = this.resetBit(1, this.registers.L); break;
+            case 0x8E: this.resetBitAtHL(1); break;
+            case 0x8F: this.registers.A = this.resetBit(1, this.registers.A); break;
+            case 0xB8: this.registers.B = this.resetBit(7, this.registers.B); break;
+            case 0xB9: this.registers.C = this.resetBit(7, this.registers.C); break;
+            case 0xBA: this.registers.D = this.resetBit(7, this.registers.D); break;
+            case 0xBB: this.registers.E = this.resetBit(7, this.registers.E); break;
+            case 0xBC: this.registers.H = this.resetBit(7, this.registers.H); break;
+            case 0xBD: this.registers.L = this.resetBit(7, this.registers.L); break;
+            case 0xBE: this.resetBitAtHL(7); break;
+            case 0xBF: this.registers.A = this.resetBit(7, this.registers.A); break;
+            
+            // SET (Set bit) instructions
+            case 0xC0: this.registers.B = this.setBit(0, this.registers.B); break;
+            case 0xC1: this.registers.C = this.setBit(0, this.registers.C); break;
+            case 0xC2: this.registers.D = this.setBit(0, this.registers.D); break;
+            case 0xC3: this.registers.E = this.setBit(0, this.registers.E); break;
+            case 0xC4: this.registers.H = this.setBit(0, this.registers.H); break;
+            case 0xC5: this.registers.L = this.setBit(0, this.registers.L); break;
+            case 0xC6: this.setBitAtHL(0); break;
+            case 0xC7: this.registers.A = this.setBit(0, this.registers.A); break;
+            case 0xC8: this.registers.B = this.setBit(1, this.registers.B); break;
+            case 0xC9: this.registers.C = this.setBit(1, this.registers.C); break;
+            case 0xCA: this.registers.D = this.setBit(1, this.registers.D); break;
+            case 0xCB: this.registers.E = this.setBit(1, this.registers.E); break;
+            case 0xCC: this.registers.H = this.setBit(1, this.registers.H); break;
+            case 0xCD: this.registers.L = this.setBit(1, this.registers.L); break;
+            case 0xCE: this.setBitAtHL(1); break;
+            case 0xCF: this.registers.A = this.setBit(1, this.registers.A); break;
+            case 0xF8: this.registers.B = this.setBit(7, this.registers.B); break;
+            case 0xF9: this.registers.C = this.setBit(7, this.registers.C); break;
+            case 0xFA: this.registers.D = this.setBit(7, this.registers.D); break;
+            case 0xFB: this.registers.E = this.setBit(7, this.registers.E); break;
+            case 0xFC: this.registers.H = this.setBit(7, this.registers.H); break;
+            case 0xFD: this.registers.L = this.setBit(7, this.registers.L); break;
+            case 0xFE: this.setBitAtHL(7); break;
+            case 0xFF: this.registers.A = this.setBit(7, this.registers.A); break;
             
             default:
                 return { error: `Unknown CB opcode: 0xCB 0x${cbOpcode.toString(16).padStart(2, '0')} at address 0x${(this.registers.PC - 2).toString(16).padStart(4, '0')}` };
@@ -932,6 +1356,94 @@ class Z80CPU {
     testBit(bit, value) {
         const bitMask = 1 << bit;
         this.registers.F.Z = (value & bitMask) === 0;
+    }
+    
+    // Rotate instructions helper methods
+    rotateLeftCircular(value) {
+        const bit7 = (value & 0x80) >> 7;
+        this.registers.F.C = bit7 !== 0;
+        const result = ((value << 1) | bit7) & 0xFF;
+        this.registers.F.Z = result === 0;
+        return result;
+    }
+    
+    rotateLeftCircularAtHL() {
+        const addr = this.getHL();
+        const value = this.memory[addr];
+        const bit7 = (value & 0x80) >> 7;
+        this.registers.F.C = bit7 !== 0;
+        this.memory[addr] = ((value << 1) | bit7) & 0xFF;
+        this.registers.F.Z = this.memory[addr] === 0;
+    }
+    
+    rotateRightCircular(value) {
+        const bit0 = value & 0x01;
+        this.registers.F.C = bit0 !== 0;
+        const result = ((value >> 1) | (bit0 << 7)) & 0xFF;
+        this.registers.F.Z = result === 0;
+        return result;
+    }
+    
+    rotateRightCircularAtHL() {
+        const addr = this.getHL();
+        const value = this.memory[addr];
+        const bit0 = value & 0x01;
+        this.registers.F.C = bit0 !== 0;
+        this.memory[addr] = ((value >> 1) | (bit0 << 7)) & 0xFF;
+        this.registers.F.Z = this.memory[addr] === 0;
+    }
+    
+    rotateLeftThroughCarry(value) {
+        const oldCarry = this.registers.F.C ? 1 : 0;
+        this.registers.F.C = (value & 0x80) !== 0;
+        const result = ((value << 1) | oldCarry) & 0xFF;
+        this.registers.F.Z = result === 0;
+        return result;
+    }
+    
+    rotateLeftThroughCarryAtHL() {
+        const addr = this.getHL();
+        const value = this.memory[addr];
+        const oldCarry = this.registers.F.C ? 1 : 0;
+        this.registers.F.C = (value & 0x80) !== 0;
+        this.memory[addr] = ((value << 1) | oldCarry) & 0xFF;
+        this.registers.F.Z = this.memory[addr] === 0;
+    }
+    
+    rotateRightThroughCarry(value) {
+        const oldCarry = this.registers.F.C ? 0x80 : 0;
+        this.registers.F.C = (value & 0x01) !== 0;
+        const result = ((value >> 1) | oldCarry) & 0xFF;
+        this.registers.F.Z = result === 0;
+        return result;
+    }
+    
+    rotateRightThroughCarryAtHL() {
+        const addr = this.getHL();
+        const value = this.memory[addr];
+        const oldCarry = this.registers.F.C ? 0x80 : 0;
+        this.registers.F.C = (value & 0x01) !== 0;
+        this.memory[addr] = ((value >> 1) | oldCarry) & 0xFF;
+        this.registers.F.Z = this.memory[addr] === 0;
+    }
+    
+    // Bit manipulation helper methods
+    setBit(bit, value) {
+        return value | (1 << bit);
+    }
+    
+    setBitAtHL(bit) {
+        const addr = this.getHL();
+        this.memory[addr] = this.memory[addr] | (1 << bit);
+    }
+    
+    resetBit(bit, value) {
+        return value & (~(1 << bit));
+    }
+    
+    resetBitAtHL(bit) {
+        const addr = this.getHL();
+        this.memory[addr] = this.memory[addr] & (~(1 << bit));
     }
 
     // I/O Port handling - use stored iomap

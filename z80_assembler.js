@@ -93,6 +93,38 @@
  * NEWLINE: EQU '\n'              ; Character literal with escape sequence  
  * NULLTERM: DB "test", chr(0)    ; String followed by null character
  * TABCHAR: EQU chr(9)            ; Tab character using chr() function
+ * 
+ * IMPLEMENTED INSTRUCTIONS: NOP; HALT; LD A,n; LD B,n; LD C,n; LD D,n; LD E,n; LD H,n; LD L,n;
+ * LD A,(nn); LD (nn),A; LD A,(BC); LD A,(DE); LD A,(HL); LD (BC),A; LD (DE),A; LD (HL),A; LD (HL),B;
+ * LD (HL),C; LD (HL),D; LD (HL),E; LD (HL),H; LD (HL),L; LD B,(HL); LD C,(HL); LD D,(HL); LD E,(HL);
+ * LD H,(HL); LD L,(HL); LD E,A; LD A,E; LD A,C; LD B,A; LD C,A; LD B,C; LD B,H; LD A,B; LD A,H;
+ * LD A,L; LD H,A; LD L,A; LD A,D; LD D,A; LD B,B; LD B,D; LD B,E; LD B,L; LD C,B; LD C,C; LD C,D;
+ * LD C,E; LD C,H; LD C,L; LD D,B; LD D,C; LD D,D; LD D,E; LD D,H; LD D,L; LD E,B; LD E,C; LD E,D;
+ * LD E,E; LD E,H; LD E,L; LD H,B; LD H,C; LD H,D; LD H,E; LD H,H; LD H,L; LD L,B; LD L,C; LD L,D;
+ * LD L,E; LD L,H; LD L,L; EX AF,AF'; EX DE,HL; EX (SP),HL; LD HL,nn; LD (nn),HL; LD HL,(nn);
+ * LD BC,nn; LD DE,nn; LD SP,nn; LD (HL),n; CALL nn; CALL Z,nn; CALL NZ,nn; CALL C,nn; CALL NC,nn;
+ * RET; RET NZ; RET Z; RET NC; RET C; JR d; JR Z,d; JR NZ,d; JR C,d; JR NC,d; DJNZ d; JP nn;
+ * JP (HL); JP Z,nn; JP NZ,nn; JP C,nn; JP NC,nn;
+ * INC A; INC B; INC C; INC D; INC E; INC H; INC L; INC BC; INC DE; INC HL; INC SP; INC (HL);
+ * DEC A; DEC B; DEC C; DEC D; DEC E; DEC H; DEC L; DEC (HL); DEC BC; DEC DE; DEC HL; DEC SP;
+ * ADD HL,BC; ADD HL,DE; ADD HL,HL; ADD HL,SP; ADD A,A; ADD A,B; ADD A,C; ADD A,D; ADD A,E; ADD A,H;
+ * ADD A,L; ADD A,n; ADD A,(HL); ADC A,H; ADC A,n; SUB A; SUB n; SUB B; SUB C; SUB D; SUB E; SUB H; SUB L;
+ * SUB (HL);
+ * CP n; CP B; CP C; CP D; CP E; CP H; CP L; CP (HL); CP A; OR A; OR B; OR C; OR D; OR E; OR H;
+ * OR L; OR (HL); OR n; XOR A; XOR B; XOR C; XOR D; XOR E; XOR H; XOR L; XOR (HL); XOR n;
+ * AND A; AND B; AND C; AND D; AND E; AND H; AND L; AND (HL); AND n; NEG; RLCA; SCF; CCF; CPL;
+ * LDIR; PUSH BC; PUSH DE; PUSH HL; PUSH AF; POP BC; POP DE; POP HL; POP AF; IN A,(n); OUT (n),A;
+ * SLA A; SLA B; SLA C; SLA D; SLA E; SLA H; SLA L; SLA (HL); SRA A; SRA B; SRA C; SRA D; SRA E;
+ * SRA H; SRA L; SRA (HL); SRL A; SRL B; SRL C; SRL D; SRL E; SRL H; SRL L; SRL (HL); RLA; RRCA; RRA;
+ * RLC A; RLC B; RLC C; RLC D; RLC E; RLC H; RLC L; RLC (HL); RRC A; RRC B; RRC C; RRC D; RRC E;
+ * RRC H; RRC L; RRC (HL); RL A; RL B; RL C; RL D; RL E; RL H; RL L; RL (HL); RR A; RR B; RR C;
+ * RR D; RR E; RR H; RR L; RR (HL); SBC A,A; SBC A,B; SBC A,C; SBC A,D; SBC A,E; SBC A,H; SBC A,L;
+ * SBC A,(HL); SBC A,n; SET 0,A; SET 0,B; SET 0,C; SET 0,D; SET 0,E; SET 0,H; SET 0,L; SET 0,(HL);
+ * SET 1,A; SET 1,B; SET 1,C; SET 1,D; SET 1,E; SET 1,H; SET 1,L; SET 1,(HL); SET 7,A; SET 7,B;
+ * SET 7,C; SET 7,D; SET 7,E; SET 7,H; SET 7,L; SET 7,(HL); RES 0,A; RES 0,B; RES 0,C; RES 0,D;
+ * RES 0,E; RES 0,H; RES 0,L; RES 0,(HL); RES 1,A; RES 1,B; RES 1,C; RES 1,D; RES 1,E; RES 1,H;
+ * RES 1,L; RES 1,(HL); RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL);
+ * BIT 0,A; BIT 1,A; BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
  */
 class Z80Assembler {
     // --- Constants for operand patterns ---
@@ -730,20 +762,68 @@ class Z80Assembler {
             { m: 'LD', ops: ['L', 'A'], opc: [0x6F] },
             { m: 'LD', ops: ['A', 'D'], opc: [0x7A] },
             { m: 'LD', ops: ['D', 'A'], opc: [0x57] },
+            
+            // Additional register-to-register LD variants
+            { m: 'LD', ops: ['B', 'B'], opc: [0x40] },
+            { m: 'LD', ops: ['B', 'D'], opc: [0x42] },
+            { m: 'LD', ops: ['B', 'E'], opc: [0x43] },
+            { m: 'LD', ops: ['B', 'L'], opc: [0x45] },
+            { m: 'LD', ops: ['C', 'B'], opc: [0x48] },
+            { m: 'LD', ops: ['C', 'C'], opc: [0x49] },
+            { m: 'LD', ops: ['C', 'D'], opc: [0x4A] },
+            { m: 'LD', ops: ['C', 'E'], opc: [0x4B] },
+            { m: 'LD', ops: ['C', 'H'], opc: [0x4C] },
+            { m: 'LD', ops: ['C', 'L'], opc: [0x4D] },
+            { m: 'LD', ops: ['C', '(HL)'], opc: [0x4E] },
+            { m: 'LD', ops: ['D', 'B'], opc: [0x50] },
+            { m: 'LD', ops: ['D', 'C'], opc: [0x51] },
+            { m: 'LD', ops: ['D', 'D'], opc: [0x52] },
+            { m: 'LD', ops: ['D', 'E'], opc: [0x53] },
+            { m: 'LD', ops: ['D', 'H'], opc: [0x54] },
+            { m: 'LD', ops: ['D', 'L'], opc: [0x55] },
+            { m: 'LD', ops: ['D', '(HL)'], opc: [0x56] },
+            { m: 'LD', ops: ['E', 'B'], opc: [0x58] },
+            { m: 'LD', ops: ['E', 'C'], opc: [0x59] },
+            { m: 'LD', ops: ['E', 'D'], opc: [0x5A] },
+            { m: 'LD', ops: ['E', 'E'], opc: [0x5B] },
+            { m: 'LD', ops: ['E', 'H'], opc: [0x5C] },
+            { m: 'LD', ops: ['E', 'L'], opc: [0x5D] },
+            { m: 'LD', ops: ['E', '(HL)'], opc: [0x5E] },
+            { m: 'LD', ops: ['H', 'B'], opc: [0x60] },
+            { m: 'LD', ops: ['H', 'C'], opc: [0x61] },
+            { m: 'LD', ops: ['H', 'D'], opc: [0x62] },
+            { m: 'LD', ops: ['H', 'E'], opc: [0x63] },
+            { m: 'LD', ops: ['H', 'H'], opc: [0x64] },
+            { m: 'LD', ops: ['H', 'L'], opc: [0x65] },
+            { m: 'LD', ops: ['H', '(HL)'], opc: [0x66] },
+            { m: 'LD', ops: ['L', 'B'], opc: [0x68] },
+            { m: 'LD', ops: ['L', 'C'], opc: [0x69] },
+            { m: 'LD', ops: ['L', 'D'], opc: [0x6A] },
+            { m: 'LD', ops: ['L', 'E'], opc: [0x6B] },
+            { m: 'LD', ops: ['L', 'H'], opc: [0x6C] },
+            { m: 'LD', ops: ['L', 'L'], opc: [0x6D] },
+            { m: 'LD', ops: ['L', '(HL)'], opc: [0x6E] },
             // NOTE: 0xEB is EX DE,HL, not LD DE,HL. Keep EX mapping only.
             
             // Exchange instructions
             { m: 'EX', ops: ['AF', "AF'"], opc: [0x08] },
             { m: 'EX', ops: ['DE', 'HL'], opc: [0xEB] },
+            { m: 'EX', ops: ['(SP)', 'HL'], opc: [0xE3] },
             
             { m: 'LD', ops: ['HL', IMM16], opc: [0x21] },
             { m: 'LD', ops: ['BC', IMM16], opc: [0x01] },
             { m: 'LD', ops: ['DE', IMM16], opc: [0x11] },
             { m: 'LD', ops: ['SP', IMM16], opc: [0x31] },
+            { m: 'LD', ops: [MEM16, 'HL'], opc: [0x22] },
+            { m: 'LD', ops: ['HL', MEM16], opc: [0x2A] },
             { m: 'LD', ops: ['(HL)', IMM8], opc: [0x36] },
 
             // Control flow
             { m: 'CALL', ops: [IMM16], opc: [0xCD] },
+            { m: 'CALL', ops: ['Z', IMM16], opc: [0xCC] },
+            { m: 'CALL', ops: ['NZ', IMM16], opc: [0xC4] },
+            { m: 'CALL', ops: ['C', IMM16], opc: [0xDC] },
+            { m: 'CALL', ops: ['NC', IMM16], opc: [0xD4] },
             { m: 'RET', ops: [], opc: [0xC9] },
             { m: 'RET', ops: ['NZ'], opc: [0xC0] },
             { m: 'RET', ops: ['Z'], opc: [0xC8] },
@@ -762,6 +842,7 @@ class Z80Assembler {
             { m: 'JP', ops: ['NZ', IMM16], opc: [0xC2] },
             { m: 'JP', ops: ['C', IMM16], opc: [0xDA] },
             { m: 'JP', ops: ['NC', IMM16], opc: [0xD2] },
+            { m: 'JP', ops: ['(HL)'], opc: [0xE9] },
 
             // Arithmetic
             { m: 'INC', ops: ['A'], opc: [0x3C] },
@@ -800,6 +881,7 @@ class Z80Assembler {
             { m: 'ADD', ops: ['A', 'H'], opc: [0x84] },
             { m: 'ADD', ops: ['A', 'L'], opc: [0x85] },
             { m: 'ADD', ops: ['A', IMM8], opc: [0xC6] },
+            { m: 'ADD', ops: ['A', '(HL)'], opc: [0x86] },
             { m: 'ADC', ops: ['A', 'H'], opc: [0x8C] },
             { m: 'ADC', ops: ['A', IMM8], opc: [0xCE] },
             { m: 'SUB', ops: ['A'], opc: [0x97] },
@@ -810,11 +892,27 @@ class Z80Assembler {
             { m: 'SUB', ops: ['E'], opc: [0x93] },
             { m: 'SUB', ops: ['H'], opc: [0x94] },
             { m: 'SUB', ops: ['L'], opc: [0x95] },
+            { m: 'SUB', ops: ['(HL)'], opc: [0x96] },
+            { m: 'SBC', ops: ['A', 'A'], opc: [0x9F] },
+            { m: 'SBC', ops: ['A', 'B'], opc: [0x98] },
+            { m: 'SBC', ops: ['A', 'C'], opc: [0x99] },
+            { m: 'SBC', ops: ['A', 'D'], opc: [0x9A] },
+            { m: 'SBC', ops: ['A', 'E'], opc: [0x9B] },
+            { m: 'SBC', ops: ['A', 'H'], opc: [0x9C] },
+            { m: 'SBC', ops: ['A', 'L'], opc: [0x9D] },
+            { m: 'SBC', ops: ['A', '(HL)'], opc: [0x9E] },
+            { m: 'SBC', ops: ['A', IMM8], opc: [0xDE] },
             
             // Logic and comparison
             { m: 'CP', ops: [IMM8], opc: [0xFE] },
             { m: 'CP', ops: ['B'], opc: [0xB8] },
+            { m: 'CP', ops: ['C'], opc: [0xB9] },
+            { m: 'CP', ops: ['D'], opc: [0xBA] },
+            { m: 'CP', ops: ['E'], opc: [0xBB] },
+            { m: 'CP', ops: ['H'], opc: [0xBC] },
+            { m: 'CP', ops: ['L'], opc: [0xBD] },
             { m: 'CP', ops: ['(HL)'], opc: [0xBE] },
+            { m: 'CP', ops: ['A'], opc: [0xBF] },
             { m: 'OR', ops: ['A'], opc: [0xB7] },
             { m: 'OR', ops: ['B'], opc: [0xB0] },
             { m: 'OR', ops: ['C'], opc: [0xB1] },
@@ -825,6 +923,13 @@ class Z80Assembler {
             { m: 'OR', ops: ['(HL)'], opc: [0xB6] },
             { m: 'OR', ops: [IMM8], opc: [0xF6] },
             { m: 'XOR', ops: ['A'], opc: [0xAF] },
+            { m: 'XOR', ops: ['B'], opc: [0xA8] },
+            { m: 'XOR', ops: ['C'], opc: [0xA9] },
+            { m: 'XOR', ops: ['D'], opc: [0xAA] },
+            { m: 'XOR', ops: ['E'], opc: [0xAB] },
+            { m: 'XOR', ops: ['H'], opc: [0xAC] },
+            { m: 'XOR', ops: ['L'], opc: [0xAD] },
+            { m: 'XOR', ops: ['(HL)'], opc: [0xAE] },
             { m: 'XOR', ops: [IMM8], opc: [0xEE] },
             { m: 'AND', ops: ['A'], opc: [0xA7] },
             { m: 'AND', ops: ['B'], opc: [0xA0] },
@@ -839,6 +944,9 @@ class Z80Assembler {
             
             // Rotate and shift
             { m: 'RLCA', ops: [], opc: [0x07] },
+            { m: 'RLA', ops: [], opc: [0x17] },
+            { m: 'RRCA', ops: [], opc: [0x0F] },
+            { m: 'RRA', ops: [], opc: [0x1F] },
             
             // Flag operations
             { m: 'SCF', ops: [], opc: [0x37] },
@@ -890,6 +998,43 @@ class Z80Assembler {
             { m: 'SRL', ops: ['L'], opc: [0xCB, 0x3D] },
             { m: 'SRL', ops: ['(HL)'], opc: [0xCB, 0x3E] },
             
+            // Rotate instructions (CB prefix)
+            { m: 'RLC', ops: ['A'], opc: [0xCB, 0x07] },
+            { m: 'RLC', ops: ['B'], opc: [0xCB, 0x00] },
+            { m: 'RLC', ops: ['C'], opc: [0xCB, 0x01] },
+            { m: 'RLC', ops: ['D'], opc: [0xCB, 0x02] },
+            { m: 'RLC', ops: ['E'], opc: [0xCB, 0x03] },
+            { m: 'RLC', ops: ['H'], opc: [0xCB, 0x04] },
+            { m: 'RLC', ops: ['L'], opc: [0xCB, 0x05] },
+            { m: 'RLC', ops: ['(HL)'], opc: [0xCB, 0x06] },
+            
+            { m: 'RRC', ops: ['A'], opc: [0xCB, 0x0F] },
+            { m: 'RRC', ops: ['B'], opc: [0xCB, 0x08] },
+            { m: 'RRC', ops: ['C'], opc: [0xCB, 0x09] },
+            { m: 'RRC', ops: ['D'], opc: [0xCB, 0x0A] },
+            { m: 'RRC', ops: ['E'], opc: [0xCB, 0x0B] },
+            { m: 'RRC', ops: ['H'], opc: [0xCB, 0x0C] },
+            { m: 'RRC', ops: ['L'], opc: [0xCB, 0x0D] },
+            { m: 'RRC', ops: ['(HL)'], opc: [0xCB, 0x0E] },
+            
+            { m: 'RL', ops: ['A'], opc: [0xCB, 0x17] },
+            { m: 'RL', ops: ['B'], opc: [0xCB, 0x10] },
+            { m: 'RL', ops: ['C'], opc: [0xCB, 0x11] },
+            { m: 'RL', ops: ['D'], opc: [0xCB, 0x12] },
+            { m: 'RL', ops: ['E'], opc: [0xCB, 0x13] },
+            { m: 'RL', ops: ['H'], opc: [0xCB, 0x14] },
+            { m: 'RL', ops: ['L'], opc: [0xCB, 0x15] },
+            { m: 'RL', ops: ['(HL)'], opc: [0xCB, 0x16] },
+            
+            { m: 'RR', ops: ['A'], opc: [0xCB, 0x1F] },
+            { m: 'RR', ops: ['B'], opc: [0xCB, 0x18] },
+            { m: 'RR', ops: ['C'], opc: [0xCB, 0x19] },
+            { m: 'RR', ops: ['D'], opc: [0xCB, 0x1A] },
+            { m: 'RR', ops: ['E'], opc: [0xCB, 0x1B] },
+            { m: 'RR', ops: ['H'], opc: [0xCB, 0x1C] },
+            { m: 'RR', ops: ['L'], opc: [0xCB, 0x1D] },
+            { m: 'RR', ops: ['(HL)'], opc: [0xCB, 0x1E] },
+            
             // Bit test instructions  
             { m: 'BIT', ops: ['0', 'A'], opc: [0xCB, 0x47] },
             { m: 'BIT', ops: ['1', 'A'], opc: [0xCB, 0x4F] },
@@ -901,6 +1046,58 @@ class Z80Assembler {
             { m: 'BIT', ops: ['7', 'A'], opc: [0xCB, 0x7F] },
             { m: 'BIT', ops: ['7', 'E'], opc: [0xCB, 0x7B] },
             { m: 'BIT', ops: ['7', 'D'], opc: [0xCB, 0x7A] },
+            
+            // SET bit instructions
+            { m: 'SET', ops: ['0', 'A'], opc: [0xCB, 0xC7] },
+            { m: 'SET', ops: ['0', 'B'], opc: [0xCB, 0xC0] },
+            { m: 'SET', ops: ['0', 'C'], opc: [0xCB, 0xC1] },
+            { m: 'SET', ops: ['0', 'D'], opc: [0xCB, 0xC2] },
+            { m: 'SET', ops: ['0', 'E'], opc: [0xCB, 0xC3] },
+            { m: 'SET', ops: ['0', 'H'], opc: [0xCB, 0xC4] },
+            { m: 'SET', ops: ['0', 'L'], opc: [0xCB, 0xC5] },
+            { m: 'SET', ops: ['0', '(HL)'], opc: [0xCB, 0xC6] },
+            { m: 'SET', ops: ['1', 'A'], opc: [0xCB, 0xCF] },
+            { m: 'SET', ops: ['1', 'B'], opc: [0xCB, 0xC8] },
+            { m: 'SET', ops: ['1', 'C'], opc: [0xCB, 0xC9] },
+            { m: 'SET', ops: ['1', 'D'], opc: [0xCB, 0xCA] },
+            { m: 'SET', ops: ['1', 'E'], opc: [0xCB, 0xCB] },
+            { m: 'SET', ops: ['1', 'H'], opc: [0xCB, 0xCC] },
+            { m: 'SET', ops: ['1', 'L'], opc: [0xCB, 0xCD] },
+            { m: 'SET', ops: ['1', '(HL)'], opc: [0xCB, 0xCE] },
+            { m: 'SET', ops: ['7', 'A'], opc: [0xCB, 0xFF] },
+            { m: 'SET', ops: ['7', 'B'], opc: [0xCB, 0xF8] },
+            { m: 'SET', ops: ['7', 'C'], opc: [0xCB, 0xF9] },
+            { m: 'SET', ops: ['7', 'D'], opc: [0xCB, 0xFA] },
+            { m: 'SET', ops: ['7', 'E'], opc: [0xCB, 0xFB] },
+            { m: 'SET', ops: ['7', 'H'], opc: [0xCB, 0xFC] },
+            { m: 'SET', ops: ['7', 'L'], opc: [0xCB, 0xFD] },
+            { m: 'SET', ops: ['7', '(HL)'], opc: [0xCB, 0xFE] },
+            
+            // RES bit instructions
+            { m: 'RES', ops: ['0', 'A'], opc: [0xCB, 0x87] },
+            { m: 'RES', ops: ['0', 'B'], opc: [0xCB, 0x80] },
+            { m: 'RES', ops: ['0', 'C'], opc: [0xCB, 0x81] },
+            { m: 'RES', ops: ['0', 'D'], opc: [0xCB, 0x82] },
+            { m: 'RES', ops: ['0', 'E'], opc: [0xCB, 0x83] },
+            { m: 'RES', ops: ['0', 'H'], opc: [0xCB, 0x84] },
+            { m: 'RES', ops: ['0', 'L'], opc: [0xCB, 0x85] },
+            { m: 'RES', ops: ['0', '(HL)'], opc: [0xCB, 0x86] },
+            { m: 'RES', ops: ['1', 'A'], opc: [0xCB, 0x8F] },
+            { m: 'RES', ops: ['1', 'B'], opc: [0xCB, 0x88] },
+            { m: 'RES', ops: ['1', 'C'], opc: [0xCB, 0x89] },
+            { m: 'RES', ops: ['1', 'D'], opc: [0xCB, 0x8A] },
+            { m: 'RES', ops: ['1', 'E'], opc: [0xCB, 0x8B] },
+            { m: 'RES', ops: ['1', 'H'], opc: [0xCB, 0x8C] },
+            { m: 'RES', ops: ['1', 'L'], opc: [0xCB, 0x8D] },
+            { m: 'RES', ops: ['1', '(HL)'], opc: [0xCB, 0x8E] },
+            { m: 'RES', ops: ['7', 'A'], opc: [0xCB, 0xBF] },
+            { m: 'RES', ops: ['7', 'B'], opc: [0xCB, 0xB8] },
+            { m: 'RES', ops: ['7', 'C'], opc: [0xCB, 0xB9] },
+            { m: 'RES', ops: ['7', 'D'], opc: [0xCB, 0xBA] },
+            { m: 'RES', ops: ['7', 'E'], opc: [0xCB, 0xBB] },
+            { m: 'RES', ops: ['7', 'H'], opc: [0xCB, 0xBC] },
+            { m: 'RES', ops: ['7', 'L'], opc: [0xCB, 0xBD] },
+            { m: 'RES', ops: ['7', '(HL)'], opc: [0xCB, 0xBE] },
         ];
 
         definitions.forEach(def => {

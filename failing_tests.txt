@@ -1,0 +1,9 @@
+        throw new Error(`Test name is required for multi-instruction tests. Assembly has ${instructionLines} lines:\n${assembly}`);
+        ^
+
+Error: Test name is required for multi-instruction tests. Assembly has 2 lines:
+
+    LD B, 1
+    INC B
+    at test (C:\dfc\github\sinclaude\z80_cpu_emulator_test.js:763:15)
+    at Z80CPUTestSuite.runAllTests (C:\dfc\github\sinclaude\z80_cpu_emulator_test.js:906:5)

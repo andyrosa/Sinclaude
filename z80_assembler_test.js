@@ -894,6 +894,62 @@ CODE:
 
     // Bit test operations
     this.assertAssemblySuccess("BIT 0,A", [0xcb, 0x47]);
+    this.assertAssemblySuccess("BIT 1,A", [0xcb, 0x4f]);
+    this.assertAssemblySuccess("BIT 7,A", [0xcb, 0x7f]);
+    this.assertAssemblySuccess("BIT 7,E", [0xcb, 0x7b]);
+    this.assertAssemblySuccess("BIT 7,D", [0xcb, 0x7a]);
+
+    // Additional rotate instructions
+    this.assertAssemblySuccess("RLA", [0x17]);
+    this.assertAssemblySuccess("RRA", [0x1f]);
+    this.assertAssemblySuccess("RRCA", [0x0f]);
+    
+    // CB-prefixed rotate instructions
+    this.assertAssemblySuccess("RLC A", [0xcb, 0x07]);
+    this.assertAssemblySuccess("RLC B", [0xcb, 0x00]);
+    this.assertAssemblySuccess("RLC (HL)", [0xcb, 0x06]);
+    this.assertAssemblySuccess("RRC A", [0xcb, 0x0f]);
+    this.assertAssemblySuccess("RRC B", [0xcb, 0x08]);
+    this.assertAssemblySuccess("RRC (HL)", [0xcb, 0x0e]);
+    this.assertAssemblySuccess("RL A", [0xcb, 0x17]);
+    this.assertAssemblySuccess("RL B", [0xcb, 0x10]);
+    this.assertAssemblySuccess("RL (HL)", [0xcb, 0x16]);
+    this.assertAssemblySuccess("RR A", [0xcb, 0x1f]);
+    this.assertAssemblySuccess("RR B", [0xcb, 0x18]);
+    this.assertAssemblySuccess("RR (HL)", [0xcb, 0x1e]);
+    
+    // SET bit operations
+    this.assertAssemblySuccess("SET 0,A", [0xcb, 0xc7]);
+    this.assertAssemblySuccess("SET 0,B", [0xcb, 0xc0]);
+    this.assertAssemblySuccess("SET 0,(HL)", [0xcb, 0xc6]);
+    this.assertAssemblySuccess("SET 1,A", [0xcb, 0xcf]);
+    this.assertAssemblySuccess("SET 1,B", [0xcb, 0xc8]);
+    this.assertAssemblySuccess("SET 1,(HL)", [0xcb, 0xce]);
+    this.assertAssemblySuccess("SET 7,A", [0xcb, 0xff]);
+    this.assertAssemblySuccess("SET 7,B", [0xcb, 0xf8]);
+    this.assertAssemblySuccess("SET 7,(HL)", [0xcb, 0xfe]);
+    
+    // RES bit operations
+    this.assertAssemblySuccess("RES 0,A", [0xcb, 0x87]);
+    this.assertAssemblySuccess("RES 0,B", [0xcb, 0x80]);
+    this.assertAssemblySuccess("RES 0,(HL)", [0xcb, 0x86]);
+    this.assertAssemblySuccess("RES 1,A", [0xcb, 0x8f]);
+    this.assertAssemblySuccess("RES 1,B", [0xcb, 0x88]);
+    this.assertAssemblySuccess("RES 1,(HL)", [0xcb, 0x8e]);
+    this.assertAssemblySuccess("RES 7,A", [0xcb, 0xbf]);
+    this.assertAssemblySuccess("RES 7,B", [0xcb, 0xb8]);
+    this.assertAssemblySuccess("RES 7,(HL)", [0xcb, 0xbe]);
+    
+    // SBC (Subtract with Carry) operations
+    this.assertAssemblySuccess("SBC A,A", [0x9f]);
+    this.assertAssemblySuccess("SBC A,B", [0x98]);
+    this.assertAssemblySuccess("SBC A,C", [0x99]);
+    this.assertAssemblySuccess("SBC A,D", [0x9a]);
+    this.assertAssemblySuccess("SBC A,E", [0x9b]);
+    this.assertAssemblySuccess("SBC A,H", [0x9c]);
+    this.assertAssemblySuccess("SBC A,L", [0x9d]);
+    this.assertAssemblySuccess("SBC A,(HL)", [0x9e]);
+    this.assertAssemblySuccess("SBC A,42", [0xde, 42]);
 
     // Conditional returns
     this.assertAssemblySuccess("RET Z", [0xc8]);
@@ -944,6 +1000,84 @@ CODE:
 
     // DJNZ instruction
     this.assertAssemblySuccess("DJNZ 10", [0x10, 0x08]);
+    
+    // Conditional CALL instructions
+    this.assertAssemblySuccess("CALL Z,1234", [0xcc, 0xd2, 0x04]);
+    this.assertAssemblySuccess("CALL NZ,1234", [0xc4, 0xd2, 0x04]);
+    this.assertAssemblySuccess("CALL C,1234", [0xdc, 0xd2, 0x04]);
+    this.assertAssemblySuccess("CALL NC,1234", [0xd4, 0xd2, 0x04]);
+    
+    // Memory load/store operations
+    this.assertAssemblySuccess("LD (1234H),HL", [0x22, 0x34, 0x12]);
+    this.assertAssemblySuccess("LD HL,(1234H)", [0x2a, 0x34, 0x12]);
+    
+    // Stack exchange
+    this.assertAssemblySuccess("EX (SP),HL", [0xe3]);
+    
+    // Indirect jump
+    this.assertAssemblySuccess("JP (HL)", [0xe9]);
+    
+    // Additional register-to-register LD variants
+    this.assertAssemblySuccess("LD B,B", [0x40]);
+    this.assertAssemblySuccess("LD B,D", [0x42]);
+    this.assertAssemblySuccess("LD B,E", [0x43]);
+    this.assertAssemblySuccess("LD B,L", [0x45]);
+    this.assertAssemblySuccess("LD C,B", [0x48]);
+    this.assertAssemblySuccess("LD C,C", [0x49]);
+    this.assertAssemblySuccess("LD C,D", [0x4a]);
+    this.assertAssemblySuccess("LD C,E", [0x4b]);
+    this.assertAssemblySuccess("LD C,H", [0x4c]);
+    this.assertAssemblySuccess("LD C,L", [0x4d]);
+    this.assertAssemblySuccess("LD C,(HL)", [0x4e]);
+    this.assertAssemblySuccess("LD D,B", [0x50]);
+    this.assertAssemblySuccess("LD D,C", [0x51]);
+    this.assertAssemblySuccess("LD D,D", [0x52]);
+    this.assertAssemblySuccess("LD D,E", [0x53]);
+    this.assertAssemblySuccess("LD D,H", [0x54]);
+    this.assertAssemblySuccess("LD D,L", [0x55]);
+    this.assertAssemblySuccess("LD D,(HL)", [0x56]);
+    this.assertAssemblySuccess("LD E,B", [0x58]);
+    this.assertAssemblySuccess("LD E,C", [0x59]);
+    this.assertAssemblySuccess("LD E,D", [0x5a]);
+    this.assertAssemblySuccess("LD E,E", [0x5b]);
+    this.assertAssemblySuccess("LD E,H", [0x5c]);
+    this.assertAssemblySuccess("LD E,L", [0x5d]);
+    this.assertAssemblySuccess("LD E,(HL)", [0x5e]);
+    this.assertAssemblySuccess("LD H,B", [0x60]);
+    this.assertAssemblySuccess("LD H,C", [0x61]);
+    this.assertAssemblySuccess("LD H,D", [0x62]);
+    this.assertAssemblySuccess("LD H,E", [0x63]);
+    this.assertAssemblySuccess("LD H,H", [0x64]);
+    this.assertAssemblySuccess("LD H,L", [0x65]);
+    this.assertAssemblySuccess("LD H,(HL)", [0x66]);
+    this.assertAssemblySuccess("LD L,B", [0x68]);
+    this.assertAssemblySuccess("LD L,C", [0x69]);
+    this.assertAssemblySuccess("LD L,D", [0x6a]);
+    this.assertAssemblySuccess("LD L,E", [0x6b]);
+    this.assertAssemblySuccess("LD L,H", [0x6c]);
+    this.assertAssemblySuccess("LD L,L", [0x6d]);
+    this.assertAssemblySuccess("LD L,(HL)", [0x6e]);
+    
+    // Arithmetic with memory
+    this.assertAssemblySuccess("ADD A,(HL)", [0x86]);
+    this.assertAssemblySuccess("SUB (HL)", [0x96]);
+    
+    // XOR register variants
+    this.assertAssemblySuccess("XOR B", [0xa8]);
+    this.assertAssemblySuccess("XOR C", [0xa9]);
+    this.assertAssemblySuccess("XOR D", [0xaa]);
+    this.assertAssemblySuccess("XOR E", [0xab]);
+    this.assertAssemblySuccess("XOR H", [0xac]);
+    this.assertAssemblySuccess("XOR L", [0xad]);
+    this.assertAssemblySuccess("XOR (HL)", [0xae]);
+    
+    // CP register variants
+    this.assertAssemblySuccess("CP C", [0xb9]);
+    this.assertAssemblySuccess("CP D", [0xba]);
+    this.assertAssemblySuccess("CP E", [0xbb]);
+    this.assertAssemblySuccess("CP H", [0xbc]);
+    this.assertAssemblySuccess("CP L", [0xbd]);
+    this.assertAssemblySuccess("CP A", [0xbf]);
   }
 
   // Test: Case Insensitivity
