@@ -573,9 +573,10 @@ textarea {
     position: relative;
 }
 
-.listing-section h3:hover,
-.console-section h3:hover {
+.listing-section h3:hover:not(:has(.header-item:hover)),
+.console-section h3:hover:not(:has(.header-item:hover)) {
     background: var(--button-hover-bgc);
+    color: var(--button-text-c);
     border-radius: 3px;
 }
 
@@ -663,7 +664,8 @@ textarea {
 
 /* Hide expand button on wide screens where there's enough space */
 @media (min-width: 769px) {
-    .header-item[title="Expand Editor"] {
+    .header-item[title="Expand Editor"],
+    .header-item[title="Expand Magazine Listing"] {
         display: none;
     }
 }
@@ -826,6 +828,20 @@ textarea {
     height: 24px;
     min-width: 72px;
     width: 72px;
+}
+
+/* Buttons inside h3 headings should stay inline */
+h3 .header-item {
+    display: inline-flex;
+    margin-left: 8px;
+    vertical-align: middle;
+    min-width: auto;
+    width: auto;
+    height: auto;
+    font-size: 14px;
+    padding: 2px 6px;
+    position: relative;
+    z-index: 10;
 }
 
 /* Debug */

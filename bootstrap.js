@@ -56,6 +56,7 @@ function loadScripts() {
       : Date.now();
   var scripts = [
     "console-utils.js",
+    "clipboard-utils.js",
     "scroll_target.js",
     "version_update.js",
     "z80_assembler.js",
