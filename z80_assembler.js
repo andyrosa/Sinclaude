@@ -153,7 +153,15 @@ class Z80Assembler {
          * A map from a mnemonic to a list of its possible instruction definitions.
          */
         this.instructionMap = new Map();
-        this._buildInstructionSet();
+        this.instructionSetAnalysis = this._buildInstructionSet();
+    }
+
+    /**
+     * Returns analysis of the instruction set including duplicates and missing opcodes.
+     * @returns {object} Object containing duplicateMnemonicOperands, duplicateOpcodes, and missingSingleBytes arrays
+     */
+    getInstructionSetAnalysis() {
+        return this.instructionSetAnalysis;
     }
 
     /**
@@ -165,11 +173,6 @@ class Z80Assembler {
      *          load address and instruction details. On failure, it includes an array of errors.
      */
     assemble(sourceCode) {
-        // Remove the first line if it's just an empty line
-        // this is contants can be entered in js on the same line at the test or in the next line
-        if (sourceCode.startsWith('\n')) {
-            sourceCode = sourceCode.slice(1);
-        }
         this.sourceLines = sourceCode.split('\n');
         
         this.symbols = {}; // Single symbol table for labels and constants
@@ -727,53 +730,38 @@ class Z80Assembler {
     _buildInstructionSet() {
         const { IMM8, IMM16, MEM8, MEM16, RELATIVE } = Z80Assembler.OPERAND;
         const definitions = [
-            // Basic instructions
+            
             { m: 'NOP', ops: [], opc: [0x00] },
-            { m: 'HALT', ops: [], opc: [0x76] },
             
-            // LD instructions
-            { m: 'LD', ops: ['A', IMM8], opc: [0x3E] },
-            { m: 'LD', ops: ['B', IMM8], opc: [0x06] },
-            { m: 'LD', ops: ['C', IMM8], opc: [0x0E] },
-            { m: 'LD', ops: ['D', IMM8], opc: [0x16] },
-            { m: 'LD', ops: ['E', IMM8], opc: [0x1E] },
-            { m: 'LD', ops: ['H', IMM8], opc: [0x26] },
-            { m: 'LD', ops: ['L', IMM8], opc: [0x2E] },
-            { m: 'LD', ops: ['A', MEM16], opc: [0x3A] },
-            { m: 'LD', ops: [MEM16, 'A'], opc: [0x32] },
-            { m: 'LD', ops: ['A', '(BC)'], opc: [0x0A] },
-            { m: 'LD', ops: ['A', '(DE)'], opc: [0x1A] },
-            { m: 'LD', ops: ['A', '(HL)'], opc: [0x7E] },
+            // LD instructions - sorted by opcode
+            { m: 'LD', ops: ['BC', IMM16], opc: [0x01] },
             { m: 'LD', ops: ['(BC)', 'A'], opc: [0x02] },
+            { m: 'LD', ops: ['B', IMM8], opc: [0x06] },
+            { m: 'LD', ops: ['A', '(BC)'], opc: [0x0A] },
+            { m: 'LD', ops: ['C', IMM8], opc: [0x0E] },
+            { m: 'LD', ops: ['DE', IMM16], opc: [0x11] },
             { m: 'LD', ops: ['(DE)', 'A'], opc: [0x12] },
-            { m: 'LD', ops: ['(HL)', 'A'], opc: [0x77] },
-            { m: 'LD', ops: ['(HL)', 'B'], opc: [0x70] },
-            { m: 'LD', ops: ['(HL)', 'C'], opc: [0x71] },
-            { m: 'LD', ops: ['(HL)', 'D'], opc: [0x72] },
-            { m: 'LD', ops: ['(HL)', 'E'], opc: [0x73] },
-            { m: 'LD', ops: ['(HL)', 'H'], opc: [0x74] },
-            { m: 'LD', ops: ['(HL)', 'L'], opc: [0x75] },
-            { m: 'LD', ops: ['B', '(HL)'], opc: [0x46] },
-            { m: 'LD', ops: ['E', 'A'], opc: [0x5F] },
-            { m: 'LD', ops: ['A', 'E'], opc: [0x7B] },
-            { m: 'LD', ops: ['A', 'C'], opc: [0x79] },
-            { m: 'LD', ops: ['B', 'A'], opc: [0x47] },
-            { m: 'LD', ops: ['C', 'A'], opc: [0x4F] },
-            { m: 'LD', ops: ['B', 'C'], opc: [0x41] },
-            { m: 'LD', ops: ['B', 'H'], opc: [0x44] },
-            { m: 'LD', ops: ['A', 'B'], opc: [0x78] },
-            { m: 'LD', ops: ['A', 'H'], opc: [0x7C] },
-            { m: 'LD', ops: ['A', 'L'], opc: [0x7D] },
-            { m: 'LD', ops: ['H', 'A'], opc: [0x67] },
-            { m: 'LD', ops: ['L', 'A'], opc: [0x6F] },
-            { m: 'LD', ops: ['A', 'D'], opc: [0x7A] },
-            { m: 'LD', ops: ['D', 'A'], opc: [0x57] },
-            
-            // Additional register-to-register LD variants
+            { m: 'LD', ops: ['D', IMM8], opc: [0x16] },
+            { m: 'LD', ops: ['A', '(DE)'], opc: [0x1A] },
+            { m: 'LD', ops: ['E', IMM8], opc: [0x1E] },
+            { m: 'LD', ops: ['HL', IMM16], opc: [0x21] },
+            { m: 'LD', ops: [MEM16, 'HL'], opc: [0x22] },
+            { m: 'LD', ops: ['H', IMM8], opc: [0x26] },
+            { m: 'LD', ops: ['HL', MEM16], opc: [0x2A] },
+            { m: 'LD', ops: ['L', IMM8], opc: [0x2E] },
+            { m: 'LD', ops: ['SP', IMM16], opc: [0x31] },
+            { m: 'LD', ops: [MEM16, 'A'], opc: [0x32] },
+            { m: 'LD', ops: ['(HL)', IMM8], opc: [0x36] },
+            { m: 'LD', ops: ['A', MEM16], opc: [0x3A] },
+            { m: 'LD', ops: ['A', IMM8], opc: [0x3E] },
             { m: 'LD', ops: ['B', 'B'], opc: [0x40] },
+            { m: 'LD', ops: ['B', 'C'], opc: [0x41] },
             { m: 'LD', ops: ['B', 'D'], opc: [0x42] },
             { m: 'LD', ops: ['B', 'E'], opc: [0x43] },
+            { m: 'LD', ops: ['B', 'H'], opc: [0x44] },
             { m: 'LD', ops: ['B', 'L'], opc: [0x45] },
+            { m: 'LD', ops: ['B', '(HL)'], opc: [0x46] },
+            { m: 'LD', ops: ['B', 'A'], opc: [0x47] },
             { m: 'LD', ops: ['C', 'B'], opc: [0x48] },
             { m: 'LD', ops: ['C', 'C'], opc: [0x49] },
             { m: 'LD', ops: ['C', 'D'], opc: [0x4A] },
@@ -781,6 +769,7 @@ class Z80Assembler {
             { m: 'LD', ops: ['C', 'H'], opc: [0x4C] },
             { m: 'LD', ops: ['C', 'L'], opc: [0x4D] },
             { m: 'LD', ops: ['C', '(HL)'], opc: [0x4E] },
+            { m: 'LD', ops: ['C', 'A'], opc: [0x4F] },
             { m: 'LD', ops: ['D', 'B'], opc: [0x50] },
             { m: 'LD', ops: ['D', 'C'], opc: [0x51] },
             { m: 'LD', ops: ['D', 'D'], opc: [0x52] },
@@ -788,6 +777,7 @@ class Z80Assembler {
             { m: 'LD', ops: ['D', 'H'], opc: [0x54] },
             { m: 'LD', ops: ['D', 'L'], opc: [0x55] },
             { m: 'LD', ops: ['D', '(HL)'], opc: [0x56] },
+            { m: 'LD', ops: ['D', 'A'], opc: [0x57] },
             { m: 'LD', ops: ['E', 'B'], opc: [0x58] },
             { m: 'LD', ops: ['E', 'C'], opc: [0x59] },
             { m: 'LD', ops: ['E', 'D'], opc: [0x5A] },
@@ -795,6 +785,7 @@ class Z80Assembler {
             { m: 'LD', ops: ['E', 'H'], opc: [0x5C] },
             { m: 'LD', ops: ['E', 'L'], opc: [0x5D] },
             { m: 'LD', ops: ['E', '(HL)'], opc: [0x5E] },
+            { m: 'LD', ops: ['E', 'A'], opc: [0x5F] },
             { m: 'LD', ops: ['H', 'B'], opc: [0x60] },
             { m: 'LD', ops: ['H', 'C'], opc: [0x61] },
             { m: 'LD', ops: ['H', 'D'], opc: [0x62] },
@@ -802,6 +793,7 @@ class Z80Assembler {
             { m: 'LD', ops: ['H', 'H'], opc: [0x64] },
             { m: 'LD', ops: ['H', 'L'], opc: [0x65] },
             { m: 'LD', ops: ['H', '(HL)'], opc: [0x66] },
+            { m: 'LD', ops: ['H', 'A'], opc: [0x67] },
             { m: 'LD', ops: ['L', 'B'], opc: [0x68] },
             { m: 'LD', ops: ['L', 'C'], opc: [0x69] },
             { m: 'LD', ops: ['L', 'D'], opc: [0x6A] },
@@ -809,20 +801,21 @@ class Z80Assembler {
             { m: 'LD', ops: ['L', 'H'], opc: [0x6C] },
             { m: 'LD', ops: ['L', 'L'], opc: [0x6D] },
             { m: 'LD', ops: ['L', '(HL)'], opc: [0x6E] },
-            // NOTE: 0xEB is EX DE,HL, not LD DE,HL. Keep EX mapping only.
-            
-            // Exchange instructions
-            { m: 'EX', ops: ['AF', "AF'"], opc: [0x08] },
-            { m: 'EX', ops: ['DE', 'HL'], opc: [0xEB] },
-            { m: 'EX', ops: ['(SP)', 'HL'], opc: [0xE3] },
-            
-            { m: 'LD', ops: ['HL', IMM16], opc: [0x21] },
-            { m: 'LD', ops: ['BC', IMM16], opc: [0x01] },
-            { m: 'LD', ops: ['DE', IMM16], opc: [0x11] },
-            { m: 'LD', ops: ['SP', IMM16], opc: [0x31] },
-            { m: 'LD', ops: [MEM16, 'HL'], opc: [0x22] },
-            { m: 'LD', ops: ['HL', MEM16], opc: [0x2A] },
-            { m: 'LD', ops: ['(HL)', IMM8], opc: [0x36] },
+            { m: 'LD', ops: ['L', 'A'], opc: [0x6F] },
+            { m: 'LD', ops: ['(HL)', 'B'], opc: [0x70] },
+            { m: 'LD', ops: ['(HL)', 'C'], opc: [0x71] },
+            { m: 'LD', ops: ['(HL)', 'D'], opc: [0x72] },
+            { m: 'LD', ops: ['(HL)', 'E'], opc: [0x73] },
+            { m: 'LD', ops: ['(HL)', 'H'], opc: [0x74] },
+            { m: 'LD', ops: ['(HL)', 'L'], opc: [0x75] },
+            { m: 'LD', ops: ['(HL)', 'A'], opc: [0x77] },
+            { m: 'LD', ops: ['A', 'B'], opc: [0x78] },
+            { m: 'LD', ops: ['A', 'C'], opc: [0x79] },
+            { m: 'LD', ops: ['A', 'D'], opc: [0x7A] },
+            { m: 'LD', ops: ['A', 'E'], opc: [0x7B] },
+            { m: 'LD', ops: ['A', 'H'], opc: [0x7C] },
+            { m: 'LD', ops: ['A', 'L'], opc: [0x7D] },
+            { m: 'LD', ops: ['A', '(HL)'], opc: [0x7E] },
 
             // Control flow
             { m: 'CALL', ops: [IMM16], opc: [0xCD] },
@@ -835,13 +828,19 @@ class Z80Assembler {
             { m: 'RET', ops: ['Z'], opc: [0xC8] },
             { m: 'RET', ops: ['NC'], opc: [0xD0] },
             { m: 'RET', ops: ['C'], opc: [0xD8] },
-            { m: 'JR', ops: [RELATIVE], opc: [0x18] },
-            { m: 'JR', ops: ['Z', RELATIVE], opc: [0x28] },
-            { m: 'JR', ops: ['NZ', RELATIVE], opc: [0x20] },
-            { m: 'JR', ops: ['C', RELATIVE], opc: [0x38] },
-            { m: 'JR', ops: ['NC', RELATIVE], opc: [0x30] },
-            { m: 'DJNZ', ops: [RELATIVE], opc: [0x10] },
 
+            { m: 'DJNZ', ops: [RELATIVE], opc: [0x10] },
+            { m: 'JR', ops: [RELATIVE], opc: [0x18] },
+            { m: 'JR', ops: ['NZ', RELATIVE], opc: [0x20] },
+            { m: 'JR', ops: ['Z', RELATIVE], opc: [0x28] },
+            { m: 'JR', ops: ['NC', RELATIVE], opc: [0x30] },
+            { m: 'JR', ops: ['C', RELATIVE], opc: [0x38] },
+
+            // Exchange instructions
+            { m: 'EX', ops: ['AF', "AF'"], opc: [0x08] },
+            { m: 'EX', ops: ['DE', 'HL'], opc: [0xEB] },
+            { m: 'EX', ops: ['(SP)', 'HL'], opc: [0xE3] },
+            
             // Jumps
             { m: 'JP', ops: [IMM16], opc: [0xC3] },
             { m: 'JP', ops: ['Z', IMM16], opc: [0xCA] },
@@ -1104,10 +1103,33 @@ class Z80Assembler {
             { m: 'RES', ops: ['7', 'H'], opc: [0xCB, 0xBC] },
             { m: 'RES', ops: ['7', 'L'], opc: [0xCB, 0xBD] },
             { m: 'RES', ops: ['7', '(HL)'], opc: [0xCB, 0xBE] },
+
+            { m: 'HALT', ops: [], opc: [0x76] },
+
         ];
 
+        const opcodes = new Set();
+        const mnemonicOperands = new Set();
+        const duplicateMnemonicOperands = [];
+        const duplicateOpcodes = [];
+        
         definitions.forEach(def => {
             const mnemonic = def.m.toUpperCase();
+            const mnemonicOperand = mnemonic + '|' + def.ops.join(',');
+            
+            if (mnemonicOperands.has(mnemonicOperand)) {
+                duplicateMnemonicOperands.push(mnemonicOperand);
+            } else {
+                mnemonicOperands.add(mnemonicOperand);
+            }
+            
+            const opcodeSeq = def.opc.join(','); // Complete opcode sequence
+            if (opcodes.has(opcodeSeq)) {
+                duplicateOpcodes.push(def.opc.map(x => '0x' + formatHex2(x)).join(','));
+            } else {
+                opcodes.add(opcodeSeq);
+            }
+            
             if (!this.instructionMap.has(mnemonic)) {
                 this.instructionMap.set(mnemonic, []);
             }
@@ -1116,6 +1138,14 @@ class Z80Assembler {
                 opcodes: def.opc
             });
         });
+
+        const missingSingleBytes = [];
+        for (let i = 0; i < 256; i++) {
+            const hex2 = formatHex2(i);
+            if (!opcodes.has(hex2)) missingSingleBytes.push('0x' + hex2);
+        }
+
+        return {duplicateMnemonicOperands, duplicateOpcodes, missingSingleBytes };
     }
 
     /**
@@ -1260,7 +1290,6 @@ class Z80Assembler {
         }
 
         let output = "";
-        const hex = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 
         // Iterate through addresses, handling sparse memory with gaps between ORG segments
         let currentAddress = minAddress;
@@ -1287,11 +1316,11 @@ class Z80Assembler {
             // Only output row if we found bytes
             if (rowBytes.length > 0) {
                 if (this.useHexFormat) {
-                    // Address part (hex, little-endian format)
-                    output += `${hex(rowStartAddress & 0xFF)}${hex((rowStartAddress >> 8) & 0xFF)} `;
+                    // Address part (hex format)
+                    output += `${formatHex4(rowStartAddress)} `;
 
                     // Data column - hex values separated by commas (no CRC)
-                    const hexData = rowBytes.map(b => hex(b)).join(',');
+                    const hexData = rowBytes.map(b => formatHex2(b)).join(',');
                     output += `Data ${hexData}`;
                 } else {
                     // Calculate CRC16 for this line (address bytes + data bytes)

@@ -128,7 +128,7 @@ When you assemble a program, the URL automatically updates to include the encode
 - `space_invader_asm.js`: Space Invader game implementation
 
 ### Project Infrastructure:
-- `bootstrap.js`: Application initialization and module loading
+- `boot.js`: Application initialization and module loading
 - `ui.js`: User interface controls and event handling
 - `scroll_target.js`: Scroll positioning and navigation utilities
 - `styles.css`: CSS styling for the web interface

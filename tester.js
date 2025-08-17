@@ -68,16 +68,7 @@ class TestFramework {
     this.failedTests = [];
   }
 
-  // Helper functions for consistent hex formatting
-  formatHex8(value) {
-    return value.toString(16).padStart(2, "0").toUpperCase();
-  }
-
-  formatHex16(value) {
-    return value.toString(16).padStart(4, "0").toUpperCase();
-  }
-
-  // Common dependency loading for test classes
+    // Common dependency loading for test classes
   loadDependencies(dependencyNames) {
     const dependencies = {};
     
