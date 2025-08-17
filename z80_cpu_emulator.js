@@ -132,6 +132,10 @@ class Z80CPU {
                 ...this.registers,
                 F: { ...this.registers.F } // Deep copy F register
             },
+            shadowRegisters: {
+                ...this.shadowRegisters,
+                F: { ...this.shadowRegisters.F } // Deep copy shadow F register
+            },
             error
         };
     }

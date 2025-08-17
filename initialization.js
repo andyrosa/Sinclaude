@@ -1,20 +1,20 @@
 // Initialization script - waits for all dependencies to load then starts the app
 window.addEventListener('load', () => {
     if (typeof Z80CPU === 'undefined') {
-        console.error('Z80CPU class not found!');
+        userMessageAboutBug('Z80CPU class not found!', 'Critical dependency missing');
         return;
     }
     if (typeof Z80Assembler === 'undefined') {
-        console.error('Z80Assembler class not found!');
+        userMessageAboutBug('Z80Assembler class not found!', 'Critical dependency missing');
         return;
     }
     
     // Check for test suites (non-critical)
-    if (typeof Z80AssemblerTestSuite === 'undefined') {
-        console.warn('Z80AssemblerTestSuite not loaded - assembler tests will be skipped');
+    if (typeof Z80AssemblerTestClass === 'undefined') {
+        userMessageAboutBug('Z80AssemblerTestClass not loaded - assembler tests will be skipped', 'Non-critical dependency missing');
     }
-    if (typeof Z80CPUTestSuite === 'undefined') {
-        console.warn('Z80CPUTestSuite not loaded - CPU tests will be skipped');
+    if (typeof Z80CPUEmulatorTestClass === 'undefined') {
+        userMessageAboutBug('Z80CPUEmulatorTestClass not loaded - CPU tests will be skipped', 'Non-critical dependency missing');
     }
     
     window.sinclaude = new Simulator();

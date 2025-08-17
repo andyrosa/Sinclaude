@@ -1273,26 +1273,26 @@ class Simulator {
 
   runAssemblerTests() {
     try {
-      // Check if assembler_test.js Z80AssemblerTestSuite is available
-      if (typeof Z80AssemblerTestSuite !== "undefined") {
+      // Check if assembler_test.js Z80AssemblerTestClass is available
+      if (typeof Z80AssemblerTestClass !== "undefined") {
         // Capture console.error and redirect to userMessage
         const originalError = console.error;
         console.error = (message) =>
-          userMessage(`Assembler Test Error: ${message}`);
+          userMessageAboutBug(`Assembler Test Error: ${message}`);
 
         try {
-          const z80AssemblerTestSuite = new Z80AssemblerTestSuite();
-          z80AssemblerTestSuite.runAllTests();
+          const z80AssemblerTestClass = new Z80AssemblerTestClass();
+          z80AssemblerTestClass.runAllTests();
 
           // Report summary to user console
           userMessage(
-            `Assembler Tests: ${z80AssemblerTestSuite.passedCount} passed, ${z80AssemblerTestSuite.failedTests.length} failed`
+            `Assembler Tests: ${z80AssemblerTestClass.passedCount} passed, ${z80AssemblerTestClass.failedTests.length} failed`
           );
         } finally {
           console.error = originalError;
         }
       } else {
-        userMessage(
+        userMessageAboutBug(
           "Assembler tests cannot run - z80_assembler_test.js not loaded"
         );
       }
@@ -1303,8 +1303,14 @@ class Simulator {
 
   runZ80CPUTests() {
     try {
-      // Check if Z80CPUTestSuite class is available from z80cpu_test.js
-      if (typeof Z80CPUTestSuite !== "undefined") {
+      // Check if Z80CPUEmulatorTestClass class is available from z80_cpu_emulator_test.js
+      if (typeof Z80CPUEmulatorTestClass !== "undefined") {
+        // Also check if runZ80CPUEmulatorTestClass is available since it's required
+        if (typeof runZ80CPUEmulatorTestClass === "undefined") {
+          userMessage("Z80 CPU tests cannot run - z80_cpu_emulator_tests.js not loaded (runZ80CPUEmulatorTestClass function missing)");
+          return;
+        }
+
         // Capture console.error and preserve detailed error messages
         const originalError = console.error;
         console.error = (message) => {
@@ -1312,18 +1318,20 @@ class Simulator {
         };
 
         try {
-          const z80CPUTestSuite = new Z80CPUTestSuite();
-          const success = z80CPUTestSuite.runAllTests();
+          const z80CPUTestClass = new Z80CPUEmulatorTestClass();
+          const success = z80CPUTestClass.runAllTests();
 
           // Report summary to user console
           userMessage(
-            `Z80 CPU Tests: ${z80CPUTestSuite.passedCount} passed, ${z80CPUTestSuite.failedTests.length} failed`
+            `Z80 CPU Tests: ${z80CPUTestClass.passedCount} passed, ${z80CPUTestClass.failedTests.length} failed`
           );
         } finally {
           console.error = originalError;
         }
       } else {
-        userMessage("Z80 CPU tests cannot run - z80_cpu_test.js not loaded");
+        userMessage("Z80 CPU tests cannot run - Z80CPUEmulatorTestClass class not available");
+        // Debug information
+        userMessage(`Available globals: Z80CPU=${typeof Z80CPU}, Z80Assembler=${typeof Z80Assembler}, runZ80CPUEmulatorTestClass=${typeof runZ80CPUEmulatorTestClass}`);
       }
     } catch (error) {
       userMessageAboutBug("Z80 CPU test error", error.message);

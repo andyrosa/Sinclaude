@@ -5,35 +5,11 @@
 
 // Import the assembler (adjust path if needed) - only in Node.js environment
 
-class Z80AssemblerTestSuite {
+class Z80AssemblerTestClass extends TestFramework {
   constructor() {
+    super("Z80 Assembler");
     // In browser environment, Z80Assembler is passed as parameter or available globally
     this.assembler = null;
-    this.testCount = 0;
-    this.passedCount = 0;
-    this.failedTests = [];
-
-    // Detect if running in Node.js vs browser
-    this.isNode = typeof module !== "undefined" && module.exports;
-  }
-
-  // Helper method to log only when running in Node.js
-  consoleLogIfNode(message) {
-    if (this.isNode) {
-      console.log(message);
-    }
-  }
-
-  // Test runner utilities
-  assert(condition, testName, details = "") {
-    this.testCount++;
-    if (condition) {
-      this.passedCount++;
-      this.consoleLogIfNode(`PASS ${testName}`);
-    } else {
-      this.failedTests.push({ name: testName, details });
-      console.error(`FAIL ${testName} - ${details}`);
-    }
   }
 
   // Helper method to extract all machine code bytes from instructionDetails
@@ -50,7 +26,9 @@ class Z80AssemblerTestSuite {
   assertAssemblySuccess(code, expectedBytes) {
     const result = this.assembler.assemble(code);
     if (result.success) {
-      const actualBytes = this.getMachineCodeFromInstructions(result.instructionDetails);
+      const actualBytes = this.getMachineCodeFromInstructions(
+        result.instructionDetails
+      );
       if (!this.arraysEqual(actualBytes, expectedBytes)) {
         this.assert(
           false,
@@ -100,27 +78,11 @@ class Z80AssemblerTestSuite {
   }
 
   runAllTests() {
-    // Load dependencies - handle both Node.js and browser environments
-    let Z80Assembler;
-    
-    if (typeof require !== "undefined") {
-      // Node.js environment
-      try {
-        Z80Assembler = require("./z80_assembler.js");
-      } catch (error) {
-        throw new Error(`Failed to load dependencies in Node.js: ${error.message}`);
-      }
-    } else {
-      // Browser environment - classes should be globally available
-      if (typeof Z80Assembler !== "undefined") {
-        // Global Z80Assembler is available
-        Z80Assembler = Z80Assembler;
-      } else if (typeof window !== "undefined" && window.Z80Assembler) {
-        Z80Assembler = window.Z80Assembler;
-      } else {
-        throw new Error('Z80Assembler class not available in browser environment - ensure z80_assembler.js is loaded');
-      }
-    }
+    // Load dependencies using inherited method
+    const { Z80Assembler, TestFramework } = this.loadDependencies([
+      "Z80Assembler",
+      "TestFramework",
+    ]);
 
     // Always create a fresh assembler instance
     this.assembler = new Z80Assembler();
@@ -141,81 +103,160 @@ class Z80AssemblerTestSuite {
     this.testBranchRange();
     this.testMultipleOrg();
 
-    this.printResults();
+    return this.completeTests();
   }
 
   // Test 13: Line addresses functionality
   testLineAddresses() {
-    this.consoleLogIfNode("\nTesting Instruction Details");
+    consoleLogIfNode("\nTesting Instruction Details");
 
     // Test that assembler returns instruction details with addresses
-    const simpleProgram = `; Comment
-NOP
-LD A, 42
-HALT`;
-    
+    const simpleProgram = `
+      ; Comment
+      NOP
+      LD A, 42
+      HALT`;
+
     const result1 = this.assembler.assemble(simpleProgram);
     this.assert(result1.success, "Simple program assembles successfully");
-    this.assert(Array.isArray(result1.instructionDetails), "instructionDetails is an array");
-    this.assert(result1.instructionDetails.length === 4, "instructionDetails has correct length");
-    this.assert(result1.instructionDetails[0].startAddress === 0, "Comment line has address 0");
-    this.assert(result1.instructionDetails[1].startAddress === 0, "NOP line has address 0");
-    this.assert(result1.instructionDetails[2].startAddress === 1, "LD A, 42 line has address 1");
-    this.assert(result1.instructionDetails[3].startAddress === 3, "HALT line has address 3");
+    this.assert(
+      Array.isArray(result1.instructionDetails),
+      "instructionDetails is an array"
+    );
+    this.assert(
+      result1.instructionDetails.length === 4,
+      "instructionDetails has correct length"
+    );
+    this.assert(
+      result1.instructionDetails[0].startAddress === 0,
+      "Comment line has address 0"
+    );
+    this.assert(
+      result1.instructionDetails[1].startAddress === 0,
+      "NOP line has address 0"
+    );
+    this.assert(
+      result1.instructionDetails[2].startAddress === 1,
+      "LD A, 42 line has address 1"
+    );
+    this.assert(
+      result1.instructionDetails[3].startAddress === 3,
+      "HALT line has address 3"
+    );
 
     // Test with ORG directive
-    const orgProgram = `; Header
-ORG $8000
-NOP
-HALT`;
-    
+    const orgProgram = `
+      ; Header
+      ORG $8000
+      NOP
+      HALT`;
+
     const result2 = this.assembler.assemble(orgProgram);
     this.assert(result2.success, "ORG program assembles successfully");
-    this.assert(result2.instructionDetails[0].startAddress === 0, "Header comment before ORG has address 0");
-    this.assert(result2.instructionDetails[1].startAddress === 32768, "ORG line shows new address");
-    this.assert(result2.instructionDetails[2].startAddress === 32768, "First instruction after ORG");
-    this.assert(result2.instructionDetails[3].startAddress === 32769, "Second instruction incremented");
+    this.assert(
+      result2.instructionDetails[0].startAddress === 0,
+      "Header comment before ORG has address 0"
+    );
+    this.assert(
+      result2.instructionDetails[1].startAddress === 32768,
+      "ORG line shows new address"
+    );
+    this.assert(
+      result2.instructionDetails[2].startAddress === 32768,
+      "First instruction after ORG"
+    );
+    this.assert(
+      result2.instructionDetails[3].startAddress === 32769,
+      "Second instruction incremented"
+    );
 
     // Test with data directives
-    const dataProgram = `NOP
-DB "Hi"
-DEFW $1234
-HALT`;
-    
+    const dataProgram = `
+      NOP
+      DB "Hi"
+      DEFW $1234
+      HALT`;
+
     const result3 = this.assembler.assemble(dataProgram);
     this.assert(result3.success, "Data program assembles successfully");
-    this.assert(result3.instructionDetails[0].startAddress === 0, "NOP at address 0");
-    this.assert(result3.instructionDetails[1].startAddress === 1, "DB at address 1");
-    this.assert(result3.instructionDetails[2].startAddress === 3, "DEFW at address 3 (after 2-byte string)");
-    this.assert(result3.instructionDetails[3].startAddress === 5, "HALT at address 5 (after 2-byte word)");
+    this.assert(
+      result3.instructionDetails[0].startAddress === 0,
+      "NOP at address 0"
+    );
+    this.assert(
+      result3.instructionDetails[1].startAddress === 1,
+      "DB at address 1"
+    );
+    this.assert(
+      result3.instructionDetails[2].startAddress === 3,
+      "DEFW at address 3 (after 2-byte string)"
+    );
+    this.assert(
+      result3.instructionDetails[3].startAddress === 5,
+      "HALT at address 5 (after 2-byte word)"
+    );
 
     // Test with labels (labels don't generate code but are at current address)
-    const labelProgram = `START:
-    LD A, 10
-LOOP:
-    DEC A
-    JR NZ, LOOP`;
-    
+    const labelProgram = `
+      START:
+        LD A, 10
+      LOOP:
+        DEC A
+        JR NZ, LOOP`;
+
     const result4 = this.assembler.assemble(labelProgram);
     this.assert(result4.success, "Label program assembles successfully");
-    this.assert(result4.instructionDetails[0].startAddress === 0, "START label at address 0");
-    this.assert(result4.instructionDetails[1].startAddress === 0, "LD A, 10 at address 0");
-    this.assert(result4.instructionDetails[2].startAddress === 2, "LOOP label at address 2");
-    this.assert(result4.instructionDetails[3].startAddress === 2, "DEC A at address 2");
-    this.assert(result4.instructionDetails[4].startAddress === 3, "JR NZ, LOOP at address 3");
-    
+    this.assert(
+      result4.instructionDetails[0].startAddress === 0,
+      "START label at address 0"
+    );
+    this.assert(
+      result4.instructionDetails[1].startAddress === 0,
+      "LD A, 10 at address 0"
+    );
+    this.assert(
+      result4.instructionDetails[2].startAddress === 2,
+      "LOOP label at address 2"
+    );
+    this.assert(
+      result4.instructionDetails[3].startAddress === 2,
+      "DEC A at address 2"
+    );
+    this.assert(
+      result4.instructionDetails[4].startAddress === 3,
+      "JR NZ, LOOP at address 3"
+    );
+
     // Test that opcodes are included for instructions that generate code
-    this.assert(result1.instructionDetails[0].opcodes.length === 0, "Comment line has no opcodes");
-    this.assert(result1.instructionDetails[1].opcodes.length === 1, "NOP has 1 opcode byte");
-    this.assert(result1.instructionDetails[1].opcodes[0] === 0x00, "NOP opcode is 0x00");
-    this.assert(result1.instructionDetails[2].opcodes.length === 2, "LD A, 42 has 2 opcode bytes");
-    this.assert(result1.instructionDetails[2].opcodes[0] === 0x3E, "LD A, n opcode is 0x3E");
-    this.assert(result1.instructionDetails[2].opcodes[1] === 42, "LD A, 42 immediate value is 42");
+    this.assert(
+      result1.instructionDetails[0].opcodes.length === 0,
+      "Comment line has no opcodes"
+    );
+    this.assert(
+      result1.instructionDetails[1].opcodes.length === 1,
+      "NOP has 1 opcode byte"
+    );
+    this.assert(
+      result1.instructionDetails[1].opcodes[0] === 0x00,
+      "NOP opcode is 0x00"
+    );
+    this.assert(
+      result1.instructionDetails[2].opcodes.length === 2,
+      "LD A, 42 has 2 opcode bytes"
+    );
+    this.assert(
+      result1.instructionDetails[2].opcodes[0] === 0x3e,
+      "LD A, n opcode is 0x3E"
+    );
+    this.assert(
+      result1.instructionDetails[2].opcodes[1] === 42,
+      "LD A, 42 immediate value is 42"
+    );
   }
 
   // Test 1: Line parsing and comments (Grammar lines 6-7, 14-15)
   testLineParsingAndComments() {
-    this.consoleLogIfNode("\nTesting Line Parsing and Comments");
+    consoleLogIfNode("\nTesting Line Parsing and Comments");
 
     // Empty lines should be ignored
     this.assertAssemblySuccess("", []);
@@ -230,83 +271,69 @@ LOOP:
     this.assertAssemblySuccess("  LD A, 5  ; Load 5 into A", [0x3e, 0x05]);
 
     // Mixed content
-    this.assertAssemblySuccess(
-      `
-            ; Program header comment
-            NOP         ; First instruction
-            ; Another comment
-            HALT        ; End program
-        `,
+    this.assertAssemblySuccess(`
+      ; Program header comment
+      NOP         ; First instruction
+      ; Another comment
+      HALT        ; End program`,
       [0x00, 0x76]
     );
   }
 
   // Test 2: Labels and constants (Grammar lines 10-12, 64-65)
   testLabelsAndConstants() {
-    this.consoleLogIfNode("\nTesting Labels and Constants");
+    consoleLogIfNode("\nTesting Labels and Constants");
 
     // Code labels with colon
-    this.assertAssemblySuccess(
-      `
-            START:
-                NOP
-                HALT
-        `,
+    this.assertAssemblySuccess(`
+      START:
+        NOP
+        HALT`,
       [0x00, 0x76]
     );
 
     // Labels with instructions on same line
-    this.assertAssemblySuccess(
-      `
-            LOOP: LD A, 10
-            END:  HALT
-        `,
+    this.assertAssemblySuccess(`
+      LOOP: LD A, 10
+      END:  HALT`,
       [0x3e, 0x0a, 0x76]
     );
 
     // EQU constants (no colon)
-    this.assertAssemblySuccess(
-      `
-            VALUE EQU 42
-            LD A, VALUE
-        `,
+    this.assertAssemblySuccess(`
+      VALUE EQU 42
+      LD A, VALUE`,
       [0x3e, 42]
     );
 
     // Constants with expressions
-    this.assertAssemblySuccess(
-      `
-            BASE EQU 100
-            OFFSET EQU 5
-            ADDR EQU BASE + OFFSET
-            LD A, ADDR
-        `,
+    this.assertAssemblySuccess(`
+      BASE EQU 100
+      OFFSET EQU 5
+      ADDR EQU BASE + OFFSET
+      LD A, ADDR`,
       [0x3e, 105]
     );
 
     // Forward label reference
-    this.assertAssemblySuccess(
-      `
-            JR FORWARD
-            NOP
-            FORWARD: HALT
-        `,
+    this.assertAssemblySuccess(`
+      JR FORWARD
+      NOP
+      FORWARD: HALT`,
       [0x18, 0x01, 0x00, 0x76]
     );
 
     // Duplicate label should fail
-    this.assertAssemblyError(
-      `
-            LABEL: NOP
-            LABEL: HALT
-        `,
+    this.assertAssemblyError(`
+      LABEL: NOP
+      LABEL: HALT`,
       "Duplicate label"
     );
   }
 
   // Test 3: All directive types (Grammar lines 17-25)
   testDirectives() {
-    this.consoleLogIfNode("\nTesting Directives");
+    consoleLogIfNode("\nTesting Directives");
 
     // ORG directive
     this.assertAssemblySuccess("ORG $8000\nNOP", [0x00]);
@@ -333,12 +360,10 @@ LOOP:
     this.assertAssemblySuccess("DEFS 2, $FF", [255, 255]);
 
     // END directive
-    this.assertAssemblySuccess(
-      `
-            NOP
-            END
-            HALT  ; This should be ignored
-        `,
+    this.assertAssemblySuccess(`
+      NOP
+      END
+      HALT  ; This should be ignored`,
       [0x00]
     );
 
@@ -348,7 +373,7 @@ LOOP:
 
   // Test 4: Instructions (Grammar lines 27-31)
   testInstructions() {
-    this.consoleLogIfNode("\nTesting Instructions");
+    consoleLogIfNode("\nTesting Instructions");
 
     // Basic instructions without operands
     this.assertAssemblySuccess("NOP", [0x00]);
@@ -372,10 +397,8 @@ LOOP:
     this.assertAssemblySuccess("LD A, ($8000)", [0x3a, 0x00, 0x80]);
 
     // Relative jump instructions
-    this.assertAssemblySuccess(
-      `
-            LOOP: JR LOOP
-        `,
+    this.assertAssemblySuccess(`
+      LOOP: JR LOOP`,
       [0x18, 0xfe]
     );
 
@@ -396,7 +419,7 @@ LOOP:
 
   // Test 5: Registers and memory references (Grammar lines 34, 36-39)
   testRegistersAndMemoryReferences() {
-    this.consoleLogIfNode("\nTesting Registers and Memory References");
+    consoleLogIfNode("\nTesting Registers and Memory References");
 
     // All 8-bit registers
     this.assertAssemblySuccess("INC A", [0x3c]);
@@ -432,7 +455,7 @@ LOOP:
 
   // Test 6: Expression evaluation (Grammar lines 41-46, 72-74)
   testExpressionEvaluation() {
-    this.consoleLogIfNode("\nTesting Expression Evaluation");
+    consoleLogIfNode("\nTesting Expression Evaluation");
 
     // Basic arithmetic
     this.assertAssemblySuccess("LD A, 5 + 3", [0x3e, 8]);
@@ -452,12 +475,10 @@ LOOP:
     this.assertAssemblySuccess("LD A, (5 + 3) * (4 - 2)", [0x3e, 16]);
 
     // Expressions with symbols
-    this.assertAssemblySuccess(
-      `
-            BASE EQU 100
-            OFFSET EQU 25
-            LD A, BASE + OFFSET * 2
-        `,
+    this.assertAssemblySuccess(`
+      BASE EQU 100
+      OFFSET EQU 25
+      LD A, BASE + OFFSET * 2`,
       [0x3e, 150]
     );
 
@@ -470,7 +491,7 @@ LOOP:
 
   // Test 7: All number formats (Grammar lines 48-51)
   testNumberFormats() {
-    this.consoleLogIfNode("\nTesting Number Formats");
+    consoleLogIfNode("\nTesting Number Formats");
 
     // Decimal numbers
     this.assertAssemblySuccess("LD A, 42", [0x3e, 42]);
@@ -501,7 +522,7 @@ LOOP:
 
   // Test 8: String and character literals (Grammar lines 53-55)
   testStringAndCharacterLiterals() {
-    this.consoleLogIfNode("\nTesting String and Character Literals");
+    consoleLogIfNode("\nTesting String and Character Literals");
 
     // String literals in DB
     this.assertAssemblySuccess('DB "Hello"', [72, 101, 108, 108, 111]);
@@ -536,62 +557,118 @@ LOOP:
     this.assertAssemblySuccess('DB " Mid "', [32, 77, 105, 100, 32]); // String with both leading and trailing space
 
     // Test that address tracking works correctly with trailing spaces in DB strings
-    const trailingSpacesProgram = `NOP
-DB "Hi "
-DEFW $1234
-HALT`;
-    
+    const trailingSpacesProgram = `
+      NOP
+      DB "Ho "
+      DEFW $1234
+      HALT`;
+
     const result5 = this.assembler.assemble(trailingSpacesProgram);
-    this.assert(result5.success, "Trailing spaces program assembles successfully");
-    this.assert(result5.instructionDetails[0].startAddress === 0, "NOP at address 0");
-    this.assert(result5.instructionDetails[1].startAddress === 1, "DB 'Hi ' at address 1");
-    this.assert(result5.instructionDetails[2].startAddress === 4, "DEFW at address 4 (after 3-byte string with space)");
-    this.assert(result5.instructionDetails[3].startAddress === 6, "HALT at address 6 (after 2-byte word)");
+    this.assert(
+      result5.success,
+      "Trailing spaces program assembles successfully"
+    );
+    this.assert(
+      result5.instructionDetails[0].startAddress === 0,
+      "NOP at address 0"
+    );
+    this.assert(
+      result5.instructionDetails[1].startAddress === 1,
+      "DB 'Ho ' at address 1"
+    );
+    this.assert(
+      result5.instructionDetails[2].startAddress === 4,
+      "DEFW at address 4 (after 3-byte string with space)"
+    );
+    this.assert(
+      result5.instructionDetails[3].startAddress === 6,
+      "HALT at address 6 (after 2-byte word)"
+    );
 
     // Test multiple DB strings with trailing spaces
-    const multipleSpacesProgram = `START:
-    DB "A "
-    DB "BB  "
-    DB "CCC   "
-LOOP:
-    LD A, 42
-    HALT`;
-    
+    const multipleSpacesProgram = `
+      START:
+        DB "A "
+        DB "BB  "
+        DB "CCC   "
+      LOOP:
+        LD A, 42
+        HALT`;
+
     const result6 = this.assembler.assemble(multipleSpacesProgram);
-    this.assert(result6.success, "Multiple trailing spaces program assembles successfully");
-    this.assert(result6.instructionDetails[0].startAddress === 0, "START label at address 0");
-    this.assert(result6.instructionDetails[1].startAddress === 0, "First DB 'A ' at address 0");
-    this.assert(result6.instructionDetails[2].startAddress === 2, "Second DB 'BB  ' at address 2 (after 2-byte string)");
-    this.assert(result6.instructionDetails[3].startAddress === 6, "Third DB 'CCC   ' at address 6 (after 4-byte string)");
-    this.assert(result6.instructionDetails[4].startAddress === 12, "LOOP label at address 12 (after 6-byte string)");
-    this.assert(result6.instructionDetails[5].startAddress === 12, "LD A, 42 at address 12");
-    this.assert(result6.instructionDetails[6].startAddress === 14, "HALT at address 14");
+    this.assert(
+      result6.success,
+      "Multiple trailing spaces program assembles successfully"
+    );
+    this.assert(
+      result6.instructionDetails[0].startAddress === 0,
+      "START label at address 0"
+    );
+    this.assert(
+      result6.instructionDetails[1].startAddress === 0,
+      "First DB 'A ' at address 0"
+    );
+    this.assert(
+      result6.instructionDetails[2].startAddress === 2,
+      "Second DB 'BB  ' at address 2 (after 2-byte string)"
+    );
+    this.assert(
+      result6.instructionDetails[3].startAddress === 6,
+      "Third DB 'CCC   ' at address 6 (after 4-byte string)"
+    );
+    this.assert(
+      result6.instructionDetails[4].startAddress === 12,
+      "LOOP label at address 12 (after 6-byte string)"
+    );
+    this.assert(
+      result6.instructionDetails[5].startAddress === 12,
+      "LD A, 42 at address 12"
+    );
+    this.assert(
+      result6.instructionDetails[6].startAddress === 14,
+      "HALT at address 14"
+    );
 
     // Test DB string with only spaces
-    const onlySpacesProgram = `NOP
-DB "   "
-NOP`;
-    
+    const onlySpacesProgram = `
+      NOP
+      DB "   "
+      NOP`;
+
     const result7 = this.assembler.assemble(onlySpacesProgram);
-    this.assert(result7.success, "Only spaces string program assembles successfully");
-    this.assert(result7.instructionDetails[0].startAddress === 0, "First NOP at address 0");
-    this.assert(result7.instructionDetails[1].startAddress === 1, "DB '   ' at address 1");
-    this.assert(result7.instructionDetails[2].startAddress === 4, "Second NOP at address 4 (after 3-space string)");
+    this.assert(
+      result7.success,
+      "Only spaces string program assembles successfully"
+    );
+    this.assert(
+      result7.instructionDetails[0].startAddress === 0,
+      "First NOP at address 0"
+    );
+    this.assert(
+      result7.instructionDetails[1].startAddress === 1,
+      "DB '   ' at address 1"
+    );
+    this.assert(
+      result7.instructionDetails[2].startAddress === 4,
+      "Second NOP at address 4 (after 3-space string)"
+    );
 
     // CRITICAL TEST: Verify that we can access bytes at specific addresses
     // This test would have caught the original issue where address 0x337 returned 0
     const addressAccessProgram = `
-MSG1: DB "Hello World     "  ; 16 bytes, ends at address 15
-MSG2: DB "Test Message    "  ; 16 bytes, ends at address 31
-CODE:
-    LD A, 42      ; Should be at address 32 (0x20)
-    LD (100), A   ; Should be at address 34 (0x22)
-    NOP           ; Should be at address 37 (0x25)
-`;
-    
+      MSG1: DB "Hello World     "  ; 16 bytes, ends at address 15
+      MSG2: DB "Test Message    "  ; 16 bytes, ends at address 31
+      CODE:
+        LD A, 42      ; Should be at address 32 (0x20)
+        LD (100), A   ; Should be at address 34 (0x22)
+        NOP           ; Should be at address 37 (0x25)`;
+
     const result8 = this.assembler.assemble(addressAccessProgram);
-    this.assert(result8.success, "Address access test program assembles successfully");
-    
+    this.assert(
+      result8.success,
+      "Address access test program assembles successfully"
+    );
+
     // Test accessing bytes at specific addresses through instruction details
     const getByteAtAddress = (addr) => {
       for (const detail of result8.instructionDetails) {
@@ -603,21 +680,42 @@ CODE:
       }
       return null; // Address not found
     };
-    
+
     // Test that we can correctly access bytes at specific addresses
     this.assert(getByteAtAddress(0) === 72, "Address 0 contains 'H' (72)"); // First byte of "Hello World"
     this.assert(getByteAtAddress(15) === 32, "Address 15 contains space (32)"); // Last trailing space of MSG1
     this.assert(getByteAtAddress(16) === 84, "Address 16 contains 'T' (84)"); // First byte of "Test Message"
     this.assert(getByteAtAddress(31) === 32, "Address 31 contains space (32)"); // Last trailing space of MSG2
-    this.assert(getByteAtAddress(32) === 0x3E, "Address 32 contains LD A,n opcode (0x3E)"); // LD A, 42
-    this.assert(getByteAtAddress(33) === 42, "Address 33 contains immediate value (42)"); // LD A, 42
-    this.assert(getByteAtAddress(34) === 0x32, "Address 34 contains LD (nn),A opcode (0x32)"); // LD (100), A
-    this.assert(getByteAtAddress(35) === 100, "Address 35 contains address low byte (100)"); // LD (100), A
-    this.assert(getByteAtAddress(36) === 0, "Address 36 contains address high byte (0)"); // LD (100), A
-    this.assert(getByteAtAddress(37) === 0x00, "Address 37 contains NOP opcode (0x00)"); // NOP
-    
+    this.assert(
+      getByteAtAddress(32) === 0x3e,
+      "Address 32 contains LD A,n opcode (0x3E)"
+    ); // LD A, 42
+    this.assert(
+      getByteAtAddress(33) === 42,
+      "Address 33 contains immediate value (42)"
+    ); // LD A, 42
+    this.assert(
+      getByteAtAddress(34) === 0x32,
+      "Address 34 contains LD (nn),A opcode (0x32)"
+    ); // LD (100), A
+    this.assert(
+      getByteAtAddress(35) === 100,
+      "Address 35 contains address low byte (100)"
+    ); // LD (100), A
+    this.assert(
+      getByteAtAddress(36) === 0,
+      "Address 36 contains address high byte (0)"
+    ); // LD (100), A
+    this.assert(
+      getByteAtAddress(37) === 0x00,
+      "Address 37 contains NOP opcode (0x00)"
+    ); // NOP
+
     // Test that accessing invalid addresses returns null
-    this.assert(getByteAtAddress(1000) === null, "Invalid address returns null");
+    this.assert(
+      getByteAtAddress(1000) === null,
+      "Invalid address returns null"
+    );
 
     // Error cases
     this.assertAssemblyError("LD A, 'AB'", "Unterminated character literal");
@@ -626,32 +724,26 @@ CODE:
 
   // Test 9: Function calls (Grammar line 58)
   testFunctionCalls() {
-    this.consoleLogIfNode("\nTesting Function Calls");
+    consoleLogIfNode("\nTesting Function Calls");
 
     // len() function with DB strings
-    this.assertAssemblySuccess(
-      `
-            MESSAGE: DB "Hello World"
-            LD A, len(MESSAGE)
-        `,
+    this.assertAssemblySuccess(`
+      MESSAGE: DB "Hello World"
+      LD A, len(MESSAGE)`,
       [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 0x3e, 11]
     );
 
     // len() in expressions
-    this.assertAssemblySuccess(
-      `
-            TEXT: DB "Test"
-            LD A, len(TEXT) + 5
-        `,
+    this.assertAssemblySuccess(`
+      TEXT: DB "Test"
+      LD A, len(TEXT) + 5`,
       [84, 101, 115, 116, 0x3e, 9]
     );
 
     // len() with empty string
-    this.assertAssemblySuccess(
-      `
-            EMPTY: DB ""
-            LD A, len(EMPTY)
-        `,
+    this.assertAssemblySuccess(`
+      EMPTY: DB ""
+      LD A, len(EMPTY)`,
       [0x3e, 0]
     );
 
@@ -661,18 +753,16 @@ CODE:
 
     // Error cases
     this.assertAssemblyError("LD A, len(UNDEFINED)", "not found");
-    this.assertAssemblyError(
-      `
-            NOTDB: EQU 42
-            LD A, len(NOTDB)
-        `,
+    this.assertAssemblyError(`
+      NOTDB: EQU 42
+      LD A, len(NOTDB)`,
       "not a DB statement"
     );
   }
 
   // Test 10: Error handling and edge cases
   testErrorHandling() {
-    this.consoleLogIfNode("\nTesting Error Handling");
+    consoleLogIfNode("\nTesting Error Handling");
 
     // Syntax errors
     this.assertAssemblyError("LD A B", "Invalid operand combination");
@@ -690,82 +780,78 @@ CODE:
     this.assertAssemblyError("LD A, 256", "8-bit immediate value out of range");
 
     // Relative jump out of range
-    this.assertAssemblyError(
-      `
-            ORG 0
-            JR FAR
-            DEFS 200, 0
-            FAR: NOP
-        `,
+    this.assertAssemblyError(`
+      ORG 0
+      JR FAR
+      DEFS 200, 0
+      FAR: NOP`,
       "out of range"
     );
 
     // Multiple ORG directives should now be allowed
-    this.assertAssemblySuccess(
-      `
-            ORG 100
-            NOP
-            ORG 200
-            HALT
-        `,
+    this.assertAssemblySuccess(`
+      ORG 100
+      NOP
+      ORG 200
+      HALT`,
       [0x00, 0x76] // NOP at 100, HALT at 200
     );
   }
 
   // Test 11: Complex programs combining multiple features
   testComplexPrograms() {
-    this.consoleLogIfNode("\nTesting Complex Programs");
+    consoleLogIfNode("\nTesting Complex Programs");
 
     // Program with all grammar features
     const complexProgram = `
-            ; Complex Z80 Assembly Program
-            ; Tests multiple grammar features together
-            
-            ; Constants
-            BUFFER_SIZE EQU 16
-            START_ADDR EQU $8000 + BUFFER_SIZE
-            
-            ; Set origin
-            ORG START_ADDR
-            
-            ; Main program
-            MAIN:
-                LD HL, BUFFER          ; Point to buffer
-                LD BC, BUFFER_SIZE     ; Size in BC
-                LD A, 'X'              ; Fill character
-                
-            FILL_LOOP:
-                LD (HL), A             ; Store character
-                INC HL                 ; Next position
-                DEC BC                 ; Decrement counter
-                LD A, B                ; Check if BC = 0
-                OR C
-                JR NZ, FILL_LOOP       ; Continue if not zero
-                
-                ; Print message
-                LD HL, MESSAGE
-                CALL PRINT_STRING
-                
-                HALT                   ; End program
-                
-            ; Data section
-            BUFFER:
-                DEFS BUFFER_SIZE, 0    ; Reserve buffer space
-                
-            MESSAGE:
-                DB "Program complete!", 0
-                
-            ; Subroutine
-            PRINT_STRING:
-                LD A, (HL)             ; Get character
-                CP 0                   ; Check for null terminator
-                RET Z                  ; Return if end of string
-                ; Output character code would go here
-                INC HL                 ; Next character
-                JR PRINT_STRING        ; Continue
-                
-            END                        ; End of program
-        `;
+      ; Complex Z80 Assembly Program
+      ; Tests multiple grammar features together
+      
+      ; Constants
+      BUFFER_SIZE EQU 16
+      START_ADDR EQU $8000 + BUFFER_SIZE
+      
+      ; Set origin
+      ORG START_ADDR
+      
+      ; Main program
+      MAIN:
+          LD HL, BUFFER          ; Point to buffer
+          LD BC, BUFFER_SIZE     ; Size in BC
+          LD A, 'X'              ; Fill character
+          
+      FILL_LOOP:
+          LD (HL), A             ; Store character
+          INC HL                 ; Next position
+          DEC BC                 ; Decrement counter
+          LD A, B                ; Check if BC = 0
+          OR C
+          JR NZ, FILL_LOOP       ; Continue if not zero
+          
+          ; Print message
+          LD HL, MESSAGE
+          CALL PRINT_STRING
+          
+          HALT                   ; End program
+          
+      ; Data section
+      BUFFER:
+          DEFS BUFFER_SIZE, 0    ; Reserve buffer space
+          
+      MESSAGE:
+          DB "Program complete!", 0
+          
+      ; Subroutine
+      PRINT_STRING:
+          LD A, (HL)             ; Get character
+          CP 0                   ; Check for null terminator
+          RET Z                  ; Return if end of string
+          ; Output character code would go here
+          INC HL                 ; Next character
+          JR PRINT_STRING        ; Continue
+          
+      END                        ; End of program
+      `;
 
     this.assertAssemblySuccess(
       complexProgram,
@@ -781,20 +867,20 @@ CODE:
 
     // Program testing operator precedence and expressions
     const mathProgram = `
-            BASE EQU 100
-            MULTIPLIER EQU 3
-            OFFSET EQU 7
-            
-            ; Test complex expressions
-            VALUE1 EQU BASE + MULTIPLIER * OFFSET    ; Should be 100 + (3 * 7) = 121
-            VALUE2 EQU (BASE + MULTIPLIER) * OFFSET  ; Should be (100 + 3) * 7 = 721
-            
-            START:
-                LD A, VALUE1           ; Load 121
-                LD B, VALUE2 / 100     ; Load 7 (721/100 = 7)
-                LD C, 'A' + VALUE1 - BASE  ; Load 86 (65 + 121 - 100)
-                HALT
-        `;
+      BASE EQU 100
+      MULTIPLIER EQU 3
+      OFFSET EQU 7
+      
+      ; Test complex expressions
+      VALUE1 EQU BASE + MULTIPLIER * OFFSET    ; Should be 100 + (3 * 7) = 121
+      VALUE2 EQU (BASE + MULTIPLIER) * OFFSET  ; Should be (100 + 3) * 7 = 721
+      
+      START:
+          LD A, VALUE1           ; Load 121
+          LD B, VALUE2 / 100     ; Load 7 (721/100 = 7)
+          LD C, 'A' + VALUE1 - BASE  ; Load 86 (65 + 121 - 100)
+          HALT
+      `;
 
     this.assertAssemblySuccess(
       mathProgram,
@@ -803,19 +889,19 @@ CODE:
 
     // Program with forward and backward references
     const jumpProgram = `
-            JR FORWARD        ; Forward reference
-            
-            BACKWARD: 
-                LD A, 42
-                RET
-                
-            FORWARD:
-                CALL BACKWARD     ; Backward reference  
-                JR END_PROG      ; Forward reference
-                
-            END_PROG:
-                HALT
-        `;
+      JR FORWARD        ; Forward reference
+      
+      BACKWARD: 
+          LD A, 42
+          RET
+          
+      FORWARD:
+          CALL BACKWARD     ; Backward reference  
+          JR END_PROG      ; Forward reference
+          
+      END_PROG:
+          HALT
+      `;
 
     this.assertAssemblySuccess(
       jumpProgram,
@@ -825,7 +911,7 @@ CODE:
 
   // Test 12: Comprehensive instruction coverage - every supported mnemonic
   testComprehensiveInstructions() {
-    this.consoleLogIfNode("\nTesting Comprehensive Instruction Coverage");
+    consoleLogIfNode("\nTesting Comprehensive Instruction Coverage");
 
     // No operand instructions
     this.assertAssemblySuccess("NOP", [0x00]);
@@ -903,7 +989,7 @@ CODE:
     this.assertAssemblySuccess("RLA", [0x17]);
     this.assertAssemblySuccess("RRA", [0x1f]);
     this.assertAssemblySuccess("RRCA", [0x0f]);
-    
+
     // CB-prefixed rotate instructions
     this.assertAssemblySuccess("RLC A", [0xcb, 0x07]);
     this.assertAssemblySuccess("RLC B", [0xcb, 0x00]);
@@ -917,7 +1003,7 @@ CODE:
     this.assertAssemblySuccess("RR A", [0xcb, 0x1f]);
     this.assertAssemblySuccess("RR B", [0xcb, 0x18]);
     this.assertAssemblySuccess("RR (HL)", [0xcb, 0x1e]);
-    
+
     // SET bit operations
     this.assertAssemblySuccess("SET 0,A", [0xcb, 0xc7]);
     this.assertAssemblySuccess("SET 0,B", [0xcb, 0xc0]);
@@ -928,7 +1014,7 @@ CODE:
     this.assertAssemblySuccess("SET 7,A", [0xcb, 0xff]);
     this.assertAssemblySuccess("SET 7,B", [0xcb, 0xf8]);
     this.assertAssemblySuccess("SET 7,(HL)", [0xcb, 0xfe]);
-    
+
     // RES bit operations
     this.assertAssemblySuccess("RES 0,A", [0xcb, 0x87]);
     this.assertAssemblySuccess("RES 0,B", [0xcb, 0x80]);
@@ -939,7 +1025,7 @@ CODE:
     this.assertAssemblySuccess("RES 7,A", [0xcb, 0xbf]);
     this.assertAssemblySuccess("RES 7,B", [0xcb, 0xb8]);
     this.assertAssemblySuccess("RES 7,(HL)", [0xcb, 0xbe]);
-    
+
     // SBC (Subtract with Carry) operations
     this.assertAssemblySuccess("SBC A,A", [0x9f]);
     this.assertAssemblySuccess("SBC A,B", [0x98]);
@@ -1000,23 +1086,23 @@ CODE:
 
     // DJNZ instruction
     this.assertAssemblySuccess("DJNZ 10", [0x10, 0x08]);
-    
+
     // Conditional CALL instructions
     this.assertAssemblySuccess("CALL Z,1234", [0xcc, 0xd2, 0x04]);
     this.assertAssemblySuccess("CALL NZ,1234", [0xc4, 0xd2, 0x04]);
     this.assertAssemblySuccess("CALL C,1234", [0xdc, 0xd2, 0x04]);
     this.assertAssemblySuccess("CALL NC,1234", [0xd4, 0xd2, 0x04]);
-    
+
     // Memory load/store operations
     this.assertAssemblySuccess("LD (1234H),HL", [0x22, 0x34, 0x12]);
     this.assertAssemblySuccess("LD HL,(1234H)", [0x2a, 0x34, 0x12]);
-    
+
     // Stack exchange
     this.assertAssemblySuccess("EX (SP),HL", [0xe3]);
-    
+
     // Indirect jump
     this.assertAssemblySuccess("JP (HL)", [0xe9]);
-    
+
     // Additional register-to-register LD variants
     this.assertAssemblySuccess("LD B,B", [0x40]);
     this.assertAssemblySuccess("LD B,D", [0x42]);
@@ -1057,11 +1143,11 @@ CODE:
     this.assertAssemblySuccess("LD L,H", [0x6c]);
     this.assertAssemblySuccess("LD L,L", [0x6d]);
     this.assertAssemblySuccess("LD L,(HL)", [0x6e]);
-    
+
     // Arithmetic with memory
     this.assertAssemblySuccess("ADD A,(HL)", [0x86]);
     this.assertAssemblySuccess("SUB (HL)", [0x96]);
-    
+
     // XOR register variants
     this.assertAssemblySuccess("XOR B", [0xa8]);
     this.assertAssemblySuccess("XOR C", [0xa9]);
@@ -1070,7 +1156,7 @@ CODE:
     this.assertAssemblySuccess("XOR H", [0xac]);
     this.assertAssemblySuccess("XOR L", [0xad]);
     this.assertAssemblySuccess("XOR (HL)", [0xae]);
-    
+
     // CP register variants
     this.assertAssemblySuccess("CP C", [0xb9]);
     this.assertAssemblySuccess("CP D", [0xba]);
@@ -1082,7 +1168,7 @@ CODE:
 
   // Test: Case Insensitivity
   testCaseInsensitivity() {
-    this.consoleLogIfNode("\nTesting Case Insensitivity");
+    consoleLogIfNode("\nTesting Case Insensitivity");
 
     // Test instructions in different cases
     this.assertAssemblySuccess("nop", [0x00]);
@@ -1167,8 +1253,14 @@ CODE:
                 halt
         `;
     const mixedResult = this.assembler.assemble(mixedCaseProgram);
-    this.assert(mixedResult.success, "Mixed case labels and constants", 
-        mixedResult.error || (mixedResult.errors ? mixedResult.errors.map(e => e.message).join(', ') : ''));
+    this.assert(
+      mixedResult.success,
+      "Mixed case labels and constants",
+      mixedResult.error ||
+        (mixedResult.errors
+          ? mixedResult.errors.map((e) => e.message).join(", ")
+          : "")
+    );
 
     // Test EQU directive in different cases
     const equProgram = `
@@ -1180,8 +1272,14 @@ CODE:
             LD C, Value3
         `;
     const equResult = this.assembler.assemble(equProgram);
-    this.assert(equResult.success, "EQU directive case insensitivity", 
-        equResult.error || (equResult.errors ? equResult.errors.map(e => e.message).join(', ') : ''));
+    this.assert(
+      equResult.success,
+      "EQU directive case insensitivity",
+      equResult.error ||
+        (equResult.errors
+          ? equResult.errors.map((e) => e.message).join(", ")
+          : "")
+    );
 
     // Test DB directive with mixed case
     this.assertAssemblySuccess('db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
@@ -1220,107 +1318,134 @@ CODE:
                 defs BUFFER_SIZE, 0
         `;
     const complexResult = this.assembler.assemble(complexProgram);
-    this.assert(complexResult.success, "Complex mixed case program", 
-        complexResult.error || (complexResult.errors ? complexResult.errors.map(e => e.message).join(', ') : ''));
+    this.assert(
+      complexResult.success,
+      "Complex mixed case program",
+      complexResult.error ||
+        (complexResult.errors
+          ? complexResult.errors.map((e) => e.message).join(", ")
+          : "")
+    );
   }
 
   // Test 14: Branch range limits
   testBranchRange() {
-    this.consoleLogIfNode("\nTesting Branch Range Limits");
+    consoleLogIfNode("\nTesting Branch Range Limits");
 
     // Test 1: 127 NOPs forward - should succeed
-    let sourceCode127 = `ORG 32768
+    let sourceCode127 = `
+      ORG 32768
 START:
     JR TARGET        ; Forward relative jump
 `;
-    
+
     // Add exactly 127 NOPs
     for (let i = 0; i < 127; i++) {
-        sourceCode127 += "    NOP\n";
+      sourceCode127 += "    NOP\n";
     }
-    
-    sourceCode127 += `TARGET:
+
+    sourceCode127 += `
+      TARGET:
     HALT
 `;
-    
+
     const result127 = this.assembler.assemble(sourceCode127);
     this.assert(
       result127.success,
       "Forward branch with 127 NOPs should succeed",
-      result127.error || (result127.errors ? result127.errors.map(e => e.message).join(', ') : '')
+      result127.error ||
+        (result127.errors
+          ? result127.errors.map((e) => e.message).join(", ")
+          : "")
     );
 
     // Test 2: 128 NOPs forward - should fail
-    let sourceCode128 = `ORG 32768
+    let sourceCode128 = `
+      ORG 32768
 START:
     JR TARGET        ; Forward relative jump
 `;
-    
+
     // Add exactly 128 NOPs
     for (let i = 0; i < 128; i++) {
-        sourceCode128 += "    NOP\n";
+      sourceCode128 += "    NOP\n";
     }
-    
-    sourceCode128 += `TARGET:
+
+    sourceCode128 += `
+      TARGET:
     HALT
 `;
-    
+
     const result128 = this.assembler.assemble(sourceCode128);
     this.assert(
       !result128.success,
       "Forward branch with 128 NOPs should fail",
-      result128.success ? "Expected failure but got success" : "Correctly failed as expected"
+      result128.success
+        ? "Expected failure but got success"
+        : "Correctly failed as expected"
     );
 
     // Test 3: 125 NOPs backward - should succeed (offset = -128, just within range)
-    let sourceCode125Back = `ORG 32768
+    let sourceCode125Back = `
+      ORG 32768
 TARGET:
     NOP              ; One instruction at target (1 byte)
 `;
-    
+
     // Add exactly 125 NOPs (125 bytes)
     for (let i = 0; i < 125; i++) {
-        sourceCode125Back += "    NOP\n";
+      sourceCode125Back += "    NOP\n";
     }
-    
-    sourceCode125Back += `    JR TARGET        ; Backward relative jump (offset = 0 - (1+125+2) = -128)
+
+    sourceCode125Back += `
+          JR TARGET        ; Backward relative jump (offset = 0 - (1+125+2) = -128)
     HALT
 `;
-    
+
     const result125Back = this.assembler.assemble(sourceCode125Back);
     this.assert(
       result125Back.success,
       "Backward branch with 125 NOPs should succeed (offset -128)",
-      result125Back.error || (result125Back.errors ? result125Back.errors.map(e => e.message).join(', ') : '')
+      result125Back.error ||
+        (result125Back.errors
+          ? result125Back.errors.map((e) => e.message).join(", ")
+          : "")
     );
 
     // Test 4: 126 NOPs backward - should fail (offset = -129, out of range)
-    let sourceCode126Back = `ORG 32768
+    let sourceCode126Back = `
+      ORG 32768
 TARGET:
     NOP              ; One instruction at target (1 byte)
 `;
-    
+
     // Add exactly 126 NOPs (126 bytes)
     for (let i = 0; i < 126; i++) {
-        sourceCode126Back += "    NOP\n";
+      sourceCode126Back += "    NOP\n";
     }
-    
-    sourceCode126Back += `    JR TARGET        ; Backward relative jump (offset = 0 - (1+126+2) = -129)
+
+    sourceCode126Back += `
+          JR TARGET        ; Backward relative jump (offset = 0 - (1+126+2) = -129)
     HALT
 `;
-    
+
     const result126Back = this.assembler.assemble(sourceCode126Back);
     this.assert(
       !result126Back.success,
       "Backward branch with 126 NOPs should fail (offset -129)",
-      result126Back.success ? "Expected failure but got success" : "Correctly failed as expected"
+      result126Back.success
+        ? "Expected failure but got success"
+        : "Correctly failed as expected"
     );
 
     // Test edge case: exactly at the limit
-    const exactLimitForward = `ORG 32768
+    const exactLimitForward =
+      `ORG 32768
 START:
     JR TARGET
-` + "    NOP\n".repeat(126) + `TARGET:
+` +
+      "    NOP\n".repeat(126) +
+      `TARGET:
     HALT
 `;
 
@@ -1328,23 +1453,30 @@ START:
     this.assert(
       resultExactLimit.success,
       "Forward branch at exact limit (126 NOPs) should succeed",
-      resultExactLimit.error || (resultExactLimit.errors ? resultExactLimit.errors.map(e => e.message).join(', ') : '')
+      resultExactLimit.error ||
+        (resultExactLimit.errors
+          ? resultExactLimit.errors.map((e) => e.message).join(", ")
+          : "")
     );
 
     // Test simple JR to skip 1 NOP
-    const simpleSkipTest = `ORG 32768
+    const simpleSkipTest = `
+      ORG 32768
 START:
     JR SKIP          ; Jump over the NOP to SKIP label
     NOP              ; This should be skipped
 SKIP:
     HALT             ; Jump lands here
 `;
-    
+
     const resultSimpleSkip = this.assembler.assemble(simpleSkipTest);
     this.assert(
       resultSimpleSkip.success,
       "JR SKIP should jump over 1 NOP instruction",
-      resultSimpleSkip.error || (resultSimpleSkip.errors ? resultSimpleSkip.errors.map(e => e.message).join(', ') : '')
+      resultSimpleSkip.error ||
+        (resultSimpleSkip.errors
+          ? resultSimpleSkip.errors.map((e) => e.message).join(", ")
+          : "")
     );
 
     // Verify the generated bytecode is correct
@@ -1353,52 +1485,95 @@ SKIP:
       // JR from 32768 to 32771: offset = 32771 - (32768 + 2) = 1
       // Expected: JR rel = [0x18, 0x01], NOP = [0x00], HALT = [0x76]
       const expectedBytes = [0x18, 0x01, 0x00, 0x76];
-      const actualBytes = this.getMachineCodeFromInstructions(resultSimpleSkip.instructionDetails);
-      
+      const actualBytes = this.getMachineCodeFromInstructions(
+        resultSimpleSkip.instructionDetails
+      );
+
       this.assert(
         JSON.stringify(actualBytes) === JSON.stringify(expectedBytes),
         "JR SKIP generates correct bytecode [0x18, 0x01, 0x00, 0x76]",
-        `Expected: [${expectedBytes.join(', ')}], Got: [${actualBytes.join(', ')}]`
+        `Expected: [${expectedBytes.join(", ")}], Got: [${actualBytes.join(
+          ", "
+        )}]`
       );
     }
   }
 
   // Test multiple ORG directives functionality
   testMultipleOrg() {
-    this.consoleLogIfNode("\nTesting Multiple ORG Directives");
-    
+    consoleLogIfNode("\nTesting Multiple ORG Directives");
+
     // Test 0 ORG directives - default address 0
-    const noOrgProgram = `; No ORG directive
+    const noOrgProgram = `
+      ; No ORG directive
 NOP
 LD A, 42
 HALT`;
-    
+
     const result0 = this.assembler.assemble(noOrgProgram);
-    this.assert(result0.success, "Program with 0 ORG directives assembles successfully");
-    this.assert(result0.loadAddress === 0, "Default load address is 0 when no ORG");
-    this.assert(result0.instructionDetails[1].startAddress === 0, "First instruction starts at address 0");
-    this.assert(result0.instructionDetails[2].startAddress === 1, "Second instruction at address 1");
-    this.assert(result0.instructionDetails[3].startAddress === 3, "Third instruction at address 3");
-    
+    this.assert(
+      result0.success,
+      "Program with 0 ORG directives assembles successfully"
+    );
+    this.assert(
+      result0.loadAddress === 0,
+      "Default load address is 0 when no ORG"
+    );
+    this.assert(
+      result0.instructionDetails[1].startAddress === 0,
+      "First instruction starts at address 0"
+    );
+    this.assert(
+      result0.instructionDetails[2].startAddress === 1,
+      "Second instruction at address 1"
+    );
+    this.assert(
+      result0.instructionDetails[3].startAddress === 3,
+      "Third instruction at address 3"
+    );
+
     // Test 1 ORG directive
-    const oneOrgProgram = `; One ORG directive
+    const oneOrgProgram = `
+      ; One ORG directive
 ORG 1000H
 START:
     LD A, 55H
     NOP
     HALT`;
-    
+
     const result1 = this.assembler.assemble(oneOrgProgram);
-    this.assert(result1.success, "Program with 1 ORG directive assembles successfully");
-    this.assert(result1.loadAddress === 0x1000, "Load address is 0x1000 with ORG 1000H");
-    this.assert(result1.instructionDetails[1].startAddress === 0x1000, "ORG line at address 0x1000");
-    this.assert(result1.instructionDetails[2].startAddress === 0x1000, "Label at address 0x1000");
-    this.assert(result1.instructionDetails[3].startAddress === 0x1000, "First instruction at address 0x1000");
-    this.assert(result1.instructionDetails[4].startAddress === 0x1002, "Second instruction at address 0x1002");
-    this.assert(result1.instructionDetails[5].startAddress === 0x1003, "Third instruction at address 0x1003");
-    
+    this.assert(
+      result1.success,
+      "Program with 1 ORG directive assembles successfully"
+    );
+    this.assert(
+      result1.loadAddress === 0x1000,
+      "Load address is 0x1000 with ORG 1000H"
+    );
+    this.assert(
+      result1.instructionDetails[1].startAddress === 0x1000,
+      "ORG line at address 0x1000"
+    );
+    this.assert(
+      result1.instructionDetails[2].startAddress === 0x1000,
+      "Label at address 0x1000"
+    );
+    this.assert(
+      result1.instructionDetails[3].startAddress === 0x1000,
+      "First instruction at address 0x1000"
+    );
+    this.assert(
+      result1.instructionDetails[4].startAddress === 0x1002,
+      "Second instruction at address 0x1002"
+    );
+    this.assert(
+      result1.instructionDetails[5].startAddress === 0x1003,
+      "Third instruction at address 0x1003"
+    );
+
     // Test 2 ORG directives - multiple memory segments
-    const twoOrgProgram = `; Two ORG directives
+    const twoOrgProgram = `
+      ; Two ORG directives
 ORG 1000H
 MAIN:
     LD A, 42H
@@ -1411,89 +1586,120 @@ SUBROUTINE:
 
 ORG 1002H
     JP SUBROUTINE`;
-    
+
     const result2 = this.assembler.assemble(twoOrgProgram);
-    this.assert(result2.success, "Program with 2 ORG directives assembles successfully");
-    this.assert(result2.loadAddress === 0x1000, "Load address is first ORG address 0x1000");
-    
+    this.assert(
+      result2.success,
+      "Program with 2 ORG directives assembles successfully"
+    );
+    this.assert(
+      result2.loadAddress === 0x1000,
+      "Load address is first ORG address 0x1000"
+    );
+
     // Check first segment (ORG 1000H)
-    this.assert(result2.instructionDetails[1].startAddress === 0x1000, "First ORG at address 0x1000");
-    this.assert(result2.instructionDetails[2].startAddress === 0x1000, "MAIN label at address 0x1000");
-    this.assert(result2.instructionDetails[3].startAddress === 0x1000, "LD A, 42H at address 0x1000");
-    this.assert(result2.instructionDetails[4].startAddress === 0x1002, "NOP at address 0x1002");
-    
+    this.assert(
+      result2.instructionDetails[1].startAddress === 0x1000,
+      "First ORG at address 0x1000"
+    );
+    this.assert(
+      result2.instructionDetails[2].startAddress === 0x1000,
+      "MAIN label at address 0x1000"
+    );
+    this.assert(
+      result2.instructionDetails[3].startAddress === 0x1000,
+      "LD A, 42H at address 0x1000"
+    );
+    this.assert(
+      result2.instructionDetails[4].startAddress === 0x1002,
+      "NOP at address 0x1002"
+    );
+
     // Check second segment (ORG 2000H)
-    this.assert(result2.instructionDetails[6].startAddress === 0x2000, "Second ORG at address 0x2000");
-    this.assert(result2.instructionDetails[7].startAddress === 0x2000, "SUBROUTINE label at address 0x2000");
-    this.assert(result2.instructionDetails[8].startAddress === 0x2000, "LD B, 55H at address 0x2000");
-    this.assert(result2.instructionDetails[9].startAddress === 0x2002, "RET at address 0x2002");
-    
+    this.assert(
+      result2.instructionDetails[6].startAddress === 0x2000,
+      "Second ORG at address 0x2000"
+    );
+    this.assert(
+      result2.instructionDetails[7].startAddress === 0x2000,
+      "SUBROUTINE label at address 0x2000"
+    );
+    this.assert(
+      result2.instructionDetails[8].startAddress === 0x2000,
+      "LD B, 55H at address 0x2000"
+    );
+    this.assert(
+      result2.instructionDetails[9].startAddress === 0x2002,
+      "RET at address 0x2002"
+    );
+
     // Check third segment (ORG 1002H)
-    this.assert(result2.instructionDetails[11].startAddress === 0x1002, "Third ORG at address 0x1002");
-    this.assert(result2.instructionDetails[12].startAddress === 0x1002, "JP SUBROUTINE at address 0x1002");
-    
+    this.assert(
+      result2.instructionDetails[11].startAddress === 0x1002,
+      "Third ORG at address 0x1002"
+    );
+    this.assert(
+      result2.instructionDetails[12].startAddress === 0x1002,
+      "JP SUBROUTINE at address 0x1002"
+    );
+
     // Verify machine code contains bytes for all segments
-    const machineCodeBytes = this.getMachineCodeFromInstructions(result2.instructionDetails);
-    this.assert(machineCodeBytes.length > 0, "Machine code generated for multiple ORG program");
-    
+    const machineCodeBytes = this.getMachineCodeFromInstructions(
+      result2.instructionDetails
+    );
+    this.assert(
+      machineCodeBytes.length > 0,
+      "Machine code generated for multiple ORG program"
+    );
+
     // Test that instruction details contain opcodes for each instruction
     const mainLdInstruction = result2.instructionDetails[3]; // LD A, 42H
-    this.assert(mainLdInstruction.opcodes.length === 2, "LD A, 42H generates 2 opcodes");
-    this.assert(mainLdInstruction.opcodes[0] === 0x3E, "LD A, 42H first opcode is 0x3E");
-    this.assert(mainLdInstruction.opcodes[1] === 0x42, "LD A, 42H second opcode is 0x42");
-    
+    this.assert(
+      mainLdInstruction.opcodes.length === 2,
+      "LD A, 42H generates 2 opcodes"
+    );
+    this.assert(
+      mainLdInstruction.opcodes[0] === 0x3e,
+      "LD A, 42H first opcode is 0x3E"
+    );
+    this.assert(
+      mainLdInstruction.opcodes[1] === 0x42,
+      "LD A, 42H second opcode is 0x42"
+    );
+
     const nopInstruction = result2.instructionDetails[4]; // NOP
     this.assert(nopInstruction.opcodes.length === 1, "NOP generates 1 opcode");
     this.assert(nopInstruction.opcodes[0] === 0x00, "NOP opcode is 0x00");
-    
+
     const jumpInstruction = result2.instructionDetails[12]; // JP SUBROUTINE
-    this.assert(jumpInstruction.opcodes.length === 3, "JP SUBROUTINE generates 3 opcodes");
-    this.assert(jumpInstruction.opcodes[0] === 0xC3, "JP first opcode is 0xC3");
-    this.assert(jumpInstruction.opcodes[1] === 0x00, "JP address low byte is 0x00 (0x2000 & 0xFF)");
-    this.assert(jumpInstruction.opcodes[2] === 0x20, "JP address high byte is 0x20 (0x2000 >> 8)");
-  }
-
-  printResults() {
-    this.consoleLogIfNode("\n" + "=".repeat(60));
-    this.consoleLogIfNode("TEST RESULTS SUMMARY");
-    this.consoleLogIfNode("=".repeat(60));
-    this.consoleLogIfNode(`Total tests: ${this.testCount}`);
-    this.consoleLogIfNode(`Passed: ${this.passedCount}`);
-    this.consoleLogIfNode(`Failed: ${this.testCount - this.passedCount}`);
-    this.consoleLogIfNode(
-      `Success rate: ${((this.passedCount / this.testCount) * 100).toFixed(1)}%`
+    this.assert(
+      jumpInstruction.opcodes.length === 3,
+      "JP SUBROUTINE generates 3 opcodes"
     );
-
-    if (this.failedTests.length > 0) {
-      console.error("\nFAILED TESTS:");
-      this.failedTests.forEach((test, i) => {
-        console.error(`${i + 1}. ${test.name}`);
-        if (test.details) {
-          console.error(`   Details: ${test.details}`);
-        }
-      });
-    }
-
-    if (this.passedCount === this.testCount) {
-      this.consoleLogIfNode(
-        "\nALL TESTS PASSED! The Z80 Assembler fully implements the specification."
-      );
-    }
+    this.assert(jumpInstruction.opcodes[0] === 0xc3, "JP first opcode is 0xC3");
+    this.assert(
+      jumpInstruction.opcodes[1] === 0x00,
+      "JP address low byte is 0x00 (0x2000 & 0xFF)"
+    );
+    this.assert(
+      jumpInstruction.opcodes[2] === 0x20,
+      "JP address high byte is 0x20 (0x2000 >> 8)"
+    );
   }
 }
 
 // Run the tests if this is being run directly in Node.js
-if (typeof require !== 'undefined' && require.main === module) {
-  const z80AssemblerTestSuite = new Z80AssemblerTestSuite();
-  z80AssemblerTestSuite.runAllTests();
+if (typeof require !== "undefined" && require.main === module) {
+  const z80AssemblerTestClass = new Z80AssemblerTestClass();
+  z80AssemblerTestClass.runAllTests();
 }
 
 // Export for use in other modules (Node.js environment)
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = Z80AssemblerTestSuite;
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = Z80AssemblerTestClass;
 }
 
 // Also make available as global for browser use
-if (typeof window !== 'undefined') {
-  window.Z80AssemblerTestSuite = Z80AssemblerTestSuite;
+if (typeof window !== "undefined") {
+  window.Z80AssemblerTestClass = Z80AssemblerTestClass;
 }
