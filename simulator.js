@@ -902,6 +902,7 @@ class Simulator {
       { handler: "displayCharacterGrid", duration: 1000 },
       { handler: "benchmarkCPU", duration: 1000 },
       { handler: "showSinclairCopyright", duration: 1 },
+      { handler: "reportInstructionSetAnalysisFixThis", duration: 1 },
       { handler: "runAssemblerTests", duration: 1 },
       { handler: "runZ80CPUTests", duration: -1 },
     ];
@@ -990,9 +991,13 @@ class Simulator {
   }
 
   benchmarkCPU() {
-    // Infinite loop at address 0; JR is not significantly faster; NOP seems to be but not worth the noise
-    const benchedProgram = "ORG 0\nJP 0";
-    const assemble = this.assembler.assemble(benchedProgram);
+    // Infinite loop; JR is not significantly faster; NOP seems to be but not worth the noise
+    this.benchmarkProgram("ORG 0\nJP 0");
+    
+  }
+
+  benchmarkProgram(assemblyCode) {
+    const assemble = this.assembler.assemble(assemblyCode);
 
     if (assemble.success) {
       const benchMemory = new Uint8Array(MEMORY_SIZE);
@@ -1017,8 +1022,8 @@ class Simulator {
           instructionCount
         );
         const endTime = performance.now();
-        const elapsedTime = (endTime - startTime) / 1000; // seconds
-        return { benchResult, elapsedTime };
+        const elapsedSeconds = (endTime - startTime) / 1000; 
+        return { benchResult, elapsedSeconds: elapsedSeconds };
       };
 
       let benchmarkResult;
@@ -1026,27 +1031,23 @@ class Simulator {
       // get enough accuracy
       while (true) {
         benchmarkResult = runBenchmark(instructions);
-        if (benchmarkResult.elapsedTime >= minimum_sec) break;
+        if (benchmarkResult.elapsedSeconds >= minimum_sec) break;
         instructions *= 2;
       }
 
       // If we're below target_sec, repeat this until it reaches target because it seems JIC might be preventing it reaching it one pass
-      if (benchmarkResult.elapsedTime < target_sec) {
-        instructions *= target_sec / benchmarkResult.elapsedTime;
+      if (benchmarkResult.elapsedSeconds < target_sec) {
+        instructions *= target_sec / benchmarkResult.elapsedSeconds;
         benchmarkResult = runBenchmark(instructions);
       }
 
       const MIPS =
         benchmarkResult.benchResult.instructionsExecuted /
-        benchmarkResult.elapsedTime /
+        benchmarkResult.elapsedSeconds /
         one_million;
 
       userMessage(
-        `CPU Benchmark: ${benchmarkResult.benchResult.instructionsExecuted.toLocaleString()} instructions in ${benchmarkResult.elapsedTime.toFixed(
-          3
-        )}s running "${benchedProgram.replace(/\n/g, "\\n")}" = ${MIPS.toFixed(
-          1
-        )} MIPS`
+        `CPU Benchmark: ${benchmarkResult.benchResult.instructionsExecuted.toLocaleString()} instructions in ${benchmarkResult.elapsedSeconds.toFixed(3)}s running "${assemblyCode.replace(/\n/g, "\\n")}" = ${MIPS.toFixed(1)} MIPS`
       );
     } else {
       userMessageAboutBug("Benchmark assembly failed", assemble.error);
@@ -1169,7 +1170,6 @@ class Simulator {
           Math.sin(line * 0.3 + col * 0.2 + time) *
           Math.cos(distanceFromCenter * 0.4 + time * 1.5);
 
-        // Combine patterns for artistic effect
         const combinedPattern =
           (wave + pattern + Math.sin(time + line * col * 0.01)) / 3;
         const charIndex = Math.floor(
@@ -1271,6 +1271,19 @@ class Simulator {
     );
   }
 
+  reportInstructionSetAnalysisFixThis() {
+    // Create an instance of the test class and call its method
+    if (typeof Z80AssemblerTestClass !== "undefined") {
+      const testInstance = new Z80AssemblerTestClass();
+      return testInstance.reportInstructionSetAnalysis();
+    } else {
+      userMessageAboutBug(
+        "Z80AssemblerTestClass not available",
+        "Cannot perform instruction set analysis - test class not found"
+      );
+    }
+  }
+
   runAssemblerTests() {
     try {
       // Check if assembler_test.js Z80AssemblerTestClass is available
@@ -1307,7 +1320,9 @@ class Simulator {
       if (typeof Z80CPUEmulatorTestClass !== "undefined") {
         // Also check if runZ80CPUEmulatorTestClass is available since it's required
         if (typeof runZ80CPUEmulatorTestClass === "undefined") {
-          userMessage("Z80 CPU tests cannot run - z80_cpu_emulator_tests.js not loaded (runZ80CPUEmulatorTestClass function missing)");
+          userMessage(
+            "Z80 CPU tests cannot run - z80_cpu_emulator_tests.js not loaded (runZ80CPUEmulatorTestClass function missing)"
+          );
           return;
         }
 
@@ -1329,9 +1344,13 @@ class Simulator {
           console.error = originalError;
         }
       } else {
-        userMessage("Z80 CPU tests cannot run - Z80CPUEmulatorTestClass class not available");
+        userMessage(
+          "Z80 CPU tests cannot run - Z80CPUEmulatorTestClass class not available"
+        );
         // Debug information
-        userMessage(`Available globals: Z80CPU=${typeof Z80CPU}, Z80Assembler=${typeof Z80Assembler}, runZ80CPUEmulatorTestClass=${typeof runZ80CPUEmulatorTestClass}`);
+        userMessage(
+          `Available globals: Z80CPU=${typeof Z80CPU}, Z80Assembler=${typeof Z80Assembler}, runZ80CPUEmulatorTestClass=${typeof runZ80CPUEmulatorTestClass}`
+        );
       }
     } catch (error) {
       userMessageAboutBug("Z80 CPU test error", error.message);
@@ -1385,7 +1404,7 @@ class Simulator {
     });
     this.activeTimers.clear();
     this.displayUpdateInterval = null;
-    
+
     // Clean up version checker timers
     if (window.versionChecker) {
       window.versionChecker.cleanup();
@@ -1396,8 +1415,9 @@ class Simulator {
     // Initialize the global version checker with timer management
     if (window.versionChecker) {
       window.versionChecker.init({
-        createTimer: (callback, interval, isInterval) => this.createTimer(callback, interval, isInterval),
-        clearTimer: (timerId) => this.clearTimer(timerId)
+        createTimer: (callback, interval, isInterval) =>
+          this.createTimer(callback, interval, isInterval),
+        clearTimer: (timerId) => this.clearTimer(timerId),
       });
     }
   }
@@ -1634,8 +1654,10 @@ class Simulator {
       if (this.keyCodeCurrent == null) {
         this.keyCodeCurrentDisplay.textContent = "--";
       } else {
-        const hex = this.keyCodeCurrent.toString(16).padStart(2, "0").toUpperCase();
-        this.keyCodeCurrentDisplay.textContent = this.keyCodeCurrentReleased? `(${hex})`: hex;
+        const hex = formatHex2(this.keyCodeCurrent);
+        this.keyCodeCurrentDisplay.textContent = this.keyCodeCurrentReleased
+          ? `(${hex})`
+          : hex;
       }
     }
     if (this.mipsDisplay) {
@@ -2431,6 +2453,17 @@ class Simulator {
     element.style.height = "96vh";
     element.style.zIndex = Z_INDEX.EXPANDED_ELEMENT;
     element.classList.add("expanded-element");
+
+    // Prevent window scrolling when textarea is expanded
+    const textarea = element.querySelector("textarea");
+    if (textarea) {
+      const wheelHandler = (e) => {
+        e.stopPropagation();
+      };
+      textarea.addEventListener("wheel", wheelHandler, { passive: false });
+      // Store handler reference for cleanup
+      textarea._expandedWheelHandler = wheelHandler;
+    }
   }
 
   restoreElement(elementId) {
@@ -2457,6 +2490,13 @@ class Simulator {
       noteHowToRestoreSize.remove();
     }
 
+    // Clean up wheel event handler
+    const textarea = element.querySelector("textarea");
+    if (textarea && textarea._expandedWheelHandler) {
+      textarea.removeEventListener("wheel", textarea._expandedWheelHandler);
+      delete textarea._expandedWheelHandler;
+    }
+
     element.classList.remove("expanded-element");
     delete element.dataset.originalStyles;
   }
@@ -2466,11 +2506,14 @@ window.buttonEditMode = false;
 
 function toggleButtonCaptionEdit() {
   window.buttonEditMode = !window.buttonEditMode;
-  const button_caption_edit_toggle = document.querySelector(".button-caption-edit-toggle");
+  const button_caption_edit_toggle = document.querySelector(
+    ".button-caption-edit-toggle"
+  );
   const gameButtons = document.querySelectorAll(".game-buttons button");
 
   if (window.buttonEditMode) {
-    button_caption_edit_toggle.textContent = "Click here to end button customization";
+    button_caption_edit_toggle.textContent =
+      "Click here to end button customization";
     button_caption_edit_toggle.classList.add("active");
     gameButtons.forEach((button) => button.classList.add("edit-mode"));
   } else {

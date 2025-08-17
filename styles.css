@@ -322,10 +322,12 @@ button:focus-visible {
 
 /* Assembly editor highlighting */
 .highlighted-line {
-    background: var(--editable-text-fgc);
-    color: var(--editable-text-bgc);
+    background: var(--attention-c);
+    color: var(--button-text-c) ;
     font-weight: bold;
     display: inline;
+    border-radius: 2px;
+    padding: 1px 2px;
 }
 
 /* Hide address and opcodes columns by default */
@@ -357,6 +359,13 @@ button:focus-visible {
 /* Adjust assembly column when expanded to take full width */
 .expanded-element .assembly-column {
     flex: 1;
+}
+
+/* Ensure textareas in expanded elements have vertical scrolling */
+.expanded-element textarea {
+    overflow-y: auto;
+    /* Focus the textarea and capture all scroll events */
+    pointer-events: auto;
 }
 
 /* Note shown when an element is expanded telling user how to restore size */

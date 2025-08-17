@@ -5,6 +5,10 @@ const RUN_LOOP_INTERVAL_MS = 1;
 const fancy_highlight_scroll = true;
 const version_update_check_interval_ms = 5000;
 
+// Hex formatting helpers
+const formatHex2 = (value) => value.toString(16).padStart(2, "0").toUpperCase();
+const formatHex4 = (value) => value.toString(16).padStart(4, "0").toUpperCase();
+
 // Responsive breakpoints
 const BREAKPOINTS = {
     MOBILE_MAX: 768    // Maximum width for mobile/phone devices

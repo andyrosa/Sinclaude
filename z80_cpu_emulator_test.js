@@ -257,9 +257,9 @@ class Z80CPUEmulatorTestClass extends TestFramework {
             : machineCodeLength;
           if (execResult.registers.PC !== expectedPC) {
             throw new Error(
-              `PC mismatch: expected 0x${TestClass.formatHex16(
+              `PC mismatch: expected 0x${formatHex4(
                 expectedPC
-              )} but got 0x${TestClass.formatHex16(
+              )} but got 0x${formatHex4(
                 execResult.registers.PC
               )} (machine code length: ${machineCodeLength})`
             );
@@ -321,11 +321,11 @@ class Z80CPUEmulatorTestClass extends TestFramework {
               const actualValue = memory[addr];
               if (actualValue !== expectedValue) {
                 throw new Error(
-                  `Memory[0x${TestClass.formatHex16(
+                  `Memory[0x${formatHex4(
                     addr
-                  )}]: expected 0x${TestClass.formatHex8(
+                  )}]: expected 0x${formatHex2(
                     expectedValue
-                  )}, got 0x${TestClass.formatHex8(actualValue)}`
+                  )}, got 0x${formatHex2(actualValue)}`
                 );
               }
             }
@@ -340,11 +340,11 @@ class Z80CPUEmulatorTestClass extends TestFramework {
               const actualValue = iomap[portNum];
               if (actualValue !== expectedValue) {
                 throw new Error(
-                  `Port[0x${TestClass.formatHex8(
+                  `Port[0x${formatHex2(
                     portNum
-                  )}]: expected 0x${TestClass.formatHex8(
+                  )}]: expected 0x${formatHex2(
                     expectedValue
-                  )}, got 0x${TestClass.formatHex8(actualValue)}`
+                  )}, got 0x${formatHex2(actualValue)}`
                 );
               }
             }
@@ -373,9 +373,9 @@ class Z80CPUEmulatorTestClass extends TestFramework {
             if (!expected.hasOwnProperty(regKey)) {
               if (execResult.registers[reg] !== initialState.registers[reg]) {
                 throw new Error(
-                  `Register ${reg}: unexpected change from 0x${TestClass.formatHex8(
+                  `Register ${reg}: unexpected change from 0x${formatHex2(
                     initialState.registers[reg]
-                  )} to 0x${TestClass.formatHex8(execResult.registers[reg])}`
+                  )} to 0x${formatHex2(execResult.registers[reg])}`
                 );
               }
             }
@@ -386,9 +386,9 @@ class Z80CPUEmulatorTestClass extends TestFramework {
             // Check shadow A register
             if (execResult.shadowRegisters.A !== initialState.shadowRegisters?.A) {
               throw new Error(
-                `Shadow register A: unexpected change from 0x${TestClass.formatHex8(
+                `Shadow register A: unexpected change from 0x${formatHex2(
                   initialState.shadowRegisters?.A || 0
-                )} to 0x${TestClass.formatHex8(execResult.shadowRegisters.A)}`
+                )} to 0x${formatHex2(execResult.shadowRegisters.A)}`
               );
             }
             
@@ -446,11 +446,11 @@ class Z80CPUEmulatorTestClass extends TestFramework {
               .slice(0, 5)
               .map(
                 (change) =>
-                  `[0x${TestClass.formatHex16(
+                  `[0x${formatHex4(
                     change.address
-                  )}]: 0x${TestClass.formatHex8(
+                  )}]: 0x${formatHex2(
                     change.initial
-                  )}→0x${TestClass.formatHex8(change.final)}`
+                  )}→0x${formatHex2(change.final)}`
               )
               .join(", ");
             const moreText =
@@ -489,11 +489,11 @@ class Z80CPUEmulatorTestClass extends TestFramework {
               .slice(0, 3)
               .map(
                 (change) =>
-                  `Port[0x${TestClass.formatHex8(
+                  `Port[0x${formatHex2(
                     change.port
-                  )}]: 0x${TestClass.formatHex8(
+                  )}]: 0x${formatHex2(
                     change.initial
-                  )}→0x${TestClass.formatHex8(change.final)}`
+                  )}→0x${formatHex2(change.final)}`
               )
               .join(", ");
             const moreText =

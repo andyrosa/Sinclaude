@@ -111,8 +111,8 @@ class Z80AssemblerTestClass extends TestFramework {
     consoleLogIfNode("\nTesting Instruction Details");
 
     // Test that assembler returns instruction details with addresses
-    const simpleProgram = `
-      ; Comment
+    const simpleProgram =
+      `; Comment
       NOP
       LD A, 42
       HALT`;
@@ -145,8 +145,8 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // Test with ORG directive
-    const orgProgram = `
-      ; Header
+    const orgProgram =
+      `; Header
       ORG $8000
       NOP
       HALT`;
@@ -171,8 +171,8 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // Test with data directives
-    const dataProgram = `
-      NOP
+    const dataProgram =
+      `NOP
       DB "Hi"
       DEFW $1234
       HALT`;
@@ -197,8 +197,8 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // Test with labels (labels don't generate code but are at current address)
-    const labelProgram = `
-      START:
+    const labelProgram =
+    `START:
         LD A, 10
       LOOP:
         DEC A
@@ -557,8 +557,8 @@ class Z80AssemblerTestClass extends TestFramework {
     this.assertAssemblySuccess('DB " Mid "', [32, 77, 105, 100, 32]); // String with both leading and trailing space
 
     // Test that address tracking works correctly with trailing spaces in DB strings
-    const trailingSpacesProgram = `
-      NOP
+    const trailingSpacesProgram =
+    ` NOP
       DB "Ho "
       DEFW $1234
       HALT`;
@@ -586,8 +586,8 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // Test multiple DB strings with trailing spaces
-    const multipleSpacesProgram = `
-      START:
+    const multipleSpacesProgram =
+      `START:
         DB "A "
         DB "BB  "
         DB "CCC   "
@@ -630,8 +630,8 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // Test DB string with only spaces
-    const onlySpacesProgram = `
-      NOP
+    const onlySpacesProgram =
+    ` NOP
       DB "   "
       NOP`;
 
@@ -1335,18 +1335,16 @@ class Z80AssemblerTestClass extends TestFramework {
     // Test 1: 127 NOPs forward - should succeed
     let sourceCode127 = `
       ORG 32768
-START:
-    JR TARGET        ; Forward relative jump
+      START:
+      JR TARGET127        ; Forward relative jump
 `;
-
     // Add exactly 127 NOPs
     for (let i = 0; i < 127; i++) {
       sourceCode127 += "    NOP\n";
     }
-
     sourceCode127 += `
-      TARGET:
-    HALT
+      TARGET127:
+        HALT
 `;
 
     const result127 = this.assembler.assemble(sourceCode127);
@@ -1362,20 +1360,17 @@ START:
     // Test 2: 128 NOPs forward - should fail
     let sourceCode128 = `
       ORG 32768
-START:
-    JR TARGET        ; Forward relative jump
-`;
-
+      START:
+      JR TARGET128        ; Forward relative jump
+      `;
     // Add exactly 128 NOPs
     for (let i = 0; i < 128; i++) {
-      sourceCode128 += "    NOP\n";
+      sourceCode128 += "NOP\n";
     }
-
     sourceCode128 += `
-      TARGET:
+      TARGET128: ; 32768+2+128=32898
     HALT
 `;
-
     const result128 = this.assembler.assemble(sourceCode128);
     this.assert(
       !result128.success,
@@ -1388,17 +1383,16 @@ START:
     // Test 3: 125 NOPs backward - should succeed (offset = -128, just within range)
     let sourceCode125Back = `
       ORG 32768
-TARGET:
-    NOP              ; One instruction at target (1 byte)
+    TARGET125:
+      NOP              ; One instruction at target (1 byte)
 `;
 
     // Add exactly 125 NOPs (125 bytes)
     for (let i = 0; i < 125; i++) {
-      sourceCode125Back += "    NOP\n";
+      sourceCode125Back += "NOP\n";
     }
-
     sourceCode125Back += `
-          JR TARGET        ; Backward relative jump (offset = 0 - (1+125+2) = -128)
+          JR TARGET125        ; Backward relative jump (offset = 0 - (1+125+2) = -128)
     HALT
 `;
 
@@ -1412,28 +1406,27 @@ TARGET:
           : "")
     );
 
-    // Test 4: 126 NOPs backward - should fail (offset = -129, out of range)
-    let sourceCode126Back = `
+    // Test 4: 127 NOPs backward - should fail (offset = -129, out of range)
+    let sourceCode127Back = `
       ORG 32768
-TARGET:
-    NOP              ; One instruction at target (1 byte)
+    TARGET127:
 `;
 
-    // Add exactly 126 NOPs (126 bytes)
-    for (let i = 0; i < 126; i++) {
-      sourceCode126Back += "    NOP\n";
+    // Add exactly 127 NOPs
+    for (let i = 0; i < 127; i++) {
+      sourceCode127Back += "    NOP\n";
     }
 
-    sourceCode126Back += `
-          JR TARGET        ; Backward relative jump (offset = 0 - (1+126+2) = -129)
-    HALT
+    sourceCode127Back += `
+      JR TARGET127        ; Backward relative jump (offset = 0 - (127+2) = -129)
+      HALT
 `;
 
-    const result126Back = this.assembler.assemble(sourceCode126Back);
+    const result127Back = this.assembler.assemble(sourceCode127Back);
     this.assert(
-      !result126Back.success,
-      "Backward branch with 126 NOPs should fail (offset -129)",
-      result126Back.success
+      !result127Back.success,
+      "Backward branch with 127 NOPs should fail (offset -129)",
+      result127Back.success
         ? "Expected failure but got success"
         : "Correctly failed as expected"
     );
@@ -1441,13 +1434,11 @@ TARGET:
     // Test edge case: exactly at the limit
     const exactLimitForward =
       `ORG 32768
-START:
-    JR TARGET
-` +
-      "    NOP\n".repeat(126) +
-      `TARGET:
-    HALT
-`;
+      START:
+        JR TARGET126\n`+
+      " NOP\n".repeat(126) +`
+      TARGET126:
+        HALT`;
 
     const resultExactLimit = this.assembler.assemble(exactLimitForward);
     this.assert(
@@ -1462,12 +1453,11 @@ START:
     // Test simple JR to skip 1 NOP
     const simpleSkipTest = `
       ORG 32768
-START:
-    JR SKIP          ; Jump over the NOP to SKIP label
-    NOP              ; This should be skipped
-SKIP:
-    HALT             ; Jump lands here
-`;
+      START:
+          JR SKIP          ; Jump over the NOP to SKIP label
+          NOP              ; This should be skipped
+      SKIP:
+          HALT             ; Jump lands here`;
 
     const resultSimpleSkip = this.assembler.assemble(simpleSkipTest);
     this.assert(
@@ -1504,11 +1494,11 @@ SKIP:
     consoleLogIfNode("\nTesting Multiple ORG Directives");
 
     // Test 0 ORG directives - default address 0
-    const noOrgProgram = `
-      ; No ORG directive
-NOP
-LD A, 42
-HALT`;
+    const noOrgProgram =
+      `; No ORG directive
+      NOP
+      LD A, 42
+      HALT`;
 
     const result0 = this.assembler.assemble(noOrgProgram);
     this.assert(
@@ -1533,13 +1523,13 @@ HALT`;
     );
 
     // Test 1 ORG directive
-    const oneOrgProgram = `
-      ; One ORG directive
-ORG 1000H
-START:
-    LD A, 55H
-    NOP
-    HALT`;
+    const oneOrgProgram =
+    `; One ORG directive
+      ORG 1000H
+    START:
+      LD A, 55H
+      NOP
+      HALT`;
 
     const result1 = this.assembler.assemble(oneOrgProgram);
     this.assert(
@@ -1572,20 +1562,20 @@ START:
     );
 
     // Test 2 ORG directives - multiple memory segments
-    const twoOrgProgram = `
-      ; Two ORG directives
-ORG 1000H
-MAIN:
-    LD A, 42H
-    NOP
+    const twoOrgProgram =
+    `; Two ORG directives
+      ORG 1000H
+      MAIN:
+          LD A, 42H
+          NOP
 
-ORG 2000H
-SUBROUTINE:
-    LD B, 55H
-    RET
+      ORG 2000H
+      SUBROUTINE:
+          LD B, 55H
+          RET
 
-ORG 1002H
-    JP SUBROUTINE`;
+      ORG 1002H
+          JP SUBROUTINE`;
 
     const result2 = this.assembler.assemble(twoOrgProgram);
     this.assert(
@@ -1686,6 +1676,37 @@ ORG 1002H
       "JP address high byte is 0x20 (0x2000 >> 8)"
     );
   }
+  reportInstructionSetAnalysis() {
+    try {
+      // Create a Z80Assembler instance to get the analysis
+      const assembler = new Z80Assembler();
+      const analysis = assembler.getInstructionSetAnalysis();
+      
+      // Dump any problems to userMessageAboutBug
+      const problems = [];
+      
+      if (analysis.duplicateMnemonicOperands.length > 0) {
+        userMessageAboutBug(`Duplicate mnemonic/operand combinations", ${analysis.duplicateMnemonicOperands.join(', ')}`);
+      }
+      
+      if (analysis.duplicateOpcodes.length > 0) {
+        userMessageAboutBug(`Duplicate opcodes: ${analysis.duplicateOpcodes.join(', ')}`);
+      }
+      
+      if (analysis.missingSingleBytes.length > 0) {
+        userMessage(`Single-byte opcodes not implemented: ${analysis.missingSingleBytes.length}`);
+      }
+      
+    } catch (error) {
+      if (typeof userMessageAboutBug !== 'undefined') {
+        userMessageAboutBug(
+          'Instruction set analysis failed',
+          error.message
+        );
+      }
+    }
+  }
+
 }
 
 // Run the tests if this is being run directly in Node.js
