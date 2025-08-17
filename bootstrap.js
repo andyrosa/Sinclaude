@@ -16,11 +16,10 @@ function loadVersionWithCallback(callback) {
       if (callback) callback();
     };
     githubVersionScript.onerror = function () {
-      console.error("Failed to load version.js from GitHub - could be CORS, network, or file not found");
+      console.error("Failed to load version.js from local and remote source");
       if (typeof userMessageAboutBug === "function") {
         userMessageAboutBug(
-          "Unable to load version information from local or remote sources",
-          "Please check your internet connection or contact support."
+          "Unable to load version information from local and remote sources",
         );
       }
       if (callback) callback();
@@ -59,9 +58,11 @@ function loadScripts() {
     "clipboard-utils.js",
     "scroll_target.js",
     "version_update.js",
+    "tester.js",
     "z80_assembler.js",
-    "z80_cpu_emulator.js",
     "z80_assembler_test.js",
+    "z80_cpu_emulator.js",
+    "z80_cpu_emulator_tests.js",
     "z80_cpu_emulator_test.js",
     "default_asm.js",
     "basics_asm.js",

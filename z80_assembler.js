@@ -165,7 +165,13 @@ class Z80Assembler {
      *          load address and instruction details. On failure, it includes an array of errors.
      */
     assemble(sourceCode) {
+        // Remove the first line if it's just an empty line
+        // this is contants can be entered in js on the same line at the test or in the next line
+        if (sourceCode.startsWith('\n')) {
+            sourceCode = sourceCode.slice(1);
+        }
         this.sourceLines = sourceCode.split('\n');
+        
         this.symbols = {}; // Single symbol table for labels and constants
         this.dbLengths = {}; // Dictionary mapping DB symbol names to their string lengths
         this.errors = [];
