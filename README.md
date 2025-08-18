@@ -188,14 +188,15 @@ test("CCF", "carry=flip");
 
 ## Current Limitations
 
-- Many Z80 instructions not implemented
-- Only C and Z flags
-- Registers IX, IY and R not assembled or simulated
-- No RST or ROM emulation. Many rabbit holes avoided. I saw again why many of us love writing simulators/emulators/game engines
+- Only the C and Z flags are implemented
+- Registers IX, IY and R not implemented
+- Many IN/OUT/CP/Rotate instructions not implemented
+- No interrupts (EI/DI/RST/NMI)
+- No ROM emulation. Many rabbit holes avoided.
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
-- It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you have a need for speed
+- It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you develop a need for speed
 - The sample assembly programs are not optimized.
-- The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes
+- The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes. For one, nobody had time for all this typing or RAM to hold it.
 
 ## Known Issues
 - Performance varies significantly: 1 to 75 MIPS, not clear why; perhaps JIT, anti-virus, or browser extensions.
