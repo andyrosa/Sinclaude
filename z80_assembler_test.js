@@ -55,14 +55,14 @@ class Z80AssemblerTestClass extends TestFramework {
       const hasExpectedError = errorMessages.includes(expectedErrorPattern);
       this.assert(
         hasExpectedError,
-        expectedErrorPattern,
+        code,
         `Expected error pattern "${expectedErrorPattern}" not found in: ${errorMessages}`
       );
     } else {
       this.assert(
         false,
-        expectedErrorPattern,
-        "Expected assembly to fail but it succeeded"
+        code,
+        `Expected assembly to fail because of '${expectedErrorPattern}' but it succeeded.`
       );
     }
     return result;
@@ -1694,7 +1694,7 @@ class Z80AssemblerTestClass extends TestFramework {
       }
       
       if (analysis.missingSingleBytes.length > 0) {
-        userMessage(`Single-byte opcodes not implemented: ${analysis.missingSingleBytes.length}`);
+        consoleLogApproved(`Single-byte opcodes not implemented: ${analysis.missingSingleBytes.length}`);
       }
       
     } catch (error) {

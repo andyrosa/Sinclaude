@@ -13,8 +13,8 @@ performance_test:
     jp   performance_test
 
 ;----------------------------------------------
-; increments DE by 4; clobbers af
 hex_print_hl_at_de:
+;   increments DE by 4; clobbers af
     ld   a, h
     call print_hex_a_at_de
     ld   a, l
@@ -22,8 +22,8 @@ hex_print_hl_at_de:
     ret
 
 ;----------------------------------------------
-; increments DE by 2; clobbers af
 print_hex_a_at_de:
+;   increments DE by 2; clobbers af
     push af                 ; save original A
     sra a
     sra a
@@ -36,8 +36,8 @@ print_hex_a_at_de:
     jp print_hex_a_nibble_at_de
 
 ;----------------------------------------------
-; increments DE; clobbers af
 print_hex_a_nibble_at_de:
+;   increments DE; clobbers af
     add  a, '0'
     cp   '9'+1
     jr   c, print_hex_a_nibble_at_de_print
@@ -50,10 +50,11 @@ print_hex_a_nibble_at_de_print:
    
 ;=======================
 delay_4M_t_states:
-    ;   12 (pushes) + 10 (ld de) + OUTER_COUNT * [10 + (INNER_COUNT * 24) + 24] + 12 (pops) + 10 (ret)
-    ;   = 4,000,212 T-states
     OUTER_COUNT: equ 4;
     INNER_COUNT: equ 41667;
+    ;12 (pushes) + 10 (ld de) + OUTER_COUNT * [10 + (INNER_COUNT * 24) + 24] + 12 (pops) + 10 (ret)
+    ; = 4,000,212 T-states
+    
     push de                  ; 4 T-states
     push bc                  ; 4 T-states
     push af                  ; 4 T-states

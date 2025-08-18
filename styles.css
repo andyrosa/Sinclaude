@@ -38,6 +38,13 @@
     
     /* Screen sizing */
     --screen-height: min(360px, calc(100vw * 3 / 4));
+
+    /* Typography */
+    --font-mono: 'Courier New', Consolas, 'Liberation Mono', monospace;
+
+    /* Button shadows */
+    --button-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+    --button-shadow-pressed: 0 var(--button-elevation-pressed) 0 var(--button-shadow-c);
 }
 
 
@@ -100,9 +107,8 @@ body {
     color: var(--surface-text-c);
     display: flex;
     flex-direction: column;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
-    margin: 0;
     min-height: 100vh;
     padding: 4px;
     position: relative;
@@ -110,18 +116,18 @@ body {
 
 /* Buttons */
 button {
-    -webkit-tap-highlight-c: transparent;
+    -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     background: var(--button-bgc);
     border: 2px solid var(--button-border-c);
     border-radius: 12px;
-    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow);
     box-sizing: border-box;
     color: var(--button-text-c);
     cursor: pointer;
     flex: 1;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: bold;
     margin: 2px;
@@ -135,13 +141,13 @@ button {
 
 button:hover {
     background: var(--button-hover-bgc);
-    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow);
 }
 
 button:active {
     background: var(--button-active-bgc);
     transform: translateY(1px);
-    box-shadow: 0 var(--button-elevation-pressed) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow-pressed);
 }
 
 button:focus-visible {
@@ -153,19 +159,19 @@ button:focus-visible {
 #assemble-run-btn {
     background: var(--important-button-bgc);
     color: var(--surface-text-c);
-    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow);
 }
 
 #assemble-run-btn:hover {
     background: var(--button-hover-bgc);
     color: var(--button-text-c);
-    box-shadow: 0 var(--button-elevation) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow);
 }
 
 #assemble-run-btn:active {
     background: var(--button-active-bgc);
     transform: translateY(1px);
-    box-shadow: 0 var(--button-elevation-pressed) 0 var(--button-shadow-c);
+    box-shadow: var(--button-shadow-pressed);
 }
 
 /* Menu */
@@ -181,6 +187,10 @@ button:focus-visible {
     border-radius: 4px;
     box-shadow: none;
     color: var(--button-text-c);
+    font-size: 20px;
+    height: 24px;
+    min-width: 72px;
+    width: 72px;
 }
 
 .menu-dropdown {
@@ -251,7 +261,7 @@ button:focus-visible {
     display: flex;
     flex: 1;
     flex-direction: column;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     min-height: 200px;
     position: relative;
@@ -270,7 +280,7 @@ button:focus-visible {
 .opcodes-column,
 .assembly-column {
     color: var(--editable-text-fgc);
-    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     max-height: 100%;
     line-height: 12px;
@@ -297,7 +307,7 @@ button:focus-visible {
     border-right: 1px solid var(--border-c);
     color: var(--surface-muted-text-c);
     flex: 0 0 53px;
-    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
     line-height: 12px;
     overflow: hidden;
@@ -426,7 +436,7 @@ button:focus-visible {
     font-size: calc(360px / 18);
 }
 .screen-char:not(.sinclair-font) {
-    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-mono);
     font-size: calc(360px / 22);
 }
 
@@ -514,7 +524,7 @@ textarea,
     border: 1px solid var(--border-c);
     color: var(--editable-text-fgc);
     flex: 1;
-    font-family: monospace;
+    font-family: var(--font-mono);
     padding: 10px;
 }
 
@@ -826,31 +836,40 @@ textarea {
 .header-items {
     position: absolute;
     right: 6px;
-    top: 2px;
+    top: 4px;
     z-index: 1000;
     display: flex;
     gap: 2px;
 }
 
-.header-item {
-    font-size: 12px;
-    height: 24px;
-    min-width: 72px;
-    width: 72px;
-}
-
 /* Buttons inside h3 headings should stay inline */
 h3 .header-item {
     display: inline-flex;
-    margin-left: 8px;
+    margin-left: 0;
     vertical-align: middle;
-    min-width: 72px;
-    width: 72px;
-    height: auto;
-    font-size: 14px;
     padding: 2px 6px;
     position: relative;
     z-index: 10;
+    flex: 0 0 auto;
+}
+
+/* Right-aligned, larger header buttons for console & listing sections
+   Consolidated to avoid duplication while preserving per-section behavior. */
+.console-section h3,
+.listing-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.console-section h3 {
+    /* Single expand button should sit at the far right */
+    justify-content: space-between;
+}
+
+.listing-section h3 .header-item:first-of-type {
+    /* push the first header-item to the right so the group stays together */
+    margin-left: auto;
 }
 
 /* Debug */

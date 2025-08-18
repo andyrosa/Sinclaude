@@ -1,0 +1,12 @@
+{
+  "name": "sinclaude",
+  "version": "1.0.0",
+  "description": "Z80 emulator and assembler project",
+  "private": true,
+  "browserslist": [
+    "defaults",
+    "not ie 11",
+    "not chrome <= 109",
+    "not ios_saf <= 15.8"
+  ]
+}

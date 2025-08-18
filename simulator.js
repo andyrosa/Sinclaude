@@ -13,7 +13,6 @@ const sinclairBlockChars = [6, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22];
 
 class Simulator {
   constructor() {
-    this.assembler = new Z80Assembler();
     this.cpu = new Z80CPU();
     this.memory = new Uint8Array(MEMORY_SIZE);
     this.ioMap = new Uint8Array(256);
@@ -997,7 +996,8 @@ class Simulator {
   }
 
   benchmarkProgram(assemblyCode) {
-    const assemble = this.assembler.assemble(assemblyCode);
+    const assembler = new Z80Assembler();
+    const assemble = assembler.assemble(assemblyCode);
 
     if (assemble.success) {
       const benchMemory = new Uint8Array(MEMORY_SIZE);
@@ -1377,8 +1377,21 @@ class Simulator {
     this.fastMode = !this.fastMode;
     const toggleButton = document.getElementById("speedToggle");
     if (toggleButton) {
-      toggleButton.textContent = this.fastMode ? "→ Slow" : "→ Fast";
+      toggleButton.textContent = this.getSpeedToggleLabel();
+      toggleButton.title = this.getSpeedToggleTitle();
     }
+  }
+  
+  getSpeedToggleLabel() {
+    return this.fastMode ? "→ SLOW" : "→ FAST";
+  }
+
+  getSpeedToggleTitle() {
+    return "Toggles screen rendering only. On the ZX-81 this gave ~300% speedup; in Sinclaude it has almost no performance effect.";
+  }
+
+  getResetButtonTitle() {
+    return "Resets CPU: sets Program Counter (PC) to the program's load address and resets the Stack Pointer (SP).";
   }
   // Timer management methods
   createTimer(callback, interval, isInterval = true) {
@@ -1781,8 +1794,8 @@ class Simulator {
   assembleAndRun() {
     const sourceCode = this.getAssemblyCode();
     const machineCodeDiv = document.getElementById("machineCode");
-
-    const result = this.assembler.assemble(sourceCode);
+    const assembler = new Z80Assembler();
+    const result = assembler.assemble(sourceCode);
     this.loadAddress = result.loadAddress;
 
     if (result.success) {
@@ -1816,8 +1829,7 @@ class Simulator {
       }
       this.lastPC = null;
 
-      this.assembler.useHexFormat = this.magazineListingHexMode;
-      machineCodeDiv.textContent = this.assembler.generateMachineCodeListing(
+      machineCodeDiv.textContent = assembler.generateMachineCodeListing(
         result.instructionDetails,
         result.loadAddress
       );
@@ -1874,43 +1886,56 @@ class Simulator {
       return;
     }
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentEncoded = urlParams.get("asm");
+    const desiredEncoded = !sourceCode ? null : btoa(encodeURIComponent(sourceCode));
+
+    // If no change would occur, do nothing silently
+    if (currentEncoded === desiredEncoded) {
+      return;
+    }
+
+    // file:// protocol doesn't support history updates.
+    if (window.location.protocol === "file:") {
+      userMessage(
+        "Saving program to query params not implemented for file://."
+      );
+      return;
+    }
+
     try {
+
       const newUrl = new URL(window.location);
 
-      if (!sourceCode || sourceCode.trim() === "") {
+      if (desiredEncoded === null) {
         // Remove asm parameter when clearing
         newUrl.searchParams.delete("asm");
       } else {
         // Set asm parameter when there's code
-        const maxUrlLength = 2048 - 100;
+        const maxUrlLength = 32779;
         const baseUrl =
           window.location.origin + window.location.pathname + "?asm=";
-        const encoded = btoa(encodeURIComponent(sourceCode));
-        const totalLength = baseUrl.length + encoded.length;
+        const totalLength = baseUrl.length + desiredEncoded.length;
 
         if (totalLength > maxUrlLength) {
           const overage = totalLength - maxUrlLength;
           userMessage(
-            `Source code too large for URL - not updated (${totalLength} bytes, ${overage} over ${maxUrlLength} limit)`
+            `Source code was not encoded on URL because it's too large (${totalLength} bytes, ${overage} over ${maxUrlLength} limit). See Docs.`
           );
           return;
         }
 
-        //TODO this is not visible/useful on file:?
-
-        newUrl.searchParams.set("asm", encoded);
+        newUrl.searchParams.set("asm", desiredEncoded);
       }
 
-      // Only attempt history update for protocols that support it
-      if (window.location.protocol !== "file:") {
-        try {
-          window.history.replaceState(null, "", newUrl);
-        } catch (historyError) {
-          userMessageAboutBug(
-            "Failed to update URL history",
-            historyError.message
-          );
-        }
+      // History update (supported on non-file protocols)
+      try {
+        window.history.replaceState(null, "", newUrl);
+      } catch (historyError) {
+        userMessageAboutBug(
+          "Failed to update URL history",
+          historyError.message
+        );
       }
     } catch (e) {
       userMessageAboutBug("Failed to update URL", e.message);
@@ -1941,7 +1966,6 @@ class Simulator {
     return false;
   }
 
-  // Check if URL updates should be disabled
   isUrlUpdateDisabled() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get("asm") === "dont";
@@ -2027,9 +2051,9 @@ class Simulator {
       case STATE.FREE_RUNNING:
         container.innerHTML = `
                     <button onclick="sinclaude.breakRequest()">Break</button>
-                    <button onclick="sinclaude.resetRequest()">Reset</button>
-                    <button id="speedToggle" onclick="sinclaude.toggleSpeed()">${
-                      this.fastMode ? "→ Slow" : "→ Fast"
+                    <button onclick="sinclaude.resetRequest()" title="${this.getResetButtonTitle()}">Reset</button>
+                    <button id="speedToggle" onclick="sinclaude.toggleSpeed()" title="${this.getSpeedToggleTitle()}">${
+                      this.getSpeedToggleLabel()
                     }</button>
                 `;
         break;
@@ -2037,7 +2061,7 @@ class Simulator {
       case STATE.STEPPING:
         container.innerHTML = `
                     <button onclick="sinclaude.stepRequest()">Step</button>
-                    <button onclick="sinclaude.resetRequest()">Reset</button>
+                    <button onclick="sinclaude.resetRequest()" title="${this.getResetButtonTitle()}">Reset</button>
                     <button onclick="sinclaude.runRequest()">Run</button>
                 `;
         break;
@@ -2519,7 +2543,7 @@ function toggleButtonCaptionEdit() {
     gameButtons.forEach((button) => button.classList.add("edit-mode"));
   } else {
     button_caption_edit_toggle.textContent =
-      "Click here to set the key sent when you click each button";
+      "Customize button-to-key mapping";
     button_caption_edit_toggle.classList.remove("active");
     gameButtons.forEach((button) => button.classList.remove("edit-mode"));
   }

@@ -2,7 +2,7 @@ const SPACE_INVADER_ASM = `
 ORG 0
 
 start:
-  JR game_start
+  JR init_game
 
 ;constants
 FALSE               EQU 0
@@ -30,11 +30,11 @@ KEYBOARD_PORT       EQU 1
 BEEP_10HZ_PORT      EQU 2
 BEEP_MS_PORT        EQU 3
 
-MISSILE_10HZ        EQU 80
-MISSILE_DURATION    EQU 1
+MISSILE_BEEP_10HZ   EQU 160
+MISSILE_BEEP_MS     EQU 2
 
-BOMB_10HZ           EQU 20
-BOMB_DURATION       EQU 1
+BOMB_BEEP_10HZ      EQU 20
+BOMB_BEEP_MS        EQU 4
 
 PLAYER_ROW          EQU SCREEN_ROWS-3
 PLAYER_START_COL    EQU SCREEN_COLS/2
@@ -52,7 +52,7 @@ FRAME_DELAY_COUNT   EQU 2
 LEVEL_INCREMENT     EQU 3
 INVADER_MOVE_DELAY  EQU 2
 
-;vars
+;vars allocated and set to starting values even tho they get overwritten on init_game
 player_col:             DB PLAYER_START_COL
 invader_col:            DB INVADER_START_COL
 invader_start_row:      DB INITIAL_INVADER_ROW
@@ -70,8 +70,47 @@ invisible_mode:         DB FALSE
 random_seed:            DB 0
 invader_move_delay_cnt: DB 0
 
-game_start:
-  CALL clear_screen
+init_game:
+  LD   A, PLAYER_START_COL
+  LD   (player_col), A
+  LD   A, INVADER_START_COL
+  LD   (invader_col), A
+  
+  LD   A, (player_won)
+  AND  A
+  JR   Z, reset_invader_position
+  
+  ; Player won - advance to next level
+  LD   A, (invader_start_row)
+  ADD  A, LEVEL_INCREMENT
+  CP   PLAYER_ROW - 2
+  JR   C, set_new_start_row
+  LD   A, INITIAL_INVADER_ROW
+  JR   set_new_start_row
+  
+reset_invader_position:
+  ; Aliens won - reset to initial position
+  LD   A, INITIAL_INVADER_ROW
+  
+set_new_start_row:
+  LD   (invader_start_row), A
+  LD   (invader_row), A
+  
+  LD   A, MOVE_RIGHT
+  LD   (invader_dir), A
+  XOR  A
+  LD   (missile_col), A
+  LD   A, MISSILE_OFF_ROW
+  LD   (missile_row), A
+  XOR  A
+  LD   (missile_active), A
+  LD   (bomb_col), A
+  LD   (bomb_row), A
+  LD   (is_bomb_active), A
+  LD   (game_over), A
+  LD   (player_won), A
+  LD   (invisible_mode), A
+  LD   (invader_move_delay_cnt), A
 
 game_loop:
   LD   A, (game_over)
@@ -141,9 +180,9 @@ fire_missile:
   LD   (missile_active), A
   
   ; Play missile sound
-  LD   A, MISSILE_10HZ
+  LD   A, MISSILE_BEEP_10HZ
   OUT  (BEEP_10HZ_PORT), A
-  LD   A, MISSILE_DURATION
+  LD   A, MISSILE_BEEP_MS 
   OUT  (BEEP_MS_PORT), A
   RET
 
@@ -253,9 +292,9 @@ random_bomb_drop:
   LD   (is_bomb_active), A
   
   ; Play bomb sound
-  LD   A, BOMB_10HZ
+  LD   A, BOMB_BEEP_10HZ
   OUT  (BEEP_10HZ_PORT), A
-  LD   A, BOMB_DURATION
+  LD   A, BOMB_BEEP_MS 
   OUT  (BEEP_MS_PORT), A
   RET
 
@@ -551,56 +590,12 @@ wait_for_key_release:
   CP   KBD_NO_KEY_PRESSED
   JR   NZ, wait_for_key_release
 
-  CALL restart_game
-  JP   game_loop
+  JP   init_game
 
 humans_won_msg:   DB "          HUMANS WON!           "
 invaders_won_msg: DB "         Invader won :(         "
 press_to_play:    DB "     PRESS W TO PLAY AGAIN      "
 controls_msg:     DB "   A=LEFT D=RIGHT SPACE=FIRE    "
-
-restart_game:
-  LD   A, PLAYER_START_COL
-  LD   (player_col), A
-  LD   A, INVADER_START_COL
-  LD   (invader_col), A
-  
-  LD   A, (player_won)
-  AND  A
-  JR   Z, reset_invader_position
-  
-  ; Player won - advance to next level
-  LD   A, (invader_start_row)
-  ADD  A, LEVEL_INCREMENT
-  CP   PLAYER_ROW - 2
-  JR   C, set_new_start_row
-  LD   A, INITIAL_INVADER_ROW
-  JR   set_new_start_row
-  
-reset_invader_position:
-  ; Aliens won - reset to initial position
-  LD   A, INITIAL_INVADER_ROW
-  
-set_new_start_row:
-  LD   (invader_start_row), A
-  LD   (invader_row), A
-  
-  LD   A, MOVE_RIGHT
-  LD   (invader_dir), A
-  XOR  A
-  LD   (missile_col), A
-  LD   A, MISSILE_OFF_ROW
-  LD   (missile_row), A
-  XOR  A
-  LD   (missile_active), A
-  LD   (bomb_col), A
-  LD   (bomb_row), A
-  LD   (is_bomb_active), A
-  LD   (game_over), A
-  LD   (player_won), A
-  LD   (invisible_mode), A
-  LD   (invader_move_delay_cnt), A
-  RET
 
   END start
 
