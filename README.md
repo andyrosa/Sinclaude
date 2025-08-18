@@ -14,15 +14,16 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - Pretty fast CPU emulation 
 - Single-step and continuous execution modes
 - Register, stack, and performance counter display
-- ZX81-style screen buffer (32x24) with block characters and (Spectrum) lowercase characters
-- Character codes 128-255 display inverted monochrome 'colors' 
-- Configurable retro vs traditional fonts
-- Customizable button press to keyboard key mapping
-- Beep functionality (not available on ZX81 or Spectrum)
+- ZX81-style screen buffer (32x24) 
+- Block characters and (Spectrum) lowercase characters
+- Characters 128–255 render in inverted monochrome
+- Configurable retro and traditional font styles
+- Configurable mapping from on-screen buttons to keyboard keys
+- Beep functionality (absent on real ZX81 and Spectrum)
 - Share and save small programs using serverless URL
-- Can run from the file system (no backend/server/node needed)
-- Extensive built-in assembler and simulator tests
-- Narrow viewport (≤768px) hides less-context-relevant assembly-area buttons and auto-collapses sections in stepping mode
+- Runs directly from the file system — no server or Node required
+- For screens less than 768 pixels wide the UI hides less-relevant assembly buttons and auto-collapses sections in stepping mode.
+- 3 sample programs
 
 ## Technical Details
 
@@ -38,14 +39,14 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 
 ## Usage
 
-1. Open `index.html` in a web browser and click the button to open the simulator, or open `simulator.html` directly. Both can be run directly from disk, without a web server.
-2. Type Z80 assembly code in the input area, or click a sample program button:
-   - **Benchmark:** Performance test showing an incrementing counter
-   - **Basic:** Simple test program with register operations (starts halted for stepping)
-   - **Space Invader:** Playable game
-3. Click "Assemble and Run" to compile and execute the code (screen clears automatically)
-4. Use "Break" to switch to single instruction execution
-5. Use "Fast" to disable screen rendering for slightly better performance
+1. Open `simulator.html` directly in a web browser, or open `index.html` and click the simulator button.
+2. The **Default** performance test program loads automatically. To use something else:
+   - Click **Clear** to write your own Z80 assembly code, or
+   - Click **Basics** (register operations demo, starts halted) or **Space Invader** (playable micro-game)
+3. Click "Assemble and Run" to compile and execute the code
+4. Use "Break" to pause and switch to single-step mode
+5. Use "Run" to resume continuous execution
+6. Use "Fast" to disable screen updates for slighly better performance
 
 ### Making a beep sound
 
@@ -57,78 +58,76 @@ OUT (3), A        ; Set duration.
 ```
 A new sound plays on the next screen refresh. A new sound does not cancel other sounds being played.
 
-### Timing with Frame Counter
+### Delaying using the Frame Counter
 
 ```assembly
-; Wait approximately 1 second (60 frames at 60Hz)
-LD A, 0
-OUT (0), A        ; Reset frame counter
+; Wait approximately 1/30ths of a second
 WAIT_LOOP:
 IN A, (0)         ; Read frame counter
-CP 60             ; Wait for 60 frames
+CP 2              ; Wait for 2 frames
 JR C, WAIT_LOOP   ; Continue waiting if less than 60
+XOR A
+OUT (0), A        ; Reset frame counter
 ```
 This feature is useful for slowing down game loops.
 
 ### Saving Programs
 
-When you assemble a program, the URL automatically updates to include the encoded program. With this URL you can:
+When you assemble a small program, the URL automatically updates to include the encoded program. With this URL you can:
 - Bookmark URLs to save your programs
 - Share the URL with others to share your program
-- If the assembly program exceeds about 1K of text, it will not generate a URL because of limitations on URL size. 16K of RAM won’t help with this limitation.
+- If the assembly program exceeds about 1K of text, it will not generate a URL because of limitations on URL size. A 16K RAM pack won’t fix this browser limitation.
 
 ### Assembler features
 - Two-pass assembly process.
 - Z80 instructions supported include most variants of:
-  - Load instructions (LD) with immediate values and register transfers
+  - Load instructions (LD) 
   - Arithmetic operations (ADD, SUB, INC, DEC)
-  - Control flow (CALL, RET, JP, JR, DJNZ) with conditional variants
+  - Control flow (CALL, RET, JP, JR, DJNZ)
   - Logic operations (AND, OR, XOR, CP)
   - Stack operations (PUSH, POP)
   - Block operations (LDIR)
-- Assembler directives (ORG, EQU, DB, DEFW, DEFS, END) (more than I ever had)
+- Assembler directives (ORG, EQU, DB, DEFW, DEFS, END) (more than I ever had in the real device)
 - Label support with arithmetic expressions
 - Multiple number formats (decimal, hex, binary)
 - String literals in data directives
 - Error reporting with line numbers
-- Machine code output that includes line numbers, decimal data, and checksums, perfect for sharing in magazine articles in publications like 'Sinclair User' and 'Your Computer' before GitHub was invented
+- Machine code output with line numbers, decimal data, and checksums — perfect for magazine listings in 'Sinclair User' and 'Your Computer' before GitHub existed.
 
-## Application States
+## Emulator States
 - App loads in the state "state_not_ready".
-- If app detects an "asm" param in the URL, it converts its value into an assembly listing.
+- If the URL contains an "asm" parameter, the app loads it as assembly code.
 - If it does not, it loads the default assembly.
 - If the user clicks "Assemble and Run" and it succeeds:
-  - the program counter is set to the lowest ORG (or 0)
+  - the program counter is set to the lowest ORG (or 0 if none is used)
   - SP is set to 65535
   - Memory and registers are not cleared
-  - The state changes to state_free_running
-- The buttons available in state_free_running are:
-  - "Break": switches the state to state_stepping
+  - The emulator state changes to "state_free_running"
+- The buttons available in "state_free_running" are:
+  - "Break": switches the state to "state_stepping"
   - "Reset": resets the program counter to the starting value
   - "Fast": disables screen rendering, making emulation a tiny bit faster
   - "Slow": re-enables screen rendering
-- The buttons available in state_stepping are:
+- The buttons available in "state_stepping" are:
   - "Step": executes one instruction and stays in stepping mode
   - "Reset": resets the program counter as above
-  - "Run": switches the state to state_free_running
+  - "Run": switches the state to "state_free_running"
 
 ## Project Files
 
 ### Core Interface:
-- `index.html`: A retro landing page that includes this document
-- `README.md`: This documentation
 - `simulator.html`: Main web interface with HTML structure and script loading
 - `simulator.js`: Main simulator logic and controller
 
 ### Project Infrastructure:
-- `boot.js`: Application initialization and module loading
+- `boot.js`: Script loader and dependency manager — loads all JS files sequentially
 - `ui.js`: User interface controls and event handling
 - `scroll_target.js`: Scroll positioning and navigation utilities
 - `styles.css`: CSS styling for the web interface
 - `constants_and_css_vars.js`: Core configuration values and CSS variables
 - `console-utils.js`: Logging infrastructure
 - `clipboard-utils.js`: Clipboard functionality utilities
-- `initialization.js`: Application bootstrap and setup
+- `initialization.js`: Application startup handler — initializes the simulator after all scripts load
 - `version.js`: Build version information
 - `version_update.js`: Version management script
 
@@ -151,6 +150,7 @@ When you assemble a program, the URL automatically updates to include the encode
 - `agent.md`: Development guidelines and rules for AI-assisted coding
 
 ### Documentation:
+- `index.html`: A retro landing page that includes this document
 - `README.md`: This documentation (also listed under Core Interface)
 - `Assembly Button Visibility Flow.md`: UI behavior documentation
 
@@ -160,48 +160,53 @@ When you assemble a program, the URL automatically updates to include the encode
 
 ## Build System
 
-The build process automatically updates `version.js` with current build information including timestamp, commit hash, and branch. The running application monitors `version.js` every few seconds and offers users the option to refresh if a new version is detected, enabling seamless updates during development.
+The build process automatically updates `version.js` with current build information including timestamp, commit hash, and branch. `version-update.js` monitors `version.js` every few seconds and offers users the option to refresh if a new version is detected, enabling quick feedback during development.
 
 ## Testing
 
 The project runs two test suites:
 
 ### Z80 Assembler Tests (400+ tests)
-Example of a test:
+Examples:
 ```javascript
 //assembly, expected output
 test("JP 1234H", [0xc3, 0x34, 0x12]);
+test('DB "Hello"', [72, 101, 108, 108, 111]);
 ```
 
 ### Z80 Emulator Tests (700+ tests)  
-Example of a test:
+Examples:
 ```javascript
-//assembly, expected post-conditions
+//assembly, expected CPU post-conditions
 test("JP 1234H", "pc=0x1234");
+test("LD BC, 1234H\nLD A, 0FFH\nLD (BC), A", 
+     "a=0xFF, b=0x12, c=0x34, [0x1234]=0xFF");
+test("XOR A", "carry=false, zero=false, a=0x00");
+test("CCF", "carry=flip");
 ```
-**Verified post-conditions:** A,B,C,D,E,H,L registers, PC, SP, zero and carry flags, CPU halted state, memory content, I/O ports
+**Available post-conditions:** A,B,C,D,E,H,L registers, PC, SP, zero and carry flags, CPU halted state, memory content, I/O ports
 
 ## Current Limitations
 
-- Many Z80 instructions not implemented (for instance LD B, C might exist, but not LD C, B)
-- Minimal flag handling - just C and Z
-- R register not simulated or tested
-- No ROM emulation. Many rabbit holes avoided. I saw again why many of us love writing simulators/emulators/game engines
+- Many Z80 instructions not implemented
+- Only C and Z flags
+- Registers IX, IY and R not assembled or simulated
+- No RST or ROM emulation. Many rabbit holes avoided. I saw again why many of us love writing simulators/emulators/game engines
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
 - It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you have a need for speed
 - The sample assembly programs are not optimized.
 - The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes
 
 ## Known Issues
-- Performance varies significantly: 1 to 50 MIPS, not clear why.
+- Performance varies significantly: 1 to 75 MIPS, not clear why; perhaps JIT, anti-virus, or browser extensions.
 - The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences.
-- UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices is much harder than testing opcodes.
+- The UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices and modes is much harder than testing opcodes.
   
 ## Easter Eggs
 
 Since you got this far, might as well spoil the Easter eggs:
 
-- **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation.
+- **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation, one-shotted by Claude.
 - **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs.
 
 ## About This Project
