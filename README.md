@@ -11,10 +11,10 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 ## Features
 
 - Pretty good Z80 assembler
-- Pretty fast CPU emulation 
+- Pretty fast CPU emulation
 - Single-step and continuous execution modes
 - Register, stack, and performance counter display
-- ZX81-style screen buffer (32x24) 
+- ZX81-style screen buffer (32x24)
 - Block characters and (Spectrum) lowercase characters
 - Characters 128–255 render in inverted monochrome
 - Configurable retro and traditional font styles
@@ -22,16 +22,18 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - Beep functionality (absent on real ZX81 and Spectrum)
 - Share and save small programs using serverless URL
 - Runs directly from the file system — no server or Node required
-- For screens less than 768 pixels wide the UI hides less-relevant assembly buttons and auto-collapses sections in stepping mode.
+- For screens less than 768 pixels wide the UI hides less-relevant assembly buttons and auto-collapses sections in stepping mode
 - 3 sample programs
 
 ## Technical Details
 
 ### Memory Map:
+
 - 64K of RAM (no ROM)
-- To simplify, screen address is fixed at 60000, rows are full width, and there are no HALT bytes.
+- To simplify, screen address is fixed at 60000, rows are full width, and there are no HALT bytes
 
 ### I/O Port Map:
+
 - **Port 0:** Frame counter: increments each display refresh (~60Hz), useful for timing
 - **Port 1:** Keyboard input: reads current key press
 - **Port 2:** Beep frequency port: in units of 10Hz
@@ -39,14 +41,14 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 
 ## Usage
 
-1. Open `simulator.html` directly in a web browser, or open `index.html` and click the simulator button.
+1. Open `simulator.html` directly in a web browser, or open `index.html` and click the simulator button
 2. The **Default** performance test program loads automatically. To use something else:
    - Click **Clear** to write your own Z80 assembly code, or
    - Click **Basics** (register operations demo, starts halted) or **Space Invader** (playable micro-game)
 3. Click "Assemble and Run" to compile and execute the code
 4. Use "Break" to pause and switch to single-step mode
 5. Use "Run" to resume continuous execution
-6. Use "Fast" to disable screen updates for slighly better performance
+6. Use "Fast" to disable screen updates for slightly better performance
 
 ### Making a beep sound
 
@@ -54,8 +56,9 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 LD A, 44          ; 440Hz (44 * 10Hz)
 OUT (2), A        ; Set frequency
 LD A, 100         ; 100ms duration
-OUT (3), A        ; Set duration.
+OUT (3), A        ; Set duration
 ```
+
 A new sound plays on the next screen refresh. A new sound does not cancel other sounds being played.
 
 ### Delaying using the Frame Counter
@@ -69,6 +72,7 @@ JR C, WAIT_LOOP   ; Continue waiting if less than 60
 XOR A
 OUT (0), A        ; Reset frame counter
 ```
+
 This feature is useful for slowing down game loops.
 
 ### Saving Programs
@@ -79,9 +83,10 @@ When you assemble a small program, the URL automatically updates to include the 
 - If the assembly program exceeds about 1K of text, it will not generate a URL because of limitations on URL size. A 16K RAM pack won’t fix this browser limitation.
 
 ### Assembler features
-- Two-pass assembly process.
+
+- Two-pass assembly process
 - Z80 instructions supported include most variants of:
-  - Load instructions (LD) 
+  - Load instructions (LD)
   - Arithmetic operations (ADD, SUB, INC, DEC)
   - Control flow (CALL, RET, JP, JR, DJNZ)
   - Logic operations (AND, OR, XOR, CP)
@@ -92,12 +97,12 @@ When you assemble a small program, the URL automatically updates to include the 
 - Multiple number formats (decimal, hex, binary)
 - String literals in data directives
 - Error reporting with line numbers
-- Machine code output with line numbers, decimal data, and checksums — perfect for magazine listings in 'Sinclair User' and 'Your Computer' before GitHub existed.
+- Machine code output with line numbers, decimal data, and checksums — perfect for magazine listings in 'Sinclair User' and 'Your Computer' before GitHub existed
 
 ## Emulator States
-- App loads in the state "state_not_ready".
-- If the URL contains an "asm" parameter, the app loads it as assembly code.
-- If it does not, it loads the default assembly.
+- App loads in the state "state_not_ready"
+- If the URL contains an "asm" parameter, the app loads it as assembly code
+- If it does not, it loads the default assembly
 - If the user clicks "Assemble and Run" and it succeeds:
   - the program counter is set to the lowest ORG (or 0 if none is used)
   - SP is set to 65535
@@ -167,6 +172,7 @@ The build process automatically updates `version.js` with current build informat
 The project runs two test suites:
 
 ### Z80 Assembler Tests (400+ tests)
+
 Examples:
 ```javascript
 //assembly, expected output
@@ -174,7 +180,8 @@ test("JP 1234H", [0xc3, 0x34, 0x12]);
 test('DB "Hello"', [72, 101, 108, 108, 111]);
 ```
 
-### Z80 Emulator Tests (700+ tests)  
+### Z80 Emulator Tests (700+ tests)
+
 Examples:
 ```javascript
 //assembly, expected CPU post-conditions
@@ -184,6 +191,7 @@ test("LD BC, 1234H\nLD A, 0FFH\nLD (BC), A",
 test("XOR A", "carry=false, zero=false, a=0x00");
 test("CCF", "carry=flip");
 ```
+
 **Available post-conditions:** A,B,C,D,E,H,L registers, PC, SP, zero and carry flags, CPU halted state, memory content, I/O ports
 
 ## Current Limitations
@@ -191,24 +199,26 @@ test("CCF", "carry=flip");
 - Only the C and Z flags are implemented
 - Registers IX, IY and R not implemented
 - Many IN/OUT/CP/Rotate instructions not implemented
-- No interrupts (EI/DI/RST/NMI)
+- No interrupts (IM/EI/DI/RST, hardware NMI even tho it would be fun and useful)
 - No ROM emulation. Many rabbit holes avoided.
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
 - It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you develop a need for speed
 - The sample assembly programs are not optimized.
 - The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes. For one, nobody had time for all this typing or RAM to hold it.
+- Saving program to query params not implemented for file:// URLs.
 
 ## Known Issues
-- Performance varies significantly: 1 to 75 MIPS, not clear why; perhaps JIT, anti-virus, or browser extensions.
-- The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences.
-- The UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices and modes is much harder than testing opcodes.
-  
+
+- Performance varies significantly: 1 to 75 MIPS, not clear why; perhaps JIT, anti-virus, or browser extensions
+- The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences
+- The UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices and modes is much harder than testing opcodes
+
 ## Easter Eggs
 
 Since you got this far, might as well spoil the Easter eggs:
 
-- **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation, one-shotted by Claude.
-- **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs.
+- **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation, one-shotted by Claude
+- **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs
 
 ## About This Project
 

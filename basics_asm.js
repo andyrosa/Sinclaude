@@ -1,5 +1,5 @@
 const BASICS_ASM = `
-; Basics test
+; Basics test - Starts and halts so you can single-step
     SCREEN_START  EQU 60000
     TWO           EQU 2
     FOUR          EQU TWO*TWO

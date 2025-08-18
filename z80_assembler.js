@@ -404,81 +404,11 @@ class Z80Assembler {
      * @returns {object|null} A parsed line object or null for empty lines.
      */
     _parseLine(line, lineNum) {
-        // Handle different line formats:
-        // 1. "label: mnemonic operands" 
-        // 2. "label mnemonic operands" (for EQU)
-        // 3. "mnemonic operands" (no label)
-        
-        // First try: label with colon
-        let match = line.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*):(?:\s+([a-zA-Z_]+)(?:\s+(.*?))?)?\s*(?:;.*)?$/);
-        if (match) {
-            const [, label, mnemonic, operandStr] = match;
-            return this._buildParsedLine(lineNum, label, mnemonic, operandStr);
-        }
-        
-        // Second try: label without colon (for EQU statements)
-        match = line.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+(EQU)\s+(.*?)\s*(?:;.*)?$/i);
-        if (match) {
-            const [, label, mnemonic, operandStr] = match;
-            return this._buildParsedLine(lineNum, label, mnemonic, operandStr);
-        }
-        
-        // Third try: no label, just mnemonic and operands
-        match = line.match(/^\s*([a-zA-Z_]+)(?:\s+(.*?))?\s*(?:;.*)?$/);
-        if (match) {
-            const [, mnemonic, operandStr] = match;
-            return this._buildParsedLine(lineNum, null, mnemonic, operandStr);
-        }
-        
-        // No match - check if it's empty or comment
-        if (line.trim() === '' || line.trim().startsWith(';')) {
-            return null;
-        }
-        
-        this._reportError(lineNum, `Syntax error.`);
-        return null;
+        // Use the ExpressionParser for proper lexical analysis
+        const parser = new ExpressionParser(line, [], this.symbols, lineNum, this);
+        return parser.parseLine();
     }
     
-    _buildParsedLine(lineNum, label, mnemonic, operandStr) {
-        const result = { lineNum, label, mnemonic };
-
-        if (operandStr) {
-            // Special case for string literals to avoid splitting them by commas
-            const stringLiteralRegex = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g;
-            const placeholders = [];
-            let processedOperandStr = operandStr.replace(stringLiteralRegex, (match) => {
-                placeholders.push(match);
-                return `__STRING_PLACEHOLDER_${placeholders.length - 1}__`;
-            });
-            
-            result.operands = processedOperandStr
-                .split(',')
-                .map(op => op.trim())
-                .filter(op => op)
-                .map(op => {
-                    // Only restore if it's an exact match (pure string literal)
-                    const exactMatch = op.match(/^__STRING_PLACEHOLDER_(\d+)__$/);
-                    if (exactMatch) {
-                        return placeholders[parseInt(exactMatch[1], 10)];
-                    }
-                    
-                    // If it contains placeholders but isn't an exact match (i.e., it's an expression),
-                    // restore all placeholders in the expression
-                    if (op.includes('__STRING_PLACEHOLDER_')) {
-                        return op.replace(/__STRING_PLACEHOLDER_(\d+)__/g, (match, index) => {
-                            return placeholders[parseInt(index, 10)];
-                        });
-                    }
-                    
-                    return op;
-                });
-        } else {
-            result.operands = [];
-        }
-        
-        return result;
-    }
-
     /**
      * Finds the matching instruction definition for a parsed line.
      * @param {object} parsedLine - The output from _parseLine.
@@ -523,9 +453,7 @@ class Z80Assembler {
                     case Z80Assembler.OPERAND.IMM16:
                     case Z80Assembler.OPERAND.RELATIVE:
                         // These patterns match immediate values (not memory references)
-                        // Memory reference: entire operand is (expression) with balanced parens
-                        // Immediate: either no outer parens, or arithmetic with parens for grouping
-                        return !this._isMemoryReference(operand);
+                        return this._isImmediateValue(operand);
                     case Z80Assembler.OPERAND.MEM16:
                     case Z80Assembler.OPERAND.MEM8:
                         // These patterns match memory references: (expression)
@@ -1182,6 +1110,15 @@ class Z80Assembler {
     }
 
     /**
+     * Determines if an operand is an immediate value based on the grammar.
+     * immediate = arithmetic_expression
+     * This means anything that's not a memory reference or register.
+     */
+    _isImmediateValue(operand) {
+        return !this._isMemoryReference(operand);
+    }
+
+    /**
      * Determines if an operand represents a memory reference vs immediate value with parentheses.
      * Memory reference: (expression) - entire operand wrapped in balanced parentheses
      * Immediate: expressions that may contain parentheses for mathematical grouping
@@ -1315,28 +1252,18 @@ class Z80Assembler {
             
             // Only output row if we found bytes
             if (rowBytes.length > 0) {
-                if (this.useHexFormat) {
-                    // Address part (hex format)
-                    output += `${formatHex4(rowStartAddress)} `;
+            
+                // Calculate CRC16 for this line (address bytes + data bytes)
+                const addressBytes = [rowStartAddress & 0xFF, (rowStartAddress >> 8) & 0xFF];
+                const lineBytes = [...addressBytes, ...rowBytes];
+                const lineCRC16 = this._calculateCRC16(lineBytes);
 
-                    // Data column - hex values separated by commas (no CRC)
-                    const hexData = rowBytes.map(b => formatHex2(b)).join(',');
-                    output += `Data ${hexData}`;
-                } else {
-                    // Calculate CRC16 for this line (address bytes + data bytes)
-                    const addressBytes = [rowStartAddress & 0xFF, (rowStartAddress >> 8) & 0xFF];
-                    const lineBytes = [...addressBytes, ...rowBytes];
-                    const lineCRC16 = this._calculateCRC16(lineBytes);
+                // Address part (decimal)
+                output += `${rowStartAddress} `;
 
-                    // Address part (decimal)
-                    output += `${rowStartAddress} `;
-
-                    // Data column - decimal values separated by commas, plus line CRC16
-                    const decimalData = rowBytes.map(b => b.toString()).join(',');
-                    output += `Data ${decimalData},${lineCRC16}`;
-                }
-
-                output += '\n';
+                // Data column - decimal values separated by commas, plus line CRC16
+                const decimalData = rowBytes.map(b => b.toString()).join(',');
+                output += `Data ${decimalData},${lineCRC16}\n`;
             }
         }
 
@@ -1729,6 +1656,255 @@ class ExpressionParser {
     error(message) {
         this.assembler._reportError(this.lineNum, message);
     }
+
+    // === LINE PARSING METHODS ===
+
+    /**
+     * Parse a complete assembly line following the grammar:
+     * line = [ white_space ] [ statement ] [ comment ] EOL
+     * statement = [ code_label ] [ directive | instruction ] | constant_def
+     */
+    parseLine() {
+        this.pos = 0; // Reset position for line parsing
+        
+        this.skipWhitespace();
+        
+        // Handle empty lines or comment-only lines
+        if (this.pos >= this.expr.length || this.peek() === ';') {
+            return null;
+        }
+        
+        // Parse statement up to comment
+        return this.parseStatement();
+    }
+
+    /**
+     * Parse statement = [ code_label ] [ directive | instruction ] | constant_def
+     */
+    parseStatement() {
+        let label = null;
+        let mnemonic = null;
+        let operands = [];
+
+        // Try to parse an identifier (could be label or mnemonic)
+        if (this.isIdentifierStart(this.peek())) {
+            const identifier = this.parseIdentifier();
+            
+            this.skipWhitespace();
+            
+            // Check if we hit a comment
+            if (this.peek() === ';' || this.pos >= this.expr.length) {
+                // Just a standalone identifier (probably a label without colon)
+                return {
+                    lineNum: this.lineNum,
+                    label: null,
+                    mnemonic: identifier,
+                    operands: []
+                };
+            }
+            
+            // Check if it's a label (followed by colon)
+            if (this.peek() === ':') {
+                this.next(); // consume ':'
+                label = identifier;
+                this.skipWhitespace();
+                
+                // Check for comment after label
+                if (this.peek() === ';' || this.pos >= this.expr.length) {
+                    return {
+                        lineNum: this.lineNum,
+                        label: label,
+                        mnemonic: null,
+                        operands: []
+                    };
+                }
+                
+                // Parse mnemonic after label
+                if (this.isIdentifierStart(this.peek())) {
+                    mnemonic = this.parseIdentifier();
+                }
+            }
+            // Check if it's an EQU statement (label EQU value)
+            else if (this.peek() !== '' && this.isIdentifierStart(this.peek())) {
+                const nextIdentifier = this.parseIdentifier();
+                if (nextIdentifier.toUpperCase() === 'EQU') {
+                    label = identifier;
+                    mnemonic = nextIdentifier;
+                } else {
+                    // First identifier was the mnemonic, second was start of operands
+                    mnemonic = identifier;
+                    // Put back the second identifier as part of operands
+                    this.pos -= nextIdentifier.length;
+                }
+            }
+            // Otherwise, it's just a mnemonic
+            else {
+                mnemonic = identifier;
+            }
+        } else {
+            // Invalid content that doesn't start with an identifier
+            const remainingContent = this.expr.slice(this.pos).split(';')[0].trim();
+            if (remainingContent.length > 0) {
+                throw new Error(`Syntax error: '${remainingContent}'`);
+            }
+        }
+
+        // Parse operands if we have a mnemonic and haven't hit a comment
+        if (mnemonic && this.peek() !== ';') {
+            this.skipWhitespace();
+            if (this.pos < this.expr.length && this.peek() !== ';') {
+                operands = this.parseOperands();
+            }
+        }
+
+        // If we get here without finding valid syntax, it's an error
+        if (!label && !mnemonic) {
+            throw new Error(`Syntax error: invalid statement`);
+        }
+
+        return {
+            lineNum: this.lineNum,
+            label: label,
+            mnemonic: mnemonic,
+            operands: operands
+        };
+    }
+
+    /**
+     * Parse a single identifier
+     */
+    parseIdentifier() {
+        let identifier = '';
+        while (this.isIdentifierChar(this.peek())) {
+            identifier += this.next();
+        }
+        return identifier;
+    }
+
+    /**
+     * Parse operand list: operand { "," white_space operand }
+     */
+    parseOperands() {
+        const operands = [];
+        
+        while (this.pos < this.expr.length && this.peek() !== ';') {
+            this.skipWhitespace();
+            if (this.pos >= this.expr.length || this.peek() === ';') break;
+            
+            const operand = this.parseOperand();
+            if (operand !== null) {
+                operands.push(operand);
+            }
+            
+            this.skipWhitespace();
+            if (this.peek() === ',') {
+                this.next(); // consume comma
+                this.skipWhitespace();
+            } else {
+                break; // No more operands
+            }
+        }
+        
+        return operands;
+    }
+
+    /**
+     * Parse a single operand (can be register, memory ref, immediate, string literal)
+     */
+    parseOperand() {
+        this.skipWhitespace();
+        
+        if (this.pos >= this.expr.length) {
+            return null;
+        }
+        
+        // Handle string literals
+        if (this.peek() === '"') {
+            return this.parseStringLiteral();
+        }
+        
+        // Handle everything else (identifiers, numbers, expressions including parenthesized ones)
+        // Let parseExpressionOperand handle all arithmetic expressions, including (5+3)*2
+        return this.parseExpressionOperand();
+    }
+
+    /**
+     * Parse string literal
+     */
+    parseStringLiteral() {
+        const quote = this.next(); // consume opening quote
+        let content = quote;
+        
+        while (this.pos < this.expr.length && this.peek() !== quote) {
+            if (this.peek() === '\\') {
+                content += this.next(); // consume backslash
+                if (this.pos < this.expr.length) {
+                    content += this.next(); // consume escaped character
+                }
+            } else {
+                content += this.next();
+            }
+        }
+        
+        if (this.peek() === quote) {
+            content += this.next(); // consume closing quote
+        }
+        
+        return content;
+    }
+
+    /**
+     * Parse expression operand (everything up to comma, comment, or end)
+     */
+    parseExpressionOperand() {
+        const startPos = this.pos;
+        let content = '';
+        let parenDepth = 0;
+        let inString = false;
+        let stringChar = null;
+        
+        while (this.pos < this.expr.length) {
+            const char = this.peek();
+            
+            // Handle string boundaries
+            if (!inString && (char === '"' || char === "'")) {
+                inString = true;
+                stringChar = char;
+                content += this.next();
+                continue;
+            } else if (inString && char === stringChar) {
+                inString = false;
+                stringChar = null;
+                content += this.next();
+                continue;
+            } else if (inString) {
+                content += this.next();
+                continue;
+            }
+            
+            // Stop at comment if we're not inside a string
+            if (char === ';' && !inString) {
+                break;
+            }
+            
+            // Handle parentheses depth
+            if (char === '(') {
+                parenDepth++;
+            } else if (char === ')') {
+                parenDepth--;
+            }
+            
+            // Stop at comma if we're not inside parentheses
+            if (char === ',' && parenDepth === 0) {
+                break;
+            }
+            
+            content += this.next();
+        }
+        
+        return content.trim();
+    }
+
 }
 
 // Static utility method for loading opcodes into memory
