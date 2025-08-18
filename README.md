@@ -184,19 +184,19 @@ test("JP 1234H", "pc=0x1234");
 ## Current Limitations
 
 - Many Z80 instructions not implemented (for instance LD B, C might exist, but not LD C, B)
-- The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes
 - Minimal flag handling - just C and Z
 - R register not simulated or tested
 - No ROM emulation. Many rabbit holes avoided. I saw again why many of us love writing simulators/emulators/game engines
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
 - It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you have a need for speed
+- The sample assembly programs are not optimized.
+- The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes
 
 ## Known Issues
 - Performance varies significantly: 1 to 50 MIPS, not clear why.
 - The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences.
-- The sample assembly programs are not optimized.
-- UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly.
-
+- UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices is much harder than testing opcodes.
+  
 ## Easter Eggs
 
 Since you got this far, might as well spoil the Easter eggs:
