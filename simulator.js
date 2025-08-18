@@ -2448,8 +2448,8 @@ class Simulator {
 
     element.style.position = "fixed";
     element.style.top = "4vh";
-    element.style.left = "2vw";
-    element.style.width = "96vw";
+    element.style.left = "0";
+    element.style.width = "100vw";
     element.style.height = "96vh";
     element.style.zIndex = Z_INDEX.EXPANDED_ELEMENT;
     element.classList.add("expanded-element");
@@ -2459,6 +2459,7 @@ class Simulator {
     if (textarea) {
       const wheelHandler = (e) => {
         e.stopPropagation();
+        e.preventDefault();
       };
       textarea.addEventListener("wheel", wheelHandler, { passive: false });
       // Store handler reference for cleanup
