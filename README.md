@@ -206,6 +206,7 @@ test("CCF", "carry=flip");
 - The sample assembly programs are not optimized.
 - The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes. For one, nobody had time for all this typing or RAM to hold it.
 - Saving program to query params not implemented for file:// URLs.
+- URLs limited to 2000 characters even tho more might be possible
 
 ## Known Issues
 
