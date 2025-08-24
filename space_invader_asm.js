@@ -20,7 +20,6 @@ SCREEN_BASE         EQU 60000
 SCREEN_COLS         EQU 32
 SCREEN_ROWS         EQU 24
 SCREEN_BLANK_CHAR   EQU ' '
-RIGHTMOST_COL       EQU SCREEN_COLS-1
 SCREEN_SIZE         EQU SCREEN_COLS * SCREEN_ROWS
 BOTTOM_ROW          EQU SCREEN_ROWS-1
 MESSAGE_ROW         EQU SCREEN_ROWS/2
@@ -39,12 +38,14 @@ BOMB_BEEP_MS        EQU 4
 PLAYER_ROW          EQU SCREEN_ROWS-3
 PLAYER_START_COL    EQU SCREEN_COLS/2
 INITIAL_INVADER_ROW EQU 0
-INVADER_START_COL   EQU 1
+INVADER_MIN_COL     EQU 1
+INVADER_START_COL   EQU INVADER_MIN_COL
+INVADER_MAX_COL     EQU SCREEN_COLS-2
 MISSILE_OFF_ROW     EQU SCREEN_ROWS
 MOVE_RIGHT          EQU 1
 
 PLAYER_MIN_COL      EQU 1
-PLAYER_MAX_COL      EQU RIGHTMOST_COL-1
+PLAYER_MAX_COL      EQU SCREEN_COLS-2
 
 BOMB_DROP_THRESHOLD EQU 26
 FRAME_DELAY_COUNT   EQU 2
@@ -243,10 +244,10 @@ update_invader:
   LD   A, (invader_col)
   ADD  A, B
 
-  AND  A
-  JR   Z, invader_hit_left
-  CP   SCREEN_COLS
-  JR   Z, invader_hit_right
+  CP   INVADER_MIN_COL
+  JR   C, invader_hit_left
+  CP   INVADER_MAX_COL + 1
+  JR   NC, invader_hit_right
 
   LD   (invader_col), A
   JR   random_bomb_drop
@@ -260,7 +261,7 @@ invader_hit_left:
   NEG
   LD   (invader_dir), A
 
-  XOR  A
+  LD   A, INVADER_MIN_COL
   LD   (invader_col), A
   JR   random_bomb_drop
 
@@ -273,7 +274,7 @@ invader_hit_right:
   NEG
   LD   (invader_dir), A
 
-  LD   A, RIGHTMOST_COL
+  LD   A, INVADER_MAX_COL
   LD   (invader_col), A
 
 random_bomb_drop:
