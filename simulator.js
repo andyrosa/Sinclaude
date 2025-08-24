@@ -1912,7 +1912,7 @@ class Simulator {
         newUrl.searchParams.delete("asm");
       } else {
         // Set asm parameter when there's code
-        const maxUrlLength = 32779;
+        const maxUrlLength = 2000; // supposed to be 32K but erring at a lot less
         const baseUrl =
           window.location.origin + window.location.pathname + "?asm=";
         const totalLength = baseUrl.length + desiredEncoded.length;
