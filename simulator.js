@@ -1393,6 +1393,18 @@ class Simulator {
   getResetButtonTitle() {
     return "Resets CPU: sets Program Counter (PC) to the program's load address and resets the Stack Pointer (SP).";
   }
+
+  getBreakButtonTitle() {
+    return "Pauses execution and switches to single-step mode for debugging.";
+  }
+
+  getStepButtonTitle() {
+    return "Executes a single instruction and shows the result. Use for debugging and learning how assembly works.";
+  }
+
+  getRunButtonTitle() {
+    return "Resumes continuous execution from the current position.";
+  }
   // Timer management methods
   createTimer(callback, interval, isInterval = true) {
     const timerId = isInterval
@@ -2050,7 +2062,7 @@ class Simulator {
 
       case STATE.FREE_RUNNING:
         container.innerHTML = `
-                    <button onclick="sinclaude.breakRequest()">Break</button>
+                    <button onclick="sinclaude.breakRequest()" title="${this.getBreakButtonTitle()}">Break</button>
                     <button onclick="sinclaude.resetRequest()" title="${this.getResetButtonTitle()}">Reset</button>
                     <button id="speedToggle" onclick="sinclaude.toggleSpeed()" title="${this.getSpeedToggleTitle()}">${
                       this.getSpeedToggleLabel()
@@ -2060,9 +2072,9 @@ class Simulator {
 
       case STATE.STEPPING:
         container.innerHTML = `
-                    <button onclick="sinclaude.stepRequest()">Step</button>
+                    <button onclick="sinclaude.stepRequest()" title="${this.getStepButtonTitle()}">Step</button>
                     <button onclick="sinclaude.resetRequest()" title="${this.getResetButtonTitle()}">Reset</button>
-                    <button onclick="sinclaude.runRequest()">Run</button>
+                    <button onclick="sinclaude.runRequest()" title="${this.getRunButtonTitle()}">Run</button>
                 `;
         break;
     }
