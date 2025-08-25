@@ -199,14 +199,14 @@ test("CCF", "carry=flip");
 - Only the C and Z flags are implemented
 - Registers IX, IY and R not implemented
 - Many IN/OUT/CP/Rotate instructions not implemented
-- No interrupts (IM/EI/DI/RST, hardware NMI even tho it would be fun and useful)
+- No interrupts (IM/EI/DI/RST, hardware NMI even though it would be fun and useful)
 - No ROM emulation. Many rabbit holes avoided.
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
 - It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you develop a need for speed
 - The sample assembly programs are not optimized.
 - The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes. For one, nobody had time for all this typing or RAM to hold it.
 - Saving program to query params not implemented for file:// URLs.
-- URLs limited to 2000 characters even tho more might be possible
+- Saving program limited to 2000 characters even though more are possible
 
 ## Known Issues
 
@@ -214,10 +214,11 @@ test("CCF", "carry=flip");
 - The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences
 - The UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices and modes is much harder than testing opcodes
 
-## Easter Eggs
+## Easter Eggs/Hidden features
 
 Since you got this far, might as well spoil the Easter eggs:
 
+- **Character Set Verification:** Clicking the boot screen while the character set is rendering pauses the output.
 - **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation, one-shotted by Claude
 - **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs
 

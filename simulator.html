@@ -52,11 +52,11 @@
                 </div>
                 <div class="section-controls">
                     <div class="controls">
-                        <button type="button" class="clear-btn" onclick="sinclaude.clearAssembly()">Clear</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()">Load Default Program</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()">Load Basics Test</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()">Load 'Space Invader'</button>
-                        <button type="button" id="assemble-run-btn" onclick="sinclaude.assembleAndRun()">Assemble and Run</button>
+                        <button type="button" class="clear-btn" onclick="sinclaude.clearAssembly()" title="Clear the assembly editor">Clear</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()" title="Load a performance test that increments a counter and displays it in hexadecimal">Load Default Program</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Load a test program that demonstrates basic Z80 instructions - starts halted for single-stepping">Load Basics Test</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()" title="Load a playable Space Invader micro-game">Load 'Space Invader'</button>
+                        <button type="button" id="assemble-run-btn" onclick="sinclaude.assembleAndRun()" title="Compile the Z80 assembly code and start execution">Assemble and Run</button>
                     </div>
                 </div>
             </div>
@@ -95,7 +95,7 @@
             </div>
             <div class="section-controls">
                 <div class="controls">
-                    <button type="button" onclick="clearConsole()">Clear</button>
+                    <button type="button" onclick="clearConsole()" title="Clear the console output">Clear</button>
                 </div>
             </div>
         </div>
