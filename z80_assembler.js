@@ -302,7 +302,9 @@ class Z80Assembler {
                         if (parsed.label && parsed.operands.length === 1) {
                             const operand = parsed.operands[0];
                             if (operand.startsWith('"') && operand.endsWith('"')) {
-                                const stringLength = operand.length - 2; // Exclude quotes
+                                const rawStr = operand.slice(1, -1);
+                                const processedStr = this._processEscapeSequences(rawStr);
+                                const stringLength = processedStr.length;
                                 this.dbLengths[parsed.label.toUpperCase()] = stringLength;
                             }
                         }
@@ -604,7 +606,9 @@ class Z80Assembler {
         let size = 0;
         for (const op of operands) {
             if (op.startsWith('"') && op.endsWith('"')) {
-                size += op.length - 2; // Size is the character count
+                const rawStr = op.slice(1, -1);
+                const processedStr = this._processEscapeSequences(rawStr);
+                size += processedStr.length;
             } else {
                 size += (mnemonic.toUpperCase() === 'DEFW' ? 2 : 1);
             }
@@ -1649,7 +1653,7 @@ class ExpressionParser {
     }
     
     isIdentifierChar(c) {
-        return this.isAlphaNum(c) || c === '_';
+        return this.isAlphaNum(c) || c === '_' || c === "'";
     }
     
     // Report error through assembler
