@@ -799,7 +799,7 @@ class Simulator {
 
     const keyCodeOrNull = this.labelToKeyCodeOrNull(value);
 
-    if (keyCodeOrNull != null) {
+    if (keyCodeOrNull !== null) {
       this.setKey(keyCodeOrNull);
     } else {
       userMessageAboutBug(
@@ -1676,7 +1676,7 @@ class Simulator {
       this.portsDisplay.textContent = portValues.join(" ");
     }
     if (this.keyCodeCurrentDisplay) {
-      if (this.keyCodeCurrent == null) {
+      if (this.keyCodeCurrent === null) {
         this.keyCodeCurrentDisplay.textContent = "--";
       } else {
         const hex = formatHex2(this.keyCodeCurrent);
@@ -1698,7 +1698,7 @@ class Simulator {
     if (this.refreshRateDisplay) {
       this.refreshRateDisplay.textContent = Math.round(this.refreshRate);
     }
-    if (this.lastPC == null || regs.PC != this.lastPC) {
+    if (this.lastPC === null || regs.PC !== this.lastPC) {
       this.lastPC = regs.PC;
       if (this.lastPC !== this.highlightedPC && this.highlightedPC !== null) {
         this.clearHighlight();
@@ -2166,7 +2166,7 @@ class Simulator {
     if (this.runLoopInterval !== null) {
       userMessageAboutBug(
         "Already running - ignoring request",
-        "startContinuousExecution called while runLoopId != null"
+        "startContinuousExecution called while runLoopId !== null"
       );
       return;
     }

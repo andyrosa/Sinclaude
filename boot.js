@@ -1,7 +1,7 @@
 // Load version.js with fallback strategy: local first, then GitHub, then error
 function loadVersionWithCallback(callback) {
   // Remove any existing version.js script tags to prevent accumulation
-  var existingVersionScripts = document.querySelectorAll('script[src*="version.js"]');
+  const existingVersionScripts = document.querySelectorAll('script[src*="version.js"]');
   existingVersionScripts.forEach(function(script) {
     if (script.parentNode) {
       script.parentNode.removeChild(script);
@@ -9,7 +9,7 @@ function loadVersionWithCallback(callback) {
   });
 
   function loadVersionGitHubIO() {
-    var githubVersionScript = document.createElement("script");
+    const githubVersionScript = document.createElement("script");
     githubVersionScript.src =
       "https://andyrosa.github.io/Sinclaude/version.js?cb=" + Date.now();
     githubVersionScript.onload = function () {
@@ -28,7 +28,7 @@ function loadVersionWithCallback(callback) {
   }
 
   // First try to load from local folder
-  var localVersionScript = document.createElement("script");
+  const localVersionScript = document.createElement("script");
   localVersionScript.src = "version.js?cb=" + Date.now();
   localVersionScript.onload = function () {
     if (callback) callback();
@@ -49,11 +49,11 @@ function loadVersionWithCallback(callback) {
 })();
 
 function loadScripts() {
-  var cacheBust =
+  const cacheBust =
     typeof BUILD_VERSION_BY_YAML !== "undefined"
       ? BUILD_VERSION_BY_YAML().buildDate
       : Date.now();
-  var scripts = [
+  const scripts = [
     "console-utils.js",
     "clipboard-utils.js",
     "scroll_target.js",
@@ -71,7 +71,7 @@ function loadScripts() {
     "initialization.js",
   ];
 
-  var scriptIndex = 0;
+  let scriptIndex = 0;
 
   function loadNextScript() {
     if (scriptIndex >= scripts.length) {
@@ -79,8 +79,8 @@ function loadScripts() {
       return;
     }
 
-    var src = scripts[scriptIndex];
-    var script = document.createElement("script");
+    const src = scripts[scriptIndex];
+    const script = document.createElement("script");
     script.src = src + "?cb=" + cacheBust;
     script.onload = function () {
       scriptIndex++;

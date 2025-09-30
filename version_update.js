@@ -118,10 +118,10 @@ window.versionChecker = {
     }
   },
 
-  // Check for version update 
+  // Check for version update
   checkForVersionUpdate: function(callback) {
     loadVersionWithCallback(function() {
-      var newVersion = typeof BUILD_VERSION_BY_YAML !== "undefined" ? BUILD_VERSION_BY_YAML().buildDate : null;
+      const newVersion = typeof BUILD_VERSION_BY_YAML !== "undefined" ? BUILD_VERSION_BY_YAML().buildDate : null;
       
       if (newVersion && newVersion !== window.versionChecker.currentVersionTimestamp) {
         if (callback) callback(BUILD_VERSION_BY_YAML(), null);
