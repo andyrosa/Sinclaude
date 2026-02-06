@@ -38,11 +38,14 @@ class Z80CPU {
     }
 
     // Reset CPU to initial state
+    // NOTE: F register only implements Z (zero) and C (carry) flags.
+    // The real Z80 also has S (sign), H (half-carry), P/V (parity/overflow),
+    // and N (subtract) flags. Programs relying on those flags will not work correctly.
     reset() {
         this.registers = {
             A: 0, B: 0, C: 0, D: 0, E: 0, H: 0, L: 0,
             PC: 0, SP: 0xFFFF,
-            F: { Z: false, C: false }
+            F: { Z: false, C: false } // Partial: only Z and C implemented (see note above)
         };
         this.shadowRegisters = {
             A: 0, F: { Z: false, C: false }
@@ -837,11 +840,11 @@ class Z80CPU {
                 break;
             case 0xD3: // OUT (n), A
                 const outPort = this.fetchByte();
-                this.PortOut(outPort, this.registers.A);
+                this.OutPort(outPort, this.registers.A);
                 break;
             case 0xDB: // IN A, (n)
                 const inPort = this.fetchByte();
-                this.registers.A = this.PortIn(inPort);
+                this.registers.A = this.InPort(inPort);
                 break;
                 
             // AND instructions
@@ -973,32 +976,32 @@ class Z80CPU {
             case 0x28: // JR Z, n
                 const jrZOffset = this.fetchByte();
                 if (this.registers.F.Z) {
-                    this.registers.PC += (jrZOffset > 127) ? jrZOffset - 256 : jrZOffset;
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrZOffset > 127) ? jrZOffset - 256 : jrZOffset));
                 }
                 break;
             case 0x20: // JR NZ, n
                 const jrNzOffset = this.fetchByte();
                 if (!this.registers.F.Z) {
-                    this.registers.PC += (jrNzOffset > 127) ? jrNzOffset - 256 : jrNzOffset;
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrNzOffset > 127) ? jrNzOffset - 256 : jrNzOffset));
                 }
                 break;
             case 0x38: // JR C, n
                 const jrCOffset = this.fetchByte();
                 if (this.registers.F.C) {
-                    this.registers.PC += (jrCOffset > 127) ? jrCOffset - 256 : jrCOffset;
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrCOffset > 127) ? jrCOffset - 256 : jrCOffset));
                 }
                 break;
             case 0x30: // JR NC, n
                 const jrNCOffset = this.fetchByte();
                 if (!this.registers.F.C) {
-                    this.registers.PC += (jrNCOffset > 127) ? jrNCOffset - 256 : jrNCOffset;
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrNCOffset > 127) ? jrNCOffset - 256 : jrNCOffset));
                 }
                 break;
             case 0x10: // DJNZ n
                 this.registers.B = (this.registers.B - 1) & 0xFF;
                 const djnzOffset = this.fetchByte();
                 if (this.registers.B !== 0) {
-                    this.registers.PC += (djnzOffset > 127) ? djnzOffset - 256 : djnzOffset;
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((djnzOffset > 127) ? djnzOffset - 256 : djnzOffset));
                 }
                 break;
             case 0xCA: // JP Z, nn
@@ -1239,7 +1242,7 @@ class Z80CPU {
             case 0x3B: this.registers.E = this.shiftRightLogical(this.registers.E); break;
             case 0x3C: this.registers.H = this.shiftRightLogical(this.registers.H); break;
             case 0x3D: this.registers.L = this.shiftRightLogical(this.registers.L); break;
-            case 0x3E: this.shiftRightlogicalAtHL(); break;
+            case 0x3E: this.shiftRightLogicalAtHL(); break;
             case 0x3F: this.registers.A = this.shiftRightLogical(this.registers.A); break;
             
             // BIT test instructions (test bit 7)
@@ -1349,7 +1352,7 @@ class Z80CPU {
         return result;
     }
     
-    shiftRightlogicalAtHL() {
+    shiftRightLogicalAtHL() {
         const addr = this.getHL();
         const value = this.memory[addr];
         this.registers.F.C = (value & 0x01) !== 0;
@@ -1450,12 +1453,12 @@ class Z80CPU {
         this.memory[addr] = this.memory[addr] & (~(1 << bit));
     }
 
-    // I/O Port handling - use stored iomap
-    PortOut(port, value) {
+    // I/O Port handling - use stored iomap (named to match Simulator.OutPort/InPort)
+    OutPort(port, value) {
       this.iomap[port] = value;
     }
 
-    PortIn(port) {
+    InPort(port) {
       return this.iomap[port];
     }
 }

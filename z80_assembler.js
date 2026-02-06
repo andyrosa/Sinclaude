@@ -426,26 +426,8 @@ class Z80Assembler {
             return null;
         }
 
-        // Sort candidates to try specific patterns before generic ones
-        const sortedCandidates = candidates.sort((a, b) => {
-            const aHasGeneric = a.operands.some(op => 
-                op === Z80Assembler.OPERAND.IMM8 || 
-                op === Z80Assembler.OPERAND.IMM16 || 
-                op === Z80Assembler.OPERAND.RELATIVE ||
-                op === Z80Assembler.OPERAND.MEM16
-            );
-            const bHasGeneric = b.operands.some(op => 
-                op === Z80Assembler.OPERAND.IMM8 || 
-                op === Z80Assembler.OPERAND.IMM16 || 
-                op === Z80Assembler.OPERAND.RELATIVE ||
-                op === Z80Assembler.OPERAND.MEM16
-            );
-            if (aHasGeneric && !bHasGeneric) return 1;  // b (specific) comes first
-            if (!aHasGeneric && bHasGeneric) return -1; // a (specific) comes first
-            return 0; // same priority
-        });
-
-        for (const inst of sortedCandidates) {
+        // Candidates are pre-sorted during _buildInstructionSet (specific patterns before generic)
+        for (const inst of candidates) {
             if (inst.operands.length !== operands.length) continue;
 
             const patternMatch = inst.operands.every((pattern, i) => {
@@ -1070,6 +1052,27 @@ class Z80Assembler {
                 opcodes: def.opc
             });
         });
+
+        // Pre-sort candidates for each mnemonic (specific patterns before generic ones)
+        for (const [, candidates] of this.instructionMap) {
+            candidates.sort((a, b) => {
+                const aHasGeneric = a.operands.some(op => 
+                    op === Z80Assembler.OPERAND.IMM8 || 
+                    op === Z80Assembler.OPERAND.IMM16 || 
+                    op === Z80Assembler.OPERAND.RELATIVE ||
+                    op === Z80Assembler.OPERAND.MEM16
+                );
+                const bHasGeneric = b.operands.some(op => 
+                    op === Z80Assembler.OPERAND.IMM8 || 
+                    op === Z80Assembler.OPERAND.IMM16 || 
+                    op === Z80Assembler.OPERAND.RELATIVE ||
+                    op === Z80Assembler.OPERAND.MEM16
+                );
+                if (aHasGeneric && !bHasGeneric) return 1;
+                if (!aHasGeneric && bHasGeneric) return -1;
+                return 0;
+            });
+        }
 
         const missingSingleBytes = [];
         for (let i = 0; i < 256; i++) {
