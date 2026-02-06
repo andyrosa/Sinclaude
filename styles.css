@@ -250,10 +250,6 @@ button:focus-visible {
     height: 100%;
 }
 
-.flex-textarea {
-    flex: 1;
-}
-
 /* Assembly Editor - 3 Column Layout */
 .assembly-editor {
     background: var(--editable-text-bgc);

@@ -13,9 +13,9 @@
 function scrollNearestKeepAnchorVisible(target, anchor, opts = {}) {
   const smooth = opts.smooth !== false;
 
-  const $ = (x) => (typeof x === 'string' ? document.querySelector(x) : x);
-  const el = $(target);
-  const btn = $(anchor);
+  const resolve = (x) => (typeof x === 'string' ? document.querySelector(x) : x);
+  const el = resolve(target);
+  const btn = resolve(anchor);
 
   if (!el || !btn) return { scrolled: false, delta: 0, scroller: null };
 

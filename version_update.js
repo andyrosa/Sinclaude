@@ -43,10 +43,7 @@ window.versionChecker = {
 
   showUpdateDialog: function(newVersion) {
     // Stop further version checks until user responds
-    if (this.versionCheckInterval && this.timerManager) {
-      this.timerManager.clearTimer(this.versionCheckInterval);
-      this.versionCheckInterval = null;
-    }
+    this.cleanup();
 
     // Create dialog overlay
     const dialogOverlay = document.createElement('div');
@@ -74,26 +71,22 @@ window.versionChecker = {
     dialogOverlay.appendChild(dialog);
     document.body.appendChild(dialogOverlay);
 
-    // Handle button clicks
-    const updateBtn = dialog.querySelector('#updateBtn');
-    const cancelBtn = dialog.querySelector('#cancelBtn');
+    const dismissDialog = () => {
+      dialogOverlay.remove();
+      this.resumeVersionChecking();
+    };
 
-    updateBtn.addEventListener('click', () => {
-      // Refresh the page to get the new version
+    // Handle button clicks
+    dialog.querySelector('#updateBtn').addEventListener('click', () => {
       window.location.reload(true);
     });
 
-    cancelBtn.addEventListener('click', () => {
-      // Remove dialog and resume version checking
-      document.body.removeChild(dialogOverlay);
-      this.resumeVersionChecking();
-    });
+    dialog.querySelector('#cancelBtn').addEventListener('click', dismissDialog);
 
     // Close dialog when clicking overlay
     dialogOverlay.addEventListener('click', (e) => {
       if (e.target === dialogOverlay) {
-        document.body.removeChild(dialogOverlay);
-        this.resumeVersionChecking();
+        dismissDialog();
       }
     });
   },
@@ -120,13 +113,14 @@ window.versionChecker = {
 
   // Check for version update
   checkForVersionUpdate: function(callback) {
+    const savedTimestamp = this.currentVersionTimestamp;
     loadVersionWithCallback(function() {
-      const newVersion = typeof BUILD_VERSION_BY_YAML !== "undefined" ? BUILD_VERSION_BY_YAML().buildDate : null;
-      
-      if (newVersion && newVersion !== window.versionChecker.currentVersionTimestamp) {
-        if (callback) callback(BUILD_VERSION_BY_YAML(), null);
+      const newBuildDate = typeof BUILD_VERSION_BY_YAML !== "undefined" ? BUILD_VERSION_BY_YAML().buildDate : null;
+
+      if (newBuildDate && newBuildDate !== savedTimestamp) {
+        callback(BUILD_VERSION_BY_YAML(), null);
       } else {
-        if (callback) callback(null, null); // No version change detected
+        callback(null, null);
       }
     });
   }

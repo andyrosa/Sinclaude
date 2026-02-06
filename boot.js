@@ -1,20 +1,15 @@
 // Load version.js with fallback strategy: local first, then GitHub, then error
 function loadVersionWithCallback(callback) {
   // Remove any existing version.js script tags to prevent accumulation
-  const existingVersionScripts = document.querySelectorAll('script[src*="version.js"]');
-  existingVersionScripts.forEach(function(script) {
-    if (script.parentNode) {
-      script.parentNode.removeChild(script);
-    }
+  document.querySelectorAll('script[src*="version.js"]').forEach(function(script) {
+    script.remove();
   });
 
   function loadVersionGitHubIO() {
     const githubVersionScript = document.createElement("script");
     githubVersionScript.src =
       "https://andyrosa.github.io/Sinclaude/version.js?cb=" + Date.now();
-    githubVersionScript.onload = function () {
-      if (callback) callback();
-    };
+    githubVersionScript.onload = callback;
     githubVersionScript.onerror = function () {
       console.error("Failed to load version.js from local and remote source");
       if (typeof userMessageAboutBug === "function") {
@@ -22,7 +17,7 @@ function loadVersionWithCallback(callback) {
           "Unable to load version information from local and remote sources",
         );
       }
-      if (callback) callback();
+      callback();
     };
     document.head.appendChild(githubVersionScript);
   }
@@ -30,23 +25,16 @@ function loadVersionWithCallback(callback) {
   // First try to load from local folder
   const localVersionScript = document.createElement("script");
   localVersionScript.src = "version.js?cb=" + Date.now();
-  localVersionScript.onload = function () {
-    if (callback) callback();
-  };
+  localVersionScript.onload = callback;
   localVersionScript.onerror = function () {
-    // Remove the failed script element from DOM
-    document.head.removeChild(localVersionScript);
+    localVersionScript.remove();
     loadVersionGitHubIO();
   };
   document.head.appendChild(localVersionScript);
 }
 
 // Initial version load that starts the application
-(function() {
-  loadVersionWithCallback(function() {
-    loadScripts();
-  });
-})();
+loadVersionWithCallback(loadScripts);
 
 function loadScripts() {
   const cacheBust =
@@ -82,10 +70,13 @@ function loadScripts() {
     const src = scripts[scriptIndex];
     const script = document.createElement("script");
     script.src = src + "?cb=" + cacheBust;
-    script.onload = function () {
+
+    function advance() {
       scriptIndex++;
       loadNextScript();
-    };
+    }
+
+    script.onload = advance;
     script.onerror = function () {
       if (typeof userMessageAboutBug === "function") {
         userMessageAboutBug(
@@ -99,8 +90,7 @@ function loadScripts() {
         );
       }
       // Continue loading even if one script fails
-      scriptIndex++;
-      loadNextScript();
+      advance();
     };
     document.body.appendChild(script);
   }

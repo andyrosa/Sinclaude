@@ -47,7 +47,7 @@ print_hex_a_nibble_at_de_print:
     ld   (de), a
     inc  de
     ret
-   
+
 ;=======================
 delay_4M_t_states:
     OUTER_COUNT: equ 4;
