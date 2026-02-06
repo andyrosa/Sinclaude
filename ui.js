@@ -47,10 +47,7 @@ function toggleRetroFontsFromMenu() {
     window.sinclaude.useSinclairFont.toString()
   );
   updateRetroFontsToggle();
-
-  if (window.sinclaude) {
-    window.sinclaude.invalidateScreenCache();
-  }
+  window.sinclaude.invalidateScreenCache();
   closeMenu();
 }
 
@@ -67,10 +64,12 @@ function getFormattedVersionInfo() {
     return null;
   }
 
+  const versionData = BUILD_VERSION_BY_YAML();
+
   // Convert buildDate to local time with error handling
   let buildDateLocal = "Unknown";
-  if (BUILD_VERSION_BY_YAML().buildDate) {
-    const buildDate = new Date(BUILD_VERSION_BY_YAML().buildDate);
+  if (versionData.buildDate) {
+    const buildDate = new Date(versionData.buildDate);
     if (!isNaN(buildDate.getTime())) {
       buildDateLocal = buildDate.toLocaleString();
     }
@@ -78,7 +77,7 @@ function getFormattedVersionInfo() {
 
   return {
     localBuildDate: buildDateLocal,
-    shortCommit: BUILD_VERSION_BY_YAML().shortCommit || "Unknown",
+    shortCommit: versionData.shortCommit || "Unknown",
   };
 }
 

@@ -2,8 +2,7 @@
 
 // Copy magazine listing content to clipboard
 function copyMagazineListingToClipboard() {
-    const machineCodeDiv = document.getElementById('machineCode');
-    const content = machineCodeDiv.textContent;
+    const content = document.getElementById('machineCode').textContent;
     
     if (content.trim() === '') {
         userMessage('Magazine listing is empty - nothing to copy');

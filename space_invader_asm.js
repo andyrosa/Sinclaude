@@ -341,7 +341,6 @@ missile_hit_invader:
   LD   (missile_active), A
   LD   A, TRUE
   LD   (player_won), A
-  LD   A, TRUE
   LD   (game_over), A
   RET
 
@@ -407,32 +406,23 @@ bomb_hit_player:
 draw_game:
   CALL clear_screen
 
+  LD   A, (invader_row)
+  LD   B, A
   LD   A, (invader_col)
   DEC  A
-  LD   B, A
-  LD   A, (invader_row)
-  LD   C, A
-  LD   A, B
-  LD   B, C
   LD   C, '<'
   CALL draw_char
 
-  LD   A, (invader_col)
-  LD   B, A
   LD   A, (invader_row)
-  LD   C, A
-  LD   A, B
-  LD   B, C
+  LD   B, A
+  LD   A, (invader_col)
   LD   C, '*'
   CALL draw_char
 
+  LD   A, (invader_row)
+  LD   B, A
   LD   A, (invader_col)
   INC  A
-  LD   B, A
-  LD   A, (invader_row)
-  LD   C, A
-  LD   A, B
-  LD   B, C
   LD   C, '>'
   CALL draw_char
 
@@ -462,11 +452,9 @@ skip_player_draw:
   LD   A, (missile_active)
   AND  A
   JR   Z, draw_bomb
-  LD   A, (missile_col)
-  PUSH AF
   LD   A, (missile_row)
   LD   B, A
-  POP  AF
+  LD   A, (missile_col)
   LD   C, '|'
   CALL draw_char
 
@@ -474,11 +462,9 @@ draw_bomb:
   LD   A, (is_bomb_active)
   AND  A
   RET  Z
-  LD   A, (bomb_col)
-  PUSH AF
   LD   A, (bomb_row)
   LD   B, A
-  POP  AF
+  LD   A, (bomb_col)
   LD   C, 'o'
   CALL draw_char
   RET
@@ -486,8 +472,6 @@ draw_bomb:
 draw_char:
   PUSH AF
   LD   A, B
-  LD   H, 0
-  LD   L, A
   LD   DE, 0
   LD   B, A
   AND  A
@@ -544,7 +528,6 @@ game_delay:
   CP   FRAME_DELAY_COUNT
   JR   C, game_delay
 
-delay_done:
   XOR  A
   OUT  (FRAME_COUNT_PORT), A
   RET
@@ -558,22 +541,22 @@ inc_random_seed:
 end_game:
   LD   A, (player_won)
   AND  A
-  JR   NZ, SCREEN_humans_won
+  JR   NZ, show_humans_won
 
-SCREEN_invaders_won:
+show_invaders_won:
   LD   DE, invaders_won_msg
   LD   B, len(invaders_won_msg)
-  JR   SCREEN_end_message
+  JR   show_end_message
 
-SCREEN_humans_won:
+show_humans_won:
   LD   DE, humans_won_msg
   LD   B, len(humans_won_msg)
 
-SCREEN_end_message:
+show_end_message:
   LD   HL, SCREEN_BASE + (MESSAGE_ROW * SCREEN_COLS)
   CALL print_string
 
-SCREEN_show_press_to_play:
+show_press_to_play:
   LD   HL, SCREEN_BASE + (BOTTOM_ROW * SCREEN_COLS)
   LD   DE, press_to_play
   LD   B, len(press_to_play)
@@ -601,6 +584,11 @@ controls_msg:     DB "   A=LEFT D=RIGHT SPACE=FIRE    "
   END start
 
 `;
+
+// Export for use in the simulator
+if (typeof window !== 'undefined') {
+    window.SPACE_INVADER_ASM = SPACE_INVADER_ASM;
+}
 
 // Export for Node.js if running in Node environment
 if (typeof module !== 'undefined' && module.exports) {

@@ -209,19 +209,10 @@ class Z80CPU {
         return adjustedValue;
     }
 
-    updateIncrementFlags(register) {
-        this.registers.F.Z = register === 0;
-    }
-
     adjustFFPlusUpdateZ(result) {
         const adjustedValue = this.adjustFF(result);
         this.registers.F.Z = adjustedValue === 0;
         return adjustedValue;
-    }
-
-    updateLogicalFlags(value) {
-        this.registers.F.Z = value === 0;
-        this.registers.F.C = false;
     }
 
     updateAZC(value) {
@@ -230,26 +221,12 @@ class Z80CPU {
         this.registers.F.C = false;
     }
 
-    // Helper methods to consolidate common adjustFF patterns
-    incrementSingleRegister(registerName) {
-        this.registers[registerName] = this.adjustFFPlusUpdateZ(this.registers[registerName] + 1);
-    }
-
-    decrementSingleRegister(registerName) {
-        this.registers[registerName] = this.adjustFFPlusUpdateZ(this.registers[registerName] - 1);
-    }
-
     incrementMemoryUpdateZ(address) {
         this.memory[address] = this.adjustFFPlusUpdateZ(this.memory[address] + 1);
     }
 
     decrementMemoryUpdateZ(address) {
         this.memory[address] = this.adjustFFPlusUpdateZ(this.memory[address] - 1);
-    }
-
-    splitWordToRegisters(value, highReg, lowReg) {
-        this.registers[highReg] = this.adjustFF(value >> 8);
-        this.registers[lowReg] = this.adjustFF(value);
     }
 
     // Convert word to [lsb, msb] pair
@@ -280,6 +257,17 @@ class Z80CPU {
 
     setDE(value) {
         this.setReg(Z80CPU.regPairs.DE, value);
+    }
+
+    // Push current PC to stack and jump to target address
+    callAddress(targetAddress) {
+        this.pushLSB_MSB(...this.wordToLSB_MSB(this.registers.PC));
+        this.registers.PC = targetAddress;
+    }
+
+    // Convert signed byte (0-255) to signed offset (-128 to 127)
+    toSignedByte(byte) {
+        return (byte > 127) ? byte - 256 : byte;
     }
 
     // executes one Z80 instruction
@@ -352,15 +340,7 @@ class Z80CPU {
                 this.registers.A = memory[this.fetchWord()];
                 break;
             case 0xCD: // CALL nn
-                {
-                    const jump_address = this.fetchWord();
-                    const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
-                    this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                    memory[this.registers.SP] = msb;
-                    this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                    memory[this.registers.SP] = lsb;
-                    this.registers.PC = jump_address;
-                }
+                this.callAddress(this.fetchWord());
                 break;
             case 0xC9: // RET
                 this.popPC();
@@ -386,9 +366,10 @@ class Z80CPU {
                 }
                 break;
             case 0x18: // JR n
-                const offset = this.fetchByte();
-                const signedOffset = (offset > 127) ? offset - 256 : offset;
-                this.registers.PC = this.adjustFFFF(this.registers.PC + signedOffset);
+                {
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
+                }
                 break;
             case 0x21: // LD HL, nn
                 this.registers.L = this.fetchByte();
@@ -974,34 +955,34 @@ class Z80CPU {
                 
             // Conditional jumps
             case 0x28: // JR Z, n
-                const jrZOffset = this.fetchByte();
-                if (this.registers.F.Z) {
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrZOffset > 127) ? jrZOffset - 256 : jrZOffset));
+                {
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    if (this.registers.F.Z) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
                 }
                 break;
             case 0x20: // JR NZ, n
-                const jrNzOffset = this.fetchByte();
-                if (!this.registers.F.Z) {
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrNzOffset > 127) ? jrNzOffset - 256 : jrNzOffset));
+                {
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    if (!this.registers.F.Z) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
                 }
                 break;
             case 0x38: // JR C, n
-                const jrCOffset = this.fetchByte();
-                if (this.registers.F.C) {
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrCOffset > 127) ? jrCOffset - 256 : jrCOffset));
+                {
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    if (this.registers.F.C) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
                 }
                 break;
             case 0x30: // JR NC, n
-                const jrNCOffset = this.fetchByte();
-                if (!this.registers.F.C) {
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((jrNCOffset > 127) ? jrNCOffset - 256 : jrNCOffset));
+                {
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    if (!this.registers.F.C) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
                 }
                 break;
             case 0x10: // DJNZ n
-                this.registers.B = (this.registers.B - 1) & 0xFF;
-                const djnzOffset = this.fetchByte();
-                if (this.registers.B !== 0) {
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + ((djnzOffset > 127) ? djnzOffset - 256 : djnzOffset));
+                {
+                    this.registers.B = (this.registers.B - 1) & 0xFF;
+                    const displacement = this.toSignedByte(this.fetchByte());
+                    if (this.registers.B !== 0) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
                 }
                 break;
             case 0xCA: // JP Z, nn
@@ -1038,54 +1019,26 @@ class Z80CPU {
             // Conditional CALL instructions
             case 0xC4: // CALL NZ, nn
                 {
-                    const jump_address = this.fetchWord();
-                    if (!this.registers.F.Z) {
-                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = msb;
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = lsb;
-                        this.registers.PC = jump_address;
-                    }
+                    const addr = this.fetchWord();
+                    if (!this.registers.F.Z) this.callAddress(addr);
                 }
                 break;
             case 0xCC: // CALL Z, nn
                 {
-                    const jump_address = this.fetchWord();
-                    if (this.registers.F.Z) {
-                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = msb;
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = lsb;
-                        this.registers.PC = jump_address;
-                    }
+                    const addr = this.fetchWord();
+                    if (this.registers.F.Z) this.callAddress(addr);
                 }
                 break;
             case 0xD4: // CALL NC, nn
                 {
-                    const jump_address = this.fetchWord();
-                    if (!this.registers.F.C) {
-                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = msb;
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = lsb;
-                        this.registers.PC = jump_address;
-                    }
+                    const addr = this.fetchWord();
+                    if (!this.registers.F.C) this.callAddress(addr);
                 }
                 break;
             case 0xDC: // CALL C, nn
                 {
-                    const jump_address = this.fetchWord();
-                    if (this.registers.F.C) {
-                        const [lsb, msb] = this.wordToLSB_MSB(this.registers.PC);
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = msb;
-                        this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-                        memory[this.registers.SP] = lsb;
-                        this.registers.PC = jump_address;
-                    }
+                    const addr = this.fetchWord();
+                    if (this.registers.F.C) this.callAddress(addr);
                 }
                 break;
                 
@@ -1166,7 +1119,6 @@ class Z80CPU {
                 // Return error for unknown instructions
                 const errorMsg = `Unknown opcode: 0x${opcode.toString(16).padStart(2, '0')} at address 0x${instructionAddress.toString(16).padStart(4, '0')}`;
                 return { error: errorMsg };
-                break;
         }
         this.registers.PC &= 0xFFFF;
         return {}; // Success - no error

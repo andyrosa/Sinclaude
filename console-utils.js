@@ -18,35 +18,28 @@ function userMessageAboutBug(userMsg, consoleMsg) {
 }
 
 // Helper to parse string as truthy value
+const TRUTHY_VALUES = new Set(["true", "yes", "y", "1", "on"]);
+
 function isTruthy(value) {
   if (!value) return false;
-  const lower = value.toLowerCase();
-  return (
-    lower === "true" ||
-    lower === "yes" ||
-    lower === "y" ||
-    lower === "1" ||
-    lower === "on"
-  );
+  return TRUTHY_VALUES.has(value.toLowerCase());
 }
 
 // Override only console.log to catch unapproved usage
-const originalConsole = {
-  log: console.log,
-};
+const originalConsoleLog = console.log;
 
 console.log = function (...args) {
   const message = args
     .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
     .join(" ");
   userMessageAboutBug("using unapproved console.log", message);
-  originalConsole.log(...args);
+  originalConsoleLog(...args);
 };
 
 // Approved console logging function for internal use
-// This is specifically for console.log - for console.error, use originalConsole.error directly
+// This is specifically for console.log - console.error is not overridden and can be used directly
 function consoleLogApproved(...args) {
-  originalConsole.log(...args);
+  originalConsoleLog(...args);
 }
 
 function consoleLogIfNode(message) {

@@ -34,20 +34,28 @@ const Z_INDEX = {
     MAXIMUM: 9999               // Maximum z-index for critical overlays
 };
 
+// Maps Z_INDEX property names to CSS variable names
+// e.g. MENU_DROPDOWN -> --z-menu-dropdown
+const Z_INDEX_CSS_NAMES = {
+    BASE: '--z-base',
+    MENU_DROPDOWN: '--z-menu-dropdown',
+    MODAL_BACKDROP: '--z-modal-backdrop',
+    EXPANDED_ELEMENT: '--z-expanded-element',
+    RESTORE_MESSAGE: '--z-restore-message',
+    TOOLTIP: '--z-tooltip',
+    NOTIFICATION: '--z-notification',
+    DEBUG_OVERLAY: '--z-debug-overlay',
+    MAXIMUM: '--z-maximum',
+};
+
 function setCssVariables() {
     const root = document.documentElement;
-    
+
     // Set Z-Index constants
-    root.style.setProperty('--z-base', Z_INDEX.BASE);
-    root.style.setProperty('--z-menu-dropdown', Z_INDEX.MENU_DROPDOWN);
-    root.style.setProperty('--z-modal-backdrop', Z_INDEX.MODAL_BACKDROP);
-    root.style.setProperty('--z-expanded-element', Z_INDEX.EXPANDED_ELEMENT);
-    root.style.setProperty('--z-restore-message', Z_INDEX.RESTORE_MESSAGE);
-    root.style.setProperty('--z-tooltip', Z_INDEX.TOOLTIP);
-    root.style.setProperty('--z-notification', Z_INDEX.NOTIFICATION);
-    root.style.setProperty('--z-debug-overlay', Z_INDEX.DEBUG_OVERLAY);
-    root.style.setProperty('--z-maximum', Z_INDEX.MAXIMUM);
-    
+    for (const key of Object.keys(Z_INDEX_CSS_NAMES)) {
+        root.style.setProperty(Z_INDEX_CSS_NAMES[key], Z_INDEX[key]);
+    }
+
     // Set breakpoint constants
     root.style.setProperty('--narrow-max-width', BREAKPOINTS.MOBILE_MAX + 'px');
 }

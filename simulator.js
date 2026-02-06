@@ -438,11 +438,8 @@ class Simulator {
   }
 
   getAssemblyCode() {
-    if (this.assemblyColumn) {
-      // If the column contains HTML (from highlighting), extract just the text
-      return this.assemblyColumn.textContent || "";
-    }
-    return "";
+    if (!this.assemblyColumn) return "";
+    return this.assemblyColumn.textContent;
   }
 
   setAssemblyCode(code) {
@@ -462,15 +459,15 @@ class Simulator {
     const addressLines = [];
     const opcodeLines = [];
 
-    lines.forEach((line, index) => {
+    lines.forEach((_line, index) => {
       const details = this.instructionDetails[index];
       if (details) {
         const hexAddr =
           details.startAddress !== null
-            ? details.startAddress.toString(16).toUpperCase().padStart(4, "0")
+            ? formatHex4(details.startAddress)
             : "----";
         const opcodeString = details.opcodes
-          .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
+          .map((byte) => formatHex2(byte))
           .join("")
           .padEnd(8, " ");
 
@@ -524,7 +521,7 @@ class Simulator {
 
       // Add event listeners for both game functionality and edit mode
       button.addEventListener("pointerdown", (e) => {
-        this.handleButtonClick(button, i, e);
+        this.handleButtonClick(button, i);
         e.preventDefault();
       });
       button.addEventListener("pointerup", (e) => {
@@ -538,7 +535,7 @@ class Simulator {
     }
   }
 
-  handleButtonClick(button, buttonNumber, event) {
+  handleButtonClick(button, buttonNumber) {
     if (window.buttonEditMode) {
       this.editButtonText(button);
     } else {
@@ -679,7 +676,7 @@ class Simulator {
     });
 
     // Mobile: Touch-based keyboard capture
-    executionSection.addEventListener("pointerdown", (e) => {
+    executionSection.addEventListener("pointerdown", () => {
       this.keyboardCaptureActive = true;
       updateKeyboardStatus(true);
     });
@@ -823,7 +820,7 @@ class Simulator {
     this.setKey(KBD_NO_KEY_PRESSED);
   }
 
-  pokeMemory(address, value, description) {
+  pokeMemory(address, value) {
     this.memory[address] = value;
   }
 
@@ -849,10 +846,8 @@ class Simulator {
       return;
     }
 
-    let oscillator = this.audioContext?.createOscillator();
-    if (!oscillator) return;
-
-    let gain = this.audioContext.createGain();
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
     oscillator.connect(gain);
     gain.connect(this.audioContext.destination);
     gain.gain.value = 0.1;
@@ -880,26 +875,22 @@ class Simulator {
     }
 
     if (keyCode === KBD_NO_KEY_PRESSED) {
-      this.OutPort(KEYBOARD_PORT, KBD_NO_KEY_PRESSED & 0xff, "no-key");
+      this.OutPort(KEYBOARD_PORT, KBD_NO_KEY_PRESSED & 0xff); // no-key
     } else if (keyCode === 27) {
-      this.OutPort(KEYBOARD_PORT, 12, "ESC key");
+      this.OutPort(KEYBOARD_PORT, 12); // ESC key
     } else if (keyCode === 13) {
-      this.OutPort(KEYBOARD_PORT, 13, "ENTER key");
+      this.OutPort(KEYBOARD_PORT, 13); // ENTER key
     } else if (keyCode === 37) {
-      this.OutPort(KEYBOARD_PORT, 144, "LEFT arrow");
+      this.OutPort(KEYBOARD_PORT, 144); // LEFT arrow
     } else if (keyCode === 38) {
-      this.OutPort(KEYBOARD_PORT, 145, "UP arrow");
+      this.OutPort(KEYBOARD_PORT, 145); // UP arrow
     } else if (keyCode === 39) {
-      this.OutPort(KEYBOARD_PORT, 146, "RIGHT arrow");
+      this.OutPort(KEYBOARD_PORT, 146); // RIGHT arrow
     } else if (keyCode === 40) {
-      this.OutPort(KEYBOARD_PORT, 147, "DOWN arrow");
+      this.OutPort(KEYBOARD_PORT, 147); // DOWN arrow
     } else {
       const sinclairCode = this.unicodeToSinclair(String.fromCharCode(keyCode));
-      this.OutPort(
-        KEYBOARD_PORT,
-        sinclairCode,
-        `key ${keyCode} -> "${String.fromCharCode(keyCode)}"`
-      );
+      this.OutPort(KEYBOARD_PORT, sinclairCode);
     }
   }
 
@@ -1031,8 +1022,8 @@ class Simulator {
           instructionCount
         );
         const endTime = performance.now();
-        const elapsedSeconds = (endTime - startTime) / 1000; 
-        return { benchResult, elapsedSeconds: elapsedSeconds };
+        const elapsedSeconds = (endTime - startTime) / 1000;
+        return { benchResult, elapsedSeconds };
       };
 
       let benchmarkResult;
@@ -1343,7 +1334,7 @@ class Simulator {
 
         try {
           const z80CPUTestClass = new Z80CPUEmulatorTestClass();
-          const success = z80CPUTestClass.runAllTests();
+          z80CPUTestClass.runAllTests();
 
           // Report summary to user console
           userMessage(
@@ -1382,7 +1373,6 @@ class Simulator {
   }
 
   toggleSpeed() {
-    const wasInFastMode = this.fastMode;
     this.fastMode = !this.fastMode;
     const toggleButton = document.getElementById("speedToggle");
     if (toggleButton) {
@@ -1576,11 +1566,7 @@ class Simulator {
 
   // Sinclair byte code → Modern Unicode character conversion
   sinclairToUnicode(byte) {
-    // Direct lookup from single canonical charset
-    if (byte >= 0 && byte <= 255) {
-      return this.sinclairByteToUnicodeNeverInverts[byte] || "?";
-    }
-    return "?";
+    return this.sinclairByteToUnicodeNeverInverts[byte] || "?";
   }
 
   // Modern Unicode character → Sinclair byte code conversion (O(1) via reverse lookup map)
@@ -1605,14 +1591,10 @@ class Simulator {
     }
 
     if (this.pcDisplay) {
-      this.pcDisplay.textContent = regs.PC.toString(16)
-        .padStart(4, "0")
-        .toUpperCase();
+      this.pcDisplay.textContent = formatHex4(regs.PC);
     }
     if (this.spDisplay) {
-      this.spDisplay.textContent = regs.SP.toString(16)
-        .padStart(4, "0")
-        .toUpperCase();
+      this.spDisplay.textContent = formatHex4(regs.SP);
     }
     if (this.stackContentsDisplay) {
       // Display the next 2 words that would be popped from the stack
@@ -1622,31 +1604,19 @@ class Simulator {
       );
       const bottomword = this.cpu.readWordFromMemory(this.memory, regs.SP);
       this.stackContentsDisplay.textContent =
-        "+2:" +
-        abovebottom.toString(16).padStart(4, "0").toUpperCase() +
-        " " +
-        "SP:" +
-        bottomword.toString(16).padStart(4, "0").toUpperCase();
+        "+2:" + formatHex4(abovebottom) + " SP:" + formatHex4(bottomword);
     }
     if (this.regADisplay) {
-      this.regADisplay.textContent = regs.A.toString(16)
-        .padStart(2, "0")
-        .toUpperCase();
+      this.regADisplay.textContent = formatHex2(regs.A);
     }
     if (this.regBCDisplay) {
-      this.regBCDisplay.textContent =
-        regs.B.toString(16).padStart(2, "0").toUpperCase() +
-        regs.C.toString(16).padStart(2, "0").toUpperCase();
+      this.regBCDisplay.textContent = formatHex2(regs.B) + formatHex2(regs.C);
     }
     if (this.regDEDisplay) {
-      this.regDEDisplay.textContent =
-        regs.D.toString(16).padStart(2, "0").toUpperCase() +
-        regs.E.toString(16).padStart(2, "0").toUpperCase();
+      this.regDEDisplay.textContent = formatHex2(regs.D) + formatHex2(regs.E);
     }
     if (this.regHLDisplay) {
-      this.regHLDisplay.textContent =
-        regs.H.toString(16).padStart(2, "0").toUpperCase() +
-        regs.L.toString(16).padStart(2, "0").toUpperCase();
+      this.regHLDisplay.textContent = formatHex2(regs.H) + formatHex2(regs.L);
     }
     if (this.flagCDisplay) {
       this.flagCDisplay.textContent = regs.F.C ? "1" : "0";
@@ -1655,25 +1625,18 @@ class Simulator {
       this.flagZDisplay.textContent = regs.F.Z ? "1" : "0";
     }
     if (this.currentInstructionDisplay) {
-      // Show 4 bytes at PC as hex in 2 lines: 2 bytes each
+      // Show 4 bytes at PC as hex
       const bytes = [];
       for (let i = 0; i < 4; i++) {
-        const addr = (regs.PC + i) & 0xffff;
-        bytes.push(
-          this.memory[addr].toString(16).padStart(2, "0").toUpperCase()
-        );
+        bytes.push(formatHex2(this.memory[(regs.PC + i) & 0xffff]));
       }
-      // Format as 2 lines: "XX XX\nXX XX"
-      const line1 = bytes.slice(0, 2).join(" ");
-      const line2 = bytes.slice(2, 4).join(" ");
-      this.currentInstructionDisplay.textContent = line1 + " " + line2;
+      this.currentInstructionDisplay.textContent = bytes.join(" ");
     }
     if (this.portsDisplay) {
       // Display ports 0-3 (Frame, Keyboard, BeepHz, BeepMs)
       const portValues = [];
       for (let port = 0; port < 4; port++) {
-        const value = this.ioMap[port];
-        portValues.push(value.toString(16).padStart(2, "0").toUpperCase());
+        portValues.push(formatHex2(this.ioMap[port]));
       }
       this.portsDisplay.textContent = portValues.join(" ");
     }
@@ -1995,7 +1958,6 @@ class Simulator {
 
   // Set state and update UI accordingly
   setState(newState) {
-    const previousState = this.state;
     this.state = newState;
     this.renderButtons();
 

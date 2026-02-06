@@ -1141,29 +1141,24 @@ class Z80Assembler {
         if (!operand.startsWith('(') || !operand.endsWith(')')) {
             return false;
         }
-        
-        // Check if the entire operand is wrapped in balanced parentheses
+
+        // Check if the entire operand is wrapped in balanced parentheses.
+        // The first '(' must only be closed by the last ')'.
         let depth = 0;
-        let firstOpenFound = false;
-        
+
         for (let i = 0; i < operand.length; i++) {
             if (operand[i] === '(') {
                 depth++;
-                if (!firstOpenFound) {
-                    firstOpenFound = true;
-                }
             } else if (operand[i] === ')') {
                 depth--;
-                // If we close the first opening paren before the end, it's not a pure memory ref
-                if (firstOpenFound && depth === 0 && i < operand.length - 1) {
+                // If the first opening paren closes before the end, it's not a pure memory ref
+                if (depth === 0 && i < operand.length - 1) {
                     return false;
                 }
             }
         }
-        
-        // Memory reference: entire operand is wrapped in parentheses
-        // The first '(' should only be closed by the last ')'
-        return depth === 0 && operand.startsWith('(') && operand.endsWith(')');
+
+        return depth === 0;
     }
 
     /**
@@ -1568,8 +1563,7 @@ class ExpressionParser {
     // Look up symbol value
     lookupSymbol(identifier) {
         const upperName = identifier.toUpperCase();
-        
-        
+
         // Regular symbol lookup
         const symbol = this.symbols[upperName];
         if (symbol !== undefined) {
@@ -1864,15 +1858,14 @@ class ExpressionParser {
      * Parse expression operand (everything up to comma, comment, or end)
      */
     parseExpressionOperand() {
-        const startPos = this.pos;
         let content = '';
         let parenDepth = 0;
         let inString = false;
         let stringChar = null;
-        
+
         while (this.pos < this.expr.length) {
             const char = this.peek();
-            
+
             // Handle string boundaries
             if (!inString && (char === '"' || char === "'")) {
                 inString = true;
@@ -1888,9 +1881,9 @@ class ExpressionParser {
                 content += this.next();
                 continue;
             }
-            
-            // Stop at comment if we're not inside a string
-            if (char === ';' && !inString) {
+
+            // Stop at comment (inString is always false here due to continue above)
+            if (char === ';') {
                 break;
             }
             
