@@ -1,6 +1,6 @@
 # Sinclaude
 
-A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs entirely in the browser, co-written with Claude
+A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs entirely in the browser, co-written with Claude Opus 4 Aug 2025.
 
 **Live at:** https://andyrosa.github.io/Sinclaude/simulator.html
 
