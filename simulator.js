@@ -218,6 +218,15 @@ class Simulator {
       const baseChar = sinclairByteToUnicode[i - 128];
       this.sinclairByteToUnicodeNeverInverts[i] = baseChar || "?";
     }
+
+    // Build reverse lookup map (Unicode char -> Sinclair byte) for O(1) conversion
+    this.unicodeToSinclairMap = new Map();
+    for (let byte = 0; byte < 256; byte++) {
+      const char = this.sinclairByteToUnicodeNeverInverts[byte];
+      if (char && !this.unicodeToSinclairMap.has(char)) {
+        this.unicodeToSinclairMap.set(char, byte);
+      }
+    }
   }
 
   setupDOM() {
@@ -1574,24 +1583,17 @@ class Simulator {
     return "?";
   }
 
-  // Modern Unicode character → Sinclair byte code conversion
+  // Modern Unicode character → Sinclair byte code conversion (O(1) via reverse lookup map)
   unicodeToSinclair(char) {
-    // Search through sinclairCharset to find matching character, return byte code
-    for (let byte = 0; byte < 256; byte++) {
-      if (this.sinclairByteToUnicodeNeverInverts[byte] === char) {
-        return byte;
-      }
-    }
+    const byte = this.unicodeToSinclairMap.get(char);
+    if (byte !== undefined) return byte;
+
     // Try uppercase version for case-insensitive matching
-    const upperChar = char.toUpperCase();
-    for (let byte = 0; byte < 256; byte++) {
-      if (this.sinclairByteToUnicodeNeverInverts[byte] === upperChar) {
-        return byte;
-      }
-    }
-    // Fallback: map unknown char to space to avoid injecting NULs
-    // Consider reporting via userMessageAboutBug
-    return this.unicodeToSinclair(" ");
+    const upperByte = this.unicodeToSinclairMap.get(char.toUpperCase());
+    if (upperByte !== undefined) return upperByte;
+
+    // Fallback: return space byte directly to avoid injecting NULs (and avoid recursion)
+    return 32;
   }
 
   updateHardwareDisplay() {

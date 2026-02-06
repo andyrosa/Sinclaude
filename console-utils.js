@@ -50,7 +50,7 @@ function consoleLogApproved(...args) {
 }
 
 function consoleLogIfNode(message) {
-  if (this.isNode) {
+  if (typeof module !== 'undefined' && module.exports) {
     consoleLogApproved(message);
   }
 }
