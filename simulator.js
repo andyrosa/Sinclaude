@@ -1316,12 +1316,12 @@ class Simulator {
 
   runZ80CPUTests() {
     try {
-      // Check if Z80CPUEmulatorTestClass class is available from z80_cpu_emulator_test.js
+      // Check if Z80CPUEmulatorTestClass class is available from z80_cpu_emulator_test_runner.js
       if (typeof Z80CPUEmulatorTestClass !== "undefined") {
         // Also check if runZ80CPUEmulatorTestClass is available since it's required
         if (typeof runZ80CPUEmulatorTestClass === "undefined") {
           userMessage(
-            "Z80 CPU tests cannot run - z80_cpu_emulator_tests.js not loaded (runZ80CPUEmulatorTestClass function missing)"
+            "Z80 CPU tests cannot run - z80_cpu_emulator_test_cases.js not loaded (runZ80CPUEmulatorTestClass function missing)"
           );
           return;
         }
