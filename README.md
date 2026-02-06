@@ -148,8 +148,8 @@ When you assemble a small program, the URL automatically updates to include the 
 ### Testing:
 - `tester.js`: Testing framework and utilities
 - `z80_assembler_test.js`: Comprehensive assembler test suite (400+ tests)
-- `z80_cpu_emulator_test.js`: Z80 CPU emulator test suite (700+ tests)
-- `z80_cpu_emulator_tests.js`: Additional CPU emulator test cases
+- `z80_cpu_emulator_test_runner.js`: Z80 CPU emulator test suite runner (700+ tests)
+- `z80_cpu_emulator_test_cases.js`: Additional CPU emulator test cases
 
 ### Development:
 - `agent.md`: Development guidelines and rules for AI-assisted coding

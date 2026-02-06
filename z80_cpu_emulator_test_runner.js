@@ -647,7 +647,7 @@ class Z80CPUEmulatorTestClass extends TestFramework {
     // Load and execute test cases
     if (typeof require !== "undefined") {
       // Node.js environment - load test cases as a function
-      const runTestCases = require("./z80_cpu_emulator_tests.js");
+      const runTestCases = require("./z80_cpu_emulator_test_cases.js");
       runTestCases(test, test_expect_error);
     } else {
       // Browser environment - test cases should be globally available
@@ -655,7 +655,7 @@ class Z80CPUEmulatorTestClass extends TestFramework {
         runZ80CPUEmulatorTestClass(test, test_expect_error);
       } else {
         throw new Error(
-          "Test cases not available in browser environment - ensure z80_cpu_emulator_tests.js is loaded"
+          "Test cases not available in browser environment - ensure z80_cpu_emulator_test_cases.js is loaded"
         );
       }
     }
