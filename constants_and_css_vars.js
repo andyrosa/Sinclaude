@@ -59,4 +59,12 @@ function setCssVariables() {
     // Set breakpoint constants
     root.style.setProperty('--narrow-max-width', BREAKPOINTS.MOBILE_MAX + 'px');
 }
-setCssVariables();
+// setCssVariables uses document, which exists only in the browser
+if (typeof document !== 'undefined') {
+    setCssVariables();
+}
+
+// Export for Node.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatHex2, formatHex4 };
+}

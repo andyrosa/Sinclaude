@@ -126,6 +126,13 @@
  * RES 1,L; RES 1,(HL); RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL);
  * BIT 0,A; BIT 1,A; BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
  */
+
+// In the browser, constants_and_css_vars.js provides formatHex2/formatHex4 as globals;
+// in Node.js, load them onto globalThis to mirror that.
+if (typeof formatHex2 === 'undefined' && typeof require !== 'undefined') {
+    Object.assign(globalThis, require('./constants_and_css_vars.js'));
+}
+
 class Z80Assembler {
     // --- Constants for operand patterns ---
     static OPERAND = {
@@ -1539,7 +1546,7 @@ class ExpressionParser {
         
         // Check if symbol exists at all
         const symbol = this.symbols[upperName];
-        if (!symbol) {
+        if (symbol === undefined) {
             throw new Error(`Symbol '${symbolName}' not found`);
         }
         

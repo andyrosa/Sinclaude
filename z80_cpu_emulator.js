@@ -31,6 +31,13 @@
 // RES 0,(HL); RES 1,A; RES 1,B; RES 1,C; RES 1,D; RES 1,E; RES 1,H; RES 1,L; RES 1,(HL);
 // RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL); BIT 0,A; BIT 1,A;
 // BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
+
+// In the browser, constants_and_css_vars.js provides formatHex2/formatHex4 as globals;
+// in Node.js, load them onto globalThis to mirror that.
+if (typeof formatHex2 === 'undefined' && typeof require !== 'undefined') {
+    Object.assign(globalThis, require('./constants_and_css_vars.js'));
+}
+
 class Z80CPU {
     constructor() {
         // Use reset to initialize to avoid code duplication
@@ -159,8 +166,8 @@ class Z80CPU {
 
     // Pop 16-bit word from stack and set PC
     popPC() {
-        this.registers.PC = this.memory[this.registers.SP] | (this.memory[this.registers.SP + 1] << 8);
-        this.registers.SP = this.adjustFFFF(this.registers.SP + 2);
+        const [lsb, msb] = this.popLSB_MSB();
+        this.registers.PC = lsb | (msb << 8);
     }
 
     // Pop from stack returning [lsb, msb] pair
@@ -762,9 +769,7 @@ class Z80CPU {
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.fetchByte() + (this.registers.F.C ? 1 : 0));
                 break;
             case 0x97: // SUB A
-                this.registers.A = 0;
-                this.registers.F.Z = true;
-                this.registers.F.C = false;
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.A);
                 break;
             case 0x90: // SUB B
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.B);
@@ -892,8 +897,9 @@ class Z80CPU {
                 }
                 break;
             case 0xBF: // CP A
-                this.registers.F.Z = true;  // A == A is always true
-                this.registers.F.C = false; // A < A is always false
+                // Deliberate self-comparison: keeps CP A in the same form as CP B..CP L
+                this.registers.F.Z = this.registers.A === this.registers.A;
+                this.registers.F.C = this.registers.A < this.registers.A;
                 break;
             case 0xB7: // OR A
                 this.updateAZC(this.registers.A);
@@ -1087,17 +1093,18 @@ class Z80CPU {
                         let de = this.getDE();
                         let bc = this.getBC();
                         
-                        while (bc > 0) {
+                        // do-while: real Z80 decrements BC before testing, so BC=0 on entry means 65536 transfers
+                        do {
                             // Copy byte from (HL) to (DE)
                             memory[de] = memory[hl];
-                            
+
                             // Increment HL and DE
                             hl = this.adjustFFFF(hl + 1);
                             de = this.adjustFFFF(de + 1);
-                            
+
                             // Decrement BC
                             bc = this.adjustFFFF(bc - 1);
-                        }
+                        } while (bc > 0);
                         
                         // Update registers with final values
                         this.setHL(hl);
@@ -1105,7 +1112,7 @@ class Z80CPU {
                         this.setBC(bc);
                         break;
                     default:
-                        const extErrorMsg = `Unknown extended opcode: 0xED 0x${extOpcode.toString(16).padStart(2, '0')} at address 0x${(this.registers.PC - 2).toString(16).padStart(4, '0')}`;
+                        const extErrorMsg = `Unknown extended opcode: 0xED 0x${formatHex2(extOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}`;
                         return { error: extErrorMsg };
                 }
                 break;
@@ -1117,7 +1124,7 @@ class Z80CPU {
                 
             default:
                 // Return error for unknown instructions
-                const errorMsg = `Unknown opcode: 0x${opcode.toString(16).padStart(2, '0')} at address 0x${instructionAddress.toString(16).padStart(4, '0')}`;
+                const errorMsg = `Unknown opcode: 0x${formatHex2(opcode)} at address 0x${formatHex4(instructionAddress)}`;
                 return { error: errorMsg };
         }
         this.registers.PC &= 0xFFFF;
@@ -1262,7 +1269,7 @@ class Z80CPU {
             case 0xFF: this.registers.A = this.setBit(7, this.registers.A); break;
             
             default:
-                return { error: `Unknown CB opcode: 0xCB 0x${cbOpcode.toString(16).padStart(2, '0')} at address 0x${(this.registers.PC - 2).toString(16).padStart(4, '0')}` };
+                return { error: `Unknown CB opcode: 0xCB 0x${formatHex2(cbOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}` };
         }
     }
     

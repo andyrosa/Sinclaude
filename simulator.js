@@ -24,7 +24,7 @@ class Simulator {
     this.refreshCount = 0;
     this.mipsLastUpdate = performance.now();
     this.mipsInstructionCount = 0;
-    this.keyCodeCurrent = 0;
+    this.keyCodeCurrent = null; // null = no key ever pressed; display shows "--"
     this.keyCodeCurrentReleased = true;
     this.runLoopInterval = null;
     this.fastMode = false;
@@ -681,7 +681,11 @@ class Simulator {
       updateKeyboardStatus(true);
     });
 
-    // Document-level touch to detect touches outside execution section
+    // Document-level touch to detect touches outside execution section.
+    // Intentional: releasing the held key here is required, not a bug. Once capture
+    // deactivates, keyup events are no longer processed, so an unreleased key would
+    // stay stuck. Early release on an outside tap (even mid-game on multi-touch)
+    // is the lesser evil. Mirrors the blur handler above.
     document.addEventListener("pointerdown", (e) => {
       if (!executionSection.contains(e.target)) {
         this.keyboardCaptureActive = false;
@@ -1773,9 +1777,9 @@ class Simulator {
     const machineCodeDiv = document.getElementById("machineCode");
     const assembler = new Z80Assembler();
     const result = assembler.assemble(sourceCode);
-    this.loadAddress = result.loadAddress;
 
     if (result.success) {
+      this.loadAddress = result.loadAddress;
       // Initialize audio context for beep functionality
       if (!this.audioContext) {
         try {
@@ -1799,9 +1803,9 @@ class Simulator {
       if (this.state === STATE.FREE_RUNNING) {
         // Hot-reload case: preserve CPU state, just inform user
         userMessage("Code hot-reloaded - may need Reset to run properly");
-        sinclaude.cpu.set(this.loadAddress);
+        this.cpu.set(this.loadAddress);
       } else {
-        sinclaude.cpu.set(this.loadAddress, 0xffff);
+        this.cpu.set(this.loadAddress, 0xffff);
         this.setState(STATE.FREE_RUNNING);
       }
       this.lastPC = null;
