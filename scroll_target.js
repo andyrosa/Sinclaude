@@ -2,20 +2,15 @@
  * Scrolls the target into view with minimal movement ("nearest"),
  * while keeping the anchor (step button) fully visible.
  * If keeping both fully visible isn’t possible, it scrolls only up to
- * the point where the anchor would start to disappear (your #13).
+ * the point where the anchor would start to disappear.
  *
- * @param {Element|string} target - Element or selector for the highlighted line.
- * @param {Element|string} anchor - Element or selector for the step button.
- * @param {Object} [opts]
- * @param {boolean} [opts.smooth=true] - Use smooth scrolling.
+ * @param {string} target - Selector for the highlighted line.
+ * @param {string} anchor - Selector for the step button.
  * @returns {{scrolled: boolean, delta: number, scroller: Element}} info
  */
-function scrollNearestKeepAnchorVisible(target, anchor, opts = {}) {
-  const smooth = opts.smooth !== false;
-
-  const resolve = (x) => (typeof x === 'string' ? document.querySelector(x) : x);
-  const el = resolve(target);
-  const btn = resolve(anchor);
+function scrollNearestKeepAnchorVisible(target, anchor) {
+  const el = document.querySelector(target);
+  const btn = document.querySelector(anchor);
 
   if (!el || !btn) return { scrolled: false, delta: 0, scroller: null };
 
@@ -84,7 +79,7 @@ function scrollNearestKeepAnchorVisible(target, anchor, opts = {}) {
 
   if (delta === 0) return { scrolled: false, delta: 0, scroller };
 
-  const behavior = smooth ? 'smooth' : 'auto';
+  const behavior = 'smooth';
   if (isWindowScroller) {
     window.scrollBy({ top: delta, behavior });
   } else {
@@ -92,6 +87,3 @@ function scrollNearestKeepAnchorVisible(target, anchor, opts = {}) {
   }
   return { scrolled: true, delta, scroller };
 }
-
-// Make function globally available
-window.scrollNearestKeepAnchorVisible = scrollNearestKeepAnchorVisible;

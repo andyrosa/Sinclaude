@@ -39,6 +39,8 @@
         const README_REPO_URL = 'https://raw.githubusercontent.com/andyrosa/Sinclaude/main/README.md';
         //not to be confused with  https://github.com/andyrosa/Sinclaude/blob/main/README.md" which is HTML not raw markdown
         async function loadReadme() {
+            // Filled while parsing the README, appended after the screenshots in finally
+            let aboutContainer = null;
             try {
                 let response;
                 const filename = README_REPO_URL.split('/').pop(); // Extract filename from URL
@@ -109,16 +111,10 @@
                         currentElement = nextElement;
                     }
                     
-                    // Remove the about section from its current position
-                    const aboutContainer = document.createElement('div');
+                    // Move the about section out of the content flow; appendChild relocates each node
+                    aboutContainer = document.createElement('div');
                     aboutContainer.id = 'about-section-moved';
-                    aboutElements.forEach(el => {
-                        aboutContainer.appendChild(el.cloneNode(true));
-                        el.remove();
-                    });
-                    
-                    // Store it to append after screenshots load
-                    window.aboutSectionToMove = aboutContainer;
+                    aboutElements.forEach(el => aboutContainer.appendChild(el));
                 }
             } catch (error) {
                 // Show fallback message with repo URL
@@ -133,10 +129,10 @@
                 });
                 
                 // Append the "About This Project" section after screenshots if it was moved
-                if (window.aboutSectionToMove) {
+                if (aboutContainer) {
                     const mediaContent = document.querySelector('.media-content');
                     if (mediaContent) {
-                        mediaContent.appendChild(window.aboutSectionToMove);
+                        mediaContent.appendChild(aboutContainer);
                     }
                 }
             }

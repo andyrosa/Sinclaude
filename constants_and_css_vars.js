@@ -2,8 +2,8 @@
 const one_million = 1000000; // hard to read so many zeros; get_with_the_program_js!
 const FPS = 60;
 const RUN_LOOP_INTERVAL_MS = 1;
-const fancy_highlight_scroll = true;
 const version_update_check_interval_ms = 5000;
+const LOCALSTORAGE_RETRO_FONTS_KEY = "useRetroFont";
 
 // Hex formatting helpers
 const formatHex2 = (value) => value.toString(16).padStart(2, "0").toUpperCase();
@@ -34,30 +34,18 @@ const Z_INDEX = {
     MAXIMUM: 9999               // Maximum z-index for critical overlays
 };
 
-// Maps Z_INDEX property names to CSS variable names
-// e.g. MENU_DROPDOWN -> --z-menu-dropdown
-const Z_INDEX_CSS_NAMES = {
-    BASE: '--z-base',
-    MENU_DROPDOWN: '--z-menu-dropdown',
-    MODAL_BACKDROP: '--z-modal-backdrop',
-    EXPANDED_ELEMENT: '--z-expanded-element',
-    RESTORE_MESSAGE: '--z-restore-message',
-    TOOLTIP: '--z-tooltip',
-    NOTIFICATION: '--z-notification',
-    DEBUG_OVERLAY: '--z-debug-overlay',
-    MAXIMUM: '--z-maximum',
-};
+// Z_INDEX property name to CSS variable name, e.g. MENU_DROPDOWN -> --z-menu-dropdown
+function zIndexCssVariableName(key) {
+    return '--z-' + key.toLowerCase().replace(/_/g, '-');
+}
 
 function setCssVariables() {
     const root = document.documentElement;
 
-    // Set Z-Index constants
-    for (const key of Object.keys(Z_INDEX_CSS_NAMES)) {
-        root.style.setProperty(Z_INDEX_CSS_NAMES[key], Z_INDEX[key]);
+    // Expose the Z-Index constants to the stylesheets
+    for (const key of Object.keys(Z_INDEX)) {
+        root.style.setProperty(zIndexCssVariableName(key), Z_INDEX[key]);
     }
-
-    // Set breakpoint constants
-    root.style.setProperty('--narrow-max-width', BREAKPOINTS.MOBILE_MAX + 'px');
 }
 // setCssVariables uses document, which exists only in the browser
 if (typeof document !== 'undefined') {

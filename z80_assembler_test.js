@@ -14,13 +14,19 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Helper method to extract all machine code bytes from instructionDetails
   getMachineCodeFromInstructions(instructionDetails) {
-    const machineCode = [];
-    for (const instruction of instructionDetails) {
-      if (instruction.opcodes && instruction.opcodes.length > 0) {
-        machineCode.push(...instruction.opcodes);
-      }
-    }
-    return machineCode;
+    return instructionDetails.flatMap((instruction) => instruction.opcodes);
+  }
+
+  formatAssemblyErrors(result) {
+    return result.errors.map((e) => e.message).join(", ");
+  }
+
+  // Assert that the source assembles; returns the result for further checks
+  assertAssembles(code, testName) {
+    const result = this.assembler.assemble(code);
+    const details = result.success ? "" : this.formatAssemblyErrors(result);
+    this.assert(result.success, testName, details);
+    return result;
   }
 
   assertAssemblySuccess(code, expectedBytes) {
@@ -29,20 +35,16 @@ class Z80AssemblerTestClass extends TestFramework {
       const actualBytes = this.getMachineCodeFromInstructions(
         result.instructionDetails
       );
-      if (!this.arraysEqual(actualBytes, expectedBytes)) {
-        this.assert(
-          false,
-          code,
-          `Expected bytes: [${expectedBytes}], got: [${actualBytes}]`
-        );
-      } else {
-        this.assert(true, code);
-      }
+      this.assert(
+        this.arraysEqual(actualBytes, expectedBytes),
+        code,
+        `Expected bytes: [${expectedBytes}], got: [${actualBytes}]`
+      );
     } else {
       this.assert(
         false,
         code,
-        `Assembly failed: ${result.errors.map((e) => e.message).join(", ")}`
+        `Assembly failed: ${this.formatAssemblyErrors(result)}`
       );
     }
     return result;
@@ -78,12 +80,6 @@ class Z80AssemblerTestClass extends TestFramework {
   }
 
   runAllTests() {
-    // Load dependencies using inherited method
-    const { Z80Assembler, TestFramework } = this.loadDependencies([
-      "Z80Assembler",
-      "TestFramework",
-    ]);
-
     // Always create a fresh assembler instance
     this.assembler = new Z80Assembler();
     this.testLineParsingAndComments();
@@ -1252,15 +1248,7 @@ class Z80AssemblerTestClass extends TestFramework {
                 ld b, VALUE
                 halt
         `;
-    const mixedResult = this.assembler.assemble(mixedCaseProgram);
-    this.assert(
-      mixedResult.success,
-      "Mixed case labels and constants",
-      mixedResult.error ||
-        (mixedResult.errors
-          ? mixedResult.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(mixedCaseProgram, "Mixed case labels and constants");
 
     // Test EQU directive in different cases
     const equProgram = `
@@ -1271,15 +1259,7 @@ class Z80AssemblerTestClass extends TestFramework {
             LD B, VALUE2
             LD C, Value3
         `;
-    const equResult = this.assembler.assemble(equProgram);
-    this.assert(
-      equResult.success,
-      "EQU directive case insensitivity",
-      equResult.error ||
-        (equResult.errors
-          ? equResult.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(equProgram, "EQU directive case insensitivity");
 
     // Test DB directive with mixed case
     this.assertAssemblySuccess('db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
@@ -1317,15 +1297,7 @@ class Z80AssemblerTestClass extends TestFramework {
             buffer:
                 defs BUFFER_SIZE, 0
         `;
-    const complexResult = this.assembler.assemble(complexProgram);
-    this.assert(
-      complexResult.success,
-      "Complex mixed case program",
-      complexResult.error ||
-        (complexResult.errors
-          ? complexResult.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(complexProgram, "Complex mixed case program");
   }
 
   // Test 14: Branch range limits
@@ -1347,15 +1319,7 @@ class Z80AssemblerTestClass extends TestFramework {
         HALT
 `;
 
-    const result127 = this.assembler.assemble(sourceCode127);
-    this.assert(
-      result127.success,
-      "Forward branch with 127 NOPs should succeed",
-      result127.error ||
-        (result127.errors
-          ? result127.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(sourceCode127, "Forward branch with 127 NOPs should succeed");
 
     // Test 2: 128 NOPs forward - should fail
     let sourceCode128 = `
@@ -1396,15 +1360,7 @@ class Z80AssemblerTestClass extends TestFramework {
     HALT
 `;
 
-    const result125Back = this.assembler.assemble(sourceCode125Back);
-    this.assert(
-      result125Back.success,
-      "Backward branch with 125 NOPs should succeed (offset -128)",
-      result125Back.error ||
-        (result125Back.errors
-          ? result125Back.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(sourceCode125Back, "Backward branch with 125 NOPs should succeed (offset -128)");
 
     // Test 4: 127 NOPs backward - should fail (offset = -129, out of range)
     let sourceCode127Back = `
@@ -1440,15 +1396,7 @@ class Z80AssemblerTestClass extends TestFramework {
       TARGET126:
         HALT`;
 
-    const resultExactLimit = this.assembler.assemble(exactLimitForward);
-    this.assert(
-      resultExactLimit.success,
-      "Forward branch at exact limit (126 NOPs) should succeed",
-      resultExactLimit.error ||
-        (resultExactLimit.errors
-          ? resultExactLimit.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    this.assertAssembles(exactLimitForward, "Forward branch at exact limit (126 NOPs) should succeed");
 
     // Test simple JR to skip 1 NOP
     const simpleSkipTest = `
@@ -1459,15 +1407,7 @@ class Z80AssemblerTestClass extends TestFramework {
       SKIP:
           HALT             ; Jump lands here`;
 
-    const resultSimpleSkip = this.assembler.assemble(simpleSkipTest);
-    this.assert(
-      resultSimpleSkip.success,
-      "JR SKIP should jump over 1 NOP instruction",
-      resultSimpleSkip.error ||
-        (resultSimpleSkip.errors
-          ? resultSimpleSkip.errors.map((e) => e.message).join(", ")
-          : "")
-    );
+    const resultSimpleSkip = this.assertAssembles(simpleSkipTest, "JR SKIP should jump over 1 NOP instruction");
 
     // Verify the generated bytecode is correct
     if (resultSimpleSkip.success) {
@@ -1480,7 +1420,7 @@ class Z80AssemblerTestClass extends TestFramework {
       );
 
       this.assert(
-        JSON.stringify(actualBytes) === JSON.stringify(expectedBytes),
+        this.arraysEqual(actualBytes, expectedBytes),
         "JR SKIP generates correct bytecode [0x18, 0x01, 0x00, 0x76]",
         `Expected: [${expectedBytes.join(", ")}], Got: [${actualBytes.join(
           ", "
@@ -1676,43 +1616,6 @@ class Z80AssemblerTestClass extends TestFramework {
       "JP address high byte is 0x20 (0x2000 >> 8)"
     );
   }
-  reportInstructionSetAnalysis() {
-    try {
-      // Create a Z80Assembler instance to get the analysis
-      const assembler = new Z80Assembler();
-      const analysis = assembler.getInstructionSetAnalysis();
-      
-      // Dump any problems to userMessageAboutBug
-      const problems = [];
-      
-      if (analysis.duplicateMnemonicOperands.length > 0) {
-        userMessageAboutBug(`Duplicate mnemonic/operand combinations", ${analysis.duplicateMnemonicOperands.join(', ')}`);
-      }
-      
-      if (analysis.duplicateOpcodes.length > 0) {
-        userMessageAboutBug(`Duplicate opcodes: ${analysis.duplicateOpcodes.join(', ')}`);
-      }
-      
-      if (analysis.missingSingleBytes.length > 0) {
-        consoleLogApproved(`Single-byte opcodes not implemented: ${analysis.missingSingleBytes.length}`);
-      }
-      
-    } catch (error) {
-      if (typeof userMessageAboutBug !== 'undefined') {
-        userMessageAboutBug(
-          'Instruction set analysis failed',
-          error.message
-        );
-      }
-    }
-  }
-
-}
-
-// Run the tests if this is being run directly in Node.js
-if (typeof require !== "undefined" && require.main === module) {
-  const z80AssemblerTestClass = new Z80AssemblerTestClass();
-  z80AssemblerTestClass.runAllTests();
 }
 
 // Export for use in other modules (Node.js environment)

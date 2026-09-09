@@ -127,12 +127,6 @@
  * BIT 0,A; BIT 1,A; BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
  */
 
-// In the browser, constants_and_css_vars.js provides formatHex2/formatHex4 as globals;
-// in Node.js, load them onto globalThis to mirror that.
-if (typeof formatHex2 === 'undefined' && typeof require !== 'undefined') {
-    Object.assign(globalThis, require('./constants_and_css_vars.js'));
-}
-
 class Z80Assembler {
     // --- Constants for operand patterns ---
     static OPERAND = {
@@ -144,12 +138,23 @@ class Z80Assembler {
         MEM8: '(n)',    // 8-bit memory address (I/O)
         MEM16: '(nn)',  // 16-bit memory address
 
-        // String literal for DB
-        STRING: 'string',
-
         // Relative displacement for JR, DJNZ
         RELATIVE: 'd'
     };
+
+    // Bytes each value-matched ("generic") operand pattern adds to an instruction.
+    // A pattern absent from this table is a literal register or condition name.
+    static OPERAND_SIZE = {
+        [Z80Assembler.OPERAND.IMM8]: 1,
+        [Z80Assembler.OPERAND.RELATIVE]: 1,
+        [Z80Assembler.OPERAND.MEM8]: 1,
+        [Z80Assembler.OPERAND.IMM16]: 2,
+        [Z80Assembler.OPERAND.MEM16]: 2,
+    };
+
+    static _isGenericOperand(pattern) {
+        return Object.prototype.hasOwnProperty.call(Z80Assembler.OPERAND_SIZE, pattern);
+    }
 
     /**
      * Initializes the assembler and builds the instruction lookup table.
@@ -308,11 +313,8 @@ class Z80Assembler {
                         // Store string length if this DB has a label and contains a string
                         if (parsed.label && parsed.operands.length === 1) {
                             const operand = parsed.operands[0];
-                            if (operand.startsWith('"') && operand.endsWith('"')) {
-                                const rawStr = operand.slice(1, -1);
-                                const processedStr = this._processEscapeSequences(rawStr);
-                                const stringLength = processedStr.length;
-                                this.dbLengths[parsed.label.toUpperCase()] = stringLength;
+                            if (this._isStringLiteral(operand)) {
+                                this.dbLengths[parsed.label.toUpperCase()] = this._stringLiteralValue(operand).length;
                             }
                         }
                         this.currentAddress += this._calculateDataSize(parsed);
@@ -325,9 +327,11 @@ class Z80Assembler {
                         // Stop processing further lines
                         return;
                     default:
-                        // It's an instruction, so find its definition and size
+                        // It's an instruction, so find its definition and size.
+                        // The match is kept on the parsed line so pass 2 does not search again.
                         const instruction = this._resolveInstruction(parsed, lineNum);
                         if (instruction) {
+                            parsed.instruction = instruction;
                             this.currentAddress += instruction.size;
                         }
                         break; // Error already reported by _resolveInstruction
@@ -389,10 +393,8 @@ class Z80Assembler {
                     bytes = Array(size).fill(fill & 0xFF);
                     break;
                 default:
-                    const instruction = this._resolveInstruction(parsed, parsed.lineNum);
-                    if (instruction) {
-                       bytes = this._generateInstructionBytes(instruction, parsed);
-                    }
+                    // Pass 2 only runs when pass 1 resolved every instruction line
+                    bytes = this._generateInstructionBytes(parsed.instruction, parsed);
                     break;
             }
             
@@ -414,10 +416,10 @@ class Z80Assembler {
      */
     _parseLine(line, lineNum) {
         // Use the ExpressionParser for proper lexical analysis
-        const parser = new ExpressionParser(line, [], this.symbols, lineNum, this);
+        const parser = new ExpressionParser(line, this.symbols, lineNum, this);
         return parser.parseLine();
     }
-    
+
     /**
      * Finds the matching instruction definition for a parsed line.
      * @param {object} parsedLine - The output from _parseLine.
@@ -433,12 +435,14 @@ class Z80Assembler {
             return null;
         }
 
+        const upperOperands = operands.map(operand => operand.toUpperCase());
+
         // Candidates are pre-sorted during _buildInstructionSet (specific patterns before generic)
         for (const inst of candidates) {
             if (inst.operands.length !== operands.length) continue;
 
             const patternMatch = inst.operands.every((pattern, i) => {
-                const operand = operands[i].toUpperCase();
+                const operand = upperOperands[i];
                 switch (pattern) {
                     case Z80Assembler.OPERAND.IMM8:
                     case Z80Assembler.OPERAND.IMM16:
@@ -449,8 +453,6 @@ class Z80Assembler {
                     case Z80Assembler.OPERAND.MEM8:
                         // These patterns match memory references: (expression)
                         return this._isMemoryReference(operand);
-                    case Z80Assembler.OPERAND.STRING:
-                        return operand.startsWith('"') && operand.endsWith('"');
                     default:
                         // Exact match for registers or conditions (e.g., 'A', 'BC', 'NZ')
                         return pattern === operand;
@@ -458,13 +460,7 @@ class Z80Assembler {
             });
 
             if (patternMatch) {
-                // Calculate size for the first pass
-                let size = inst.opcodes.length;
-                inst.operands.forEach(p => {
-                    if (p === Z80Assembler.OPERAND.IMM8 || p === Z80Assembler.OPERAND.RELATIVE || p === Z80Assembler.OPERAND.MEM8) size += 1;
-                    if (p === Z80Assembler.OPERAND.IMM16 || p === Z80Assembler.OPERAND.MEM16) size += 2;
-                });
-                return { ...inst, size };
+                return inst;
             }
         }
 
@@ -509,7 +505,7 @@ class Z80Assembler {
                         this._reportError(parsedLine.lineNum, `16-bit immediate value out of range (-32768 to 65535): ${value}`);
                         failed = true;
                     } else {
-                        bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+                        bytes.push(...this._wordToLittleEndianBytes(value));
                     }
                     break;
                 }
@@ -536,7 +532,7 @@ class Z80Assembler {
                         this._reportError(parsedLine.lineNum, `Invalid 16-bit address: '${operandStr}'`);
                         failed = true;
                     } else {
-                        bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+                        bytes.push(...this._wordToLittleEndianBytes(value));
                     }
                     break;
                 }
@@ -548,17 +544,12 @@ class Z80Assembler {
                         failed = true;
                     } else {
                         // Relative offset is from the address *after* the instruction
-                        if (this.currentAddress === undefined) {
-                            this._reportError(parsedLine.lineNum, `Internal error: currentAddress undefined during relative jump calculation.`);
+                        const offset = targetAddr - (this.currentAddress + instruction.size);
+                        if (offset < -128 || offset > 127) {
+                            this._reportError(parsedLine.lineNum, `Relative jump target out of range. Offset is ${offset}.`);
                             failed = true;
                         } else {
-                            const offset = targetAddr - (this.currentAddress + instruction.size);
-                            if (offset < -128 || offset > 127) {
-                                this._reportError(parsedLine.lineNum, `Relative jump target out of range. Offset is ${offset}.`);
-                                failed = true;
-                            } else {
-                                bytes.push(offset & 0xFF); // Two's complement representation
-                            }
+                            bytes.push(offset & 0xFF); // Two's complement representation
                         }
                     }
                     break;
@@ -579,12 +570,25 @@ class Z80Assembler {
      * @param {object} symbols - Symbol table for label/equate lookup.
      * @returns {number} The evaluated result.
      */
-    _evaluateExpression(expr, symbols, lineNum) {    
-        const parser = new ExpressionParser(expr.trim(), [], symbols, lineNum, this);
+    _evaluateExpression(expr, symbols, lineNum) {
+        const parser = new ExpressionParser(expr.trim(), symbols, lineNum, this);
         return parser.parseExpression();
     }
-    
+
     // --- Helper methods for data directives (DB, DW, DS) ---
+
+    _isStringLiteral(operand) {
+        return operand.startsWith('"') && operand.endsWith('"');
+    }
+
+    // The string's characters with quotes removed and escape sequences applied
+    _stringLiteralValue(operand) {
+        return this._processEscapeSequences(operand.slice(1, -1));
+    }
+
+    _wordToLittleEndianBytes(value) {
+        return [value & 0xFF, (value >> 8) & 0xFF];
+    }
 
     _calculateDataSize(parsed) {
         const { mnemonic, operands } = parsed;
@@ -594,10 +598,8 @@ class Z80Assembler {
 
         let size = 0;
         for (const op of operands) {
-            if (op.startsWith('"') && op.endsWith('"')) {
-                const rawStr = op.slice(1, -1);
-                const processedStr = this._processEscapeSequences(rawStr);
-                size += processedStr.length;
+            if (this._isStringLiteral(op)) {
+                size += this._stringLiteralValue(op).length;
             } else {
                 size += (mnemonic.toUpperCase() === 'DEFW' ? 2 : 1);
             }
@@ -610,9 +612,8 @@ class Z80Assembler {
         let failed = false;
         const symbols = this.symbols;
         for (const op of parsed.operands) {
-            if (op.startsWith('"') && op.endsWith('"')) {
-                const rawStr = op.slice(1, -1);
-                const processedStr = this._processEscapeSequences(rawStr);
+            if (this._isStringLiteral(op)) {
+                const processedStr = this._stringLiteralValue(op);
                 for (let i = 0; i < processedStr.length; i++) {
                     bytes.push(processedStr.charCodeAt(i));
                 }
@@ -639,7 +640,7 @@ class Z80Assembler {
                  this._reportError(parsed.lineNum, `Invalid word value: '${op}'`);
                  failed = true;
              } else {
-                 bytes.push(value & 0xFF, (value >> 8) & 0xFF); // Little-endian
+                 bytes.push(...this._wordToLittleEndianBytes(value));
              }
         }
         return failed ? [] : bytes;
@@ -1054,27 +1055,24 @@ class Z80Assembler {
             if (!this.instructionMap.has(mnemonic)) {
                 this.instructionMap.set(mnemonic, []);
             }
+            // Size is fixed per definition: opcode bytes plus the operand value bytes
+            const operandBytes = def.ops.reduce(
+                (total, pattern) => total + (Z80Assembler._isGenericOperand(pattern) ? Z80Assembler.OPERAND_SIZE[pattern] : 0),
+                0
+            );
             this.instructionMap.get(mnemonic).push({
                 operands: def.ops,
-                opcodes: def.opc
+                opcodes: def.opc,
+                size: def.opc.length + operandBytes
             });
         });
 
         // Pre-sort candidates for each mnemonic (specific patterns before generic ones)
+        const hasGenericOperand = (inst) => inst.operands.some(Z80Assembler._isGenericOperand);
         for (const [, candidates] of this.instructionMap) {
             candidates.sort((a, b) => {
-                const aHasGeneric = a.operands.some(op => 
-                    op === Z80Assembler.OPERAND.IMM8 || 
-                    op === Z80Assembler.OPERAND.IMM16 || 
-                    op === Z80Assembler.OPERAND.RELATIVE ||
-                    op === Z80Assembler.OPERAND.MEM16
-                );
-                const bHasGeneric = b.operands.some(op => 
-                    op === Z80Assembler.OPERAND.IMM8 || 
-                    op === Z80Assembler.OPERAND.IMM16 || 
-                    op === Z80Assembler.OPERAND.RELATIVE ||
-                    op === Z80Assembler.OPERAND.MEM16
-                );
+                const aHasGeneric = hasGenericOperand(a);
+                const bHasGeneric = hasGenericOperand(b);
                 if (aHasGeneric && !bHasGeneric) return 1;
                 if (!aHasGeneric && bHasGeneric) return -1;
                 return 0;
@@ -1174,10 +1172,10 @@ class Z80Assembler {
      * @param {string} message - The error description.
      */
     _reportError(lineNum, message) {
-        this.errors.push({ 
-            line: lineNum, 
-            address: this.currentAddress !== undefined ? this.currentAddress : null, 
-            message 
+        this.errors.push({
+            line: lineNum,
+            address: this.currentAddress,
+            message
         });
     }
 
@@ -1210,30 +1208,17 @@ class Z80Assembler {
      * @returns {string} A formatted string representation of the machine code.
      */
     generateMachineCodeListing(instructionDetails, loadAddress) {
-        if (!instructionDetails || instructionDetails.length === 0) {
-            return "No machine code generated.";
-        }
-
-        // Build sparse memory array from instruction details (like simulator does)
+        // Build sparse memory from instruction details with the same loader the simulator uses
         const memory = {};
-        let minAddress = null;
-        let maxAddress = null;
+        Z80Assembler.loadOpcodesIntoMemory(memory, instructionDetails);
+        const addresses = Object.keys(memory).map(Number);
 
-        instructionDetails.forEach(detail => {
-            if (detail.startAddress !== null && detail.opcodes.length > 0) {
-                for (let i = 0; i < detail.opcodes.length; i++) {
-                    const addr = detail.startAddress + i;
-                    memory[addr] = detail.opcodes[i];
-                    
-                    if (minAddress === null || addr < minAddress) minAddress = addr;
-                    if (maxAddress === null || addr > maxAddress) maxAddress = addr;
-                }
-            }
-        });
-
-        if (minAddress === null) {
+        if (addresses.length === 0) {
             return "No machine code generated.";
         }
+
+        const minAddress = addresses.reduce((lowest, addr) => Math.min(lowest, addr));
+        const maxAddress = addresses.reduce((highest, addr) => Math.max(highest, addr));
 
         let output = "";
 
@@ -1263,8 +1248,7 @@ class Z80Assembler {
             if (rowBytes.length > 0) {
             
                 // Calculate CRC16 for this line (address bytes + data bytes)
-                const addressBytes = [rowStartAddress & 0xFF, (rowStartAddress >> 8) & 0xFF];
-                const lineBytes = [...addressBytes, ...rowBytes];
+                const lineBytes = [...this._wordToLittleEndianBytes(rowStartAddress), ...rowBytes];
                 const lineCRC16 = this._calculateCRC16(lineBytes);
 
                 // Address part (decimal)
@@ -1289,9 +1273,8 @@ class Z80Assembler {
  *   FunctionCall := Identifier '(' Expression ')'
  */
 class ExpressionParser {
-    constructor(expr, literals, symbols, lineNum, assembler) {
+    constructor(expr, symbols, lineNum, assembler) {
         this.expr = expr;
-        this.literals = literals;
         this.symbols = symbols;
         this.lineNum = lineNum;
         this.assembler = assembler;
@@ -1417,7 +1400,7 @@ class ExpressionParser {
         }
         
         // Handle numbers
-        if (this.isDigit(this.peek()) || this.peek() === '$' || this.peek() === '%' || this.peek() === '0') {
+        if (this.isDigit(this.peek()) || this.peek() === '$' || this.peek() === '%') {
             return this.parseNumber();
         }
         
@@ -1465,23 +1448,14 @@ class ExpressionParser {
 
     // Parse identifier or function call
     parseIdentifierOrFunction() {
-        let identifier = '';
-        while (this.isIdentifierChar(this.peek())) {
-            identifier += this.next();
+        const identifier = this.parseIdentifier();
+
+        // An identifier such as FFH or 0AH is a hex number with an H suffix
+        const hexValue = this.hexSuffixValueOrNull(identifier);
+        if (hexValue !== null) {
+            return hexValue;
         }
-        
-        // Check if this might be a hex number with H suffix
-        if (identifier.toUpperCase().endsWith('H')) {
-            const hexPart = identifier.slice(0, -1);
-            // Check if all characters except the H are valid hex digits
-            if (hexPart.length > 0 && /^[0-9A-Fa-f]+$/.test(hexPart)) {
-                const result = parseInt(hexPart, 16);
-                if (!isNaN(result)) {
-                    return result;
-                }
-            }
-        }
-        
+
         // Check if it's a function call
         if (this.peek() === '(') {
             this.next(); // consume '('
@@ -1522,21 +1496,12 @@ class ExpressionParser {
         if (!this.isIdentifierStart(this.peek())) {
             throw new Error('Expected symbol name');
         }
-        
-        let symbolName = '';
-        while (this.isIdentifierChar(this.peek())) {
-            symbolName += this.next();
-        }
-        
-        return symbolName;
+
+        return this.parseIdentifier();
     }
 
     // Handle len() function
     handleLenFunction(symbolName) {
-        if (typeof symbolName !== 'string') {
-            throw new Error('len() function requires a symbol name');
-        }
-        
         const upperName = symbolName.toUpperCase();
         
         // Check if it's in the DB lengths dictionary
@@ -1615,24 +1580,31 @@ class ExpressionParser {
             while (this.isAlphaNum(this.peek())) {
                 numStr += this.next();
             }
-            
-            // Check for hex suffix H
-            if (numStr.toUpperCase().endsWith('H')) {
-                base = 16;
-                numStr = numStr.slice(0, -1);
+
+            const hexValue = this.hexSuffixValueOrNull(numStr);
+            if (hexValue !== null) {
+                return hexValue;
             }
         }
-        
+
         if (numStr === '') {
             throw new Error('Invalid number format');
         }
-        
+
         const result = parseInt(numStr, base);
         if (isNaN(result)) {
             throw new Error(`Invalid number: ${numStr}`);
         }
-        
+
         return result;
+    }
+
+    // Value of a hex literal written with an H suffix (FFH, 0AH); null when token is not one
+    hexSuffixValueOrNull(token) {
+        if (!/^[0-9A-Fa-f]+[Hh]$/.test(token)) {
+            return null;
+        }
+        return parseInt(token.slice(0, -1), 16);
     }
 
     // Helper functions
@@ -1697,37 +1669,16 @@ class ExpressionParser {
         // Try to parse an identifier (could be label or mnemonic)
         if (this.isIdentifierStart(this.peek())) {
             const identifier = this.parseIdentifier();
-            
+
             this.skipWhitespace();
-            
-            // Check if we hit a comment
-            if (this.peek() === ';' || this.pos >= this.expr.length) {
-                // Just a standalone identifier (probably a label without colon)
-                return {
-                    lineNum: this.lineNum,
-                    label: null,
-                    mnemonic: identifier,
-                    operands: []
-                };
-            }
-            
+
             // Check if it's a label (followed by colon)
             if (this.peek() === ':') {
                 this.next(); // consume ':'
                 label = identifier;
                 this.skipWhitespace();
-                
-                // Check for comment after label
-                if (this.peek() === ';' || this.pos >= this.expr.length) {
-                    return {
-                        lineNum: this.lineNum,
-                        label: label,
-                        mnemonic: null,
-                        operands: []
-                    };
-                }
-                
-                // Parse mnemonic after label
+
+                // Parse mnemonic after label, if the line has one
                 if (this.isIdentifierStart(this.peek())) {
                     mnemonic = this.parseIdentifier();
                 }

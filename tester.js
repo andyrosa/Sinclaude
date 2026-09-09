@@ -8,9 +8,6 @@ class TestFramework {
     this.testCount = 0;
     this.passedCount = 0;
     this.failedTests = [];
-
-    // Detect if running in Node.js vs browser
-    this.isNode = typeof module !== "undefined" && module.exports;
   }
 
   // Core test assertion method
@@ -54,67 +51,6 @@ class TestFramework {
   // Helper method to check if all tests passed
   allTestsPassed() {
     return this.passedCount === this.testCount;
-  }
-
-  // Get failure count
-  getFailureCount() {
-    return this.testCount - this.passedCount;
-  }
-
-  // Reset test state (useful for running multiple test suites)
-  reset() {
-    this.testCount = 0;
-    this.passedCount = 0;
-    this.failedTests = [];
-  }
-
-    // Common dependency loading for test classes
-  loadDependencies(dependencyNames) {
-    const dependencies = {};
-    
-    if (typeof require !== "undefined") {
-      // Node.js environment
-      try {
-        for (const depName of dependencyNames) {
-          if (depName === "TestFramework") {
-            dependencies[depName] = require("./tester.js");
-          } else {
-            // Assume dependency file name matches: Z80CPU -> z80_cpu_emulator.js, Z80Assembler -> z80_assembler.js
-            const fileName = depName === "Z80CPU" ? "./z80_cpu_emulator.js" : 
-                           depName === "Z80Assembler" ? "./z80_assembler.js" : 
-                           `./${depName.toLowerCase()}.js`;
-            dependencies[depName] = require(fileName);
-          }
-        }
-      } catch (error) {
-        throw new Error(`Failed to load dependencies in Node.js: ${error.message}`);
-      }
-    } else {
-      // Browser environment - classes should be globally available
-      for (const depName of dependencyNames) {
-        if (typeof window !== "undefined" && window[depName]) {
-          dependencies[depName] = window[depName];
-        } else if (typeof global !== "undefined" && global[depName]) {
-          dependencies[depName] = global[depName];
-        } else {
-          // Check direct global access
-          if (typeof eval !== "undefined") {
-            try {
-              const globalDep = eval(depName);
-              if (typeof globalDep !== "undefined") {
-                dependencies[depName] = globalDep;
-                continue;
-              }
-            } catch (e) {
-              // Ignore eval errors
-            }
-          }
-          throw new Error(`${depName} class not available in browser environment - ensure ${depName.toLowerCase()}.js is loaded`);
-        }
-      }
-    }
-    
-    return dependencies;
   }
 
   // Common test completion pattern

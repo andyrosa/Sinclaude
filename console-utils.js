@@ -9,12 +9,15 @@ function userMessage(message) {
   const consoleDiv = document.getElementById("console");
   const timestamp = new Date().toLocaleTimeString();
   const line = `${timestamp} ${message}\n`;
-  consoleDiv.textContent += line;
+  // append adds a text node instead of re-serializing the whole console each message
+  consoleDiv.append(line);
   consoleDiv.scrollTop = consoleDiv.scrollHeight;
 }
 
+// Bug reports go to both the user (simple message) and the developer (technical message)
 function userMessageAboutBug(userMsg, consoleMsg) {
   userMessage(`BUG: ${userMsg}`);
+  console.error(`BUG: ${consoleMsg}`);
 }
 
 // Helper to parse string as truthy value

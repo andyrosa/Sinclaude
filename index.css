@@ -41,7 +41,6 @@ p {
     font-size: 1em;
     text-align: left;
     margin: 2em 0;
-    word-wrap: break-word;
     overflow-wrap: break-word;
 }
 
@@ -62,7 +61,6 @@ p {
 
 .launch-button:hover {
     background: var(--button-hover-bgc);
-    color: var(--button-text-c);
 }
 
 /* Links */
@@ -211,12 +209,7 @@ pre code {
         font-size: 1.4em;
     }
 
-    h3 {
-        font-size: 1.2em;
-    }
-
     .content {
-        font-size: 1em;
         margin: 1em 0;
     }
 

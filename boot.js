@@ -15,6 +15,7 @@ function loadVersionWithCallback(callback) {
       if (typeof userMessageAboutBug === "function") {
         userMessageAboutBug(
           "Unable to load version information from local and remote sources",
+          `version.js failed to load from ${githubVersionScript.src}`
         );
       }
       callback();

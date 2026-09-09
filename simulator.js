@@ -8,8 +8,30 @@ const KBD_NO_KEY_PRESSED = -1;
 const BEEP_10HZ_PORT = 2;
 const BEEP_MS_PORT = 3;
 
+// Run loop batch: at 1 MIPS, 1/60 of a second is 16,000 instructions;
+// the closest prime keeps batch boundaries from syncing with the refresh rate
+const RUN_BATCH_INSTRUCTIONS = 15991;
+const MAX_URL_LENGTH = 2000; // supposed to be 32K but erring at a lot less
+const EASTER_EGG_DURATION_MS = 4000;
+const ANIMATION_FRAME_MS = 20;
+const BEEP_GAIN = 0.1;
+const BUTTON_EDIT_FOCUS_DELAY_MS = 10;
+
 // Sinclair block characters that should not use retro font
 const sinclairBlockChars = [6, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22];
+
+// Keys a game button can be named after. sinclairCode is the keyboard-port value for
+// keys without a printable character; null means the key goes through unicodeToSinclair.
+const SPECIAL_KEYS = [
+  { keyCode: 32, name: "Space", sinclairCode: null },
+  { keyCode: 27, name: "Escape", sinclairCode: 12 },
+  { keyCode: 38, name: "ArrowUp", sinclairCode: 145 },
+  { keyCode: 40, name: "ArrowDown", sinclairCode: 147 },
+  { keyCode: 37, name: "ArrowLeft", sinclairCode: 144 },
+  { keyCode: 39, name: "ArrowRight", sinclairCode: 146 },
+  { keyCode: 13, name: "Enter", sinclairCode: 13 },
+  { keyCode: 9, name: "Tab", sinclairCode: null },
+];
 
 class Simulator {
   constructor() {
@@ -36,10 +58,9 @@ class Simulator {
     this.highlightedPC = null;
     this.lastPC = null;
 
-    // Screen optimization tracking
+    // Screen optimization tracking; an empty screenElements array forces a full rebuild
     this.lastScreenState = new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT);
     this.screenElements = [];
-    this.lastScreenStateIsValid = false;
 
     // Timer management
     this.activeTimers = new Set();
@@ -47,19 +68,17 @@ class Simulator {
 
     // Beep functionality
     this.audioContext = null;
-    this.currentOscillator = null;
-    this.lastBeepHz = 0;
-    this.lastBeepMs = 0;
 
     // Sinclair byte <-> Unicode char
-    this.sinclairByteToUnicodeNeverInverts = {};
     this.initializeCharacterMappings();
     this.initializeKeyMappings();
 
     // Button lifecycle state tracking
     this.lastIsAssemblyAreaClear = null;
+    this.buttonEditMode = false;
 
-    this.useSinclairFont = true;
+    this.useSinclairFont =
+      localStorage.getItem(LOCALSTORAGE_RETRO_FONTS_KEY) !== "false";
 
     this.setupDOM();
     this.setupKeyboard();
@@ -206,27 +225,17 @@ class Simulator {
       "©", // not DEL
     ];
 
-    // Build Sinclair byte -> Unicode char
-    for (let i = 0; i < 128; i++) {
-      this.sinclairByteToUnicodeNeverInverts[i] =
-        sinclairByteToUnicode[i] || "¿";
-    }
-
-    // Extended range 128-255: Inverted/flashing characters
-    // In ZX Spectrum, 128+ were inverted versions of 0-127
-    for (let i = 128; i < 256; i++) {
-      const baseChar = sinclairByteToUnicode[i - 128];
-      this.sinclairByteToUnicodeNeverInverts[i] = baseChar || "?";
-    }
+    // Bytes 128-255 are the inverted forms of 0-127 (same glyph), so the
+    // 128-entry table is indexed with the top bit masked off
+    this.sinclairByteToUnicode = sinclairByteToUnicode;
 
     // Build reverse lookup map (Unicode char -> Sinclair byte) for O(1) conversion
     this.unicodeToSinclairMap = new Map();
-    for (let byte = 0; byte < 256; byte++) {
-      const char = this.sinclairByteToUnicodeNeverInverts[byte];
-      if (char && !this.unicodeToSinclairMap.has(char)) {
+    sinclairByteToUnicode.forEach((char, byte) => {
+      if (!this.unicodeToSinclairMap.has(char)) {
         this.unicodeToSinclairMap.set(char, byte);
       }
-    }
+    });
   }
 
   setupDOM() {
@@ -246,7 +255,6 @@ class Simulator {
       document.getElementById("currentInstruction");
     this.refreshRateDisplay = document.getElementById("refreshRate");
     this.mipsDisplay = document.getElementById("mips");
-    this.RAMatPCDisplay = document.getElementById("RAMatPC");
     this.portsDisplay = document.getElementById("ports");
 
     // Assembly editor elements
@@ -255,8 +263,10 @@ class Simulator {
     this.opcodesColumn = document.getElementById("opcodesColumn");
     this.assemblyColumn = document.getElementById("assemblyColumn");
 
-    // Listing section elements
+    // Collapsible sections
+    this.assemblySection = document.querySelector(".assembly-section");
     this.listingSection = document.querySelector(".listing-section");
+    this.consoleSection = document.querySelector(".console-section");
 
     // Generate program buttons and key inputs
     this.createGameButtons();
@@ -264,53 +274,27 @@ class Simulator {
     // Setup assembly editor
     this.setupAssemblyEditor();
 
-    // Setup listing section toggle
-    this.setupListingToggle();
+    this.setupCollapsibleSection(this.listingSection);
+    this.setupCollapsibleSection(this.consoleSection);
 
-    // Setup console section toggle
-    this.setupConsoleToggle();
-
-    // Initialize edit toggle text by triggering the two-state function
-    toggleButtonCaptionEdit();
-    toggleButtonCaptionEdit();
-
-    // Setup touch hints for touch-enabled devices
-    this.setupTouchHints();
+    this.applyButtonEditMode(false);
   }
 
   setupAssemblyEditor() {
-    if (!this.assemblyColumn) {
-      userMessageAboutBug(
-        "Assembly editor setup failed",
-        "assemblyColumn element not found in DOM"
-      );
-      return;
-    }
-
-    // Synchronize scrolling between columns
-    const syncScroll = (source, targets) => {
-      targets.forEach((target) => {
-        if (target && target !== source) {
-          target.scrollTop = source.scrollTop;
-        }
-      });
-    };
-
-    // Add scroll event listeners to keep columns in sync
+    // Keep the three columns scrolled together
     const columns = [
       this.addressColumn,
       this.opcodesColumn,
       this.assemblyColumn,
     ];
     columns.forEach((column) => {
-      if (column) {
-        column.addEventListener("scroll", () => {
-          syncScroll(
-            column,
-            columns.filter((c) => c !== column)
-          );
+      column.addEventListener("scroll", () => {
+        columns.forEach((other) => {
+          if (other !== column) {
+            other.scrollTop = column.scrollTop;
+          }
         });
-      }
+      });
     });
 
     // Handle input in the assembly column
@@ -328,24 +312,17 @@ class Simulator {
       this.hideAddressOpcodesColumns();
     });
 
-    // Handle keyboard shortcuts
+    // Tab and Enter are inserted as plain text so the contenteditable keeps
+    // its line structure; every other key edits natively and fires "input"
+    const keyInserts = new Map([
+      ["Tab", "  "], // 2 spaces for tab; let's skimp; we got 32 total
+      ["Enter", "\n"],
+    ]);
     this.assemblyColumn.addEventListener("keydown", (e) => {
-      // Handle Tab key to maintain indentation
-      if (e.key === "Tab") {
+      const insertedText = keyInserts.get(e.key);
+      if (insertedText !== undefined) {
         e.preventDefault();
-        this.insertTextAtCursor("  "); // 2 spaces for tab; let's skimp; we got 32 total
-        this.hideAddressOpcodesColumns();
-      }
-
-      // Handle Enter key to maintain proper line breaks
-      if (e.key === "Enter") {
-        e.preventDefault();
-        this.insertTextAtCursor("\n");
-        this.hideAddressOpcodesColumns();
-      }
-
-      // Hide columns on any other typing
-      if (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete") {
+        this.insertTextAtCursor(insertedText);
         this.hideAddressOpcodesColumns();
       }
     });
@@ -356,28 +333,17 @@ class Simulator {
       return; // Skip observer setup on full viewports - buttons stay visible
     }
 
-    // Create a MutationObserver to watch for content changes in the assembly area
-    this.assemblyObserver = new MutationObserver((mutations) => {
-      // Check if any mutation actually changed the text content
-      const hasContentChange = mutations.some(
-        (mutation) =>
-          mutation.type === "childList" || mutation.type === "characterData"
-      );
-
-      if (hasContentChange) {
-        // Content changed - update button visibility
-        this.updateButtonVisibility();
-      }
+    // Watch for content changes in the assembly area; the observe options
+    // below already limit callbacks to childList and characterData mutations
+    this.assemblyObserver = new MutationObserver(() => {
+      this.updateButtonVisibility();
     });
 
-    // Start observing the assembly column for changes
-    if (this.assemblyColumn) {
-      this.assemblyObserver.observe(this.assemblyColumn, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-    }
+    this.assemblyObserver.observe(this.assemblyColumn, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   }
 
   // Helper method to check if we're on a narrow viewport that needs dynamic buttons
@@ -385,44 +351,10 @@ class Simulator {
     return window.innerWidth <= BREAKPOINTS.MOBILE_MAX;
   }
 
-  // Helper method to check if device has touch capability
-  isTouchDevice() {
-    return "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  }
-
-  setupListingToggle() {
-    if (this.listingSection) {
-      const header = this.listingSection.querySelector("h3");
-      if (header) {
-        header.addEventListener("click", () => {
-          this.toggleListingSection();
-        });
-      }
-    }
-  }
-
-  setupConsoleToggle() {
-    this.consoleSection = document.querySelector(".console-section");
-    if (this.consoleSection) {
-      const header = this.consoleSection.querySelector("h3");
-      if (header) {
-        header.addEventListener("click", () => {
-          this.toggleConsoleSection();
-        });
-      }
-    }
-  }
-
-  toggleListingSection() {
-    if (this.listingSection) {
-      this.listingSection.classList.toggle("collapsed");
-    }
-  }
-
-  toggleConsoleSection() {
-    if (this.consoleSection) {
-      this.consoleSection.classList.toggle("collapsed");
-    }
+  setupCollapsibleSection(section) {
+    section.querySelector("h3").addEventListener("click", () => {
+      section.classList.toggle("collapsed");
+    });
   }
 
   insertTextAtCursor(text) {
@@ -438,23 +370,16 @@ class Simulator {
   }
 
   getAssemblyCode() {
-    if (!this.assemblyColumn) return "";
     return this.assemblyColumn.textContent;
   }
 
   setAssemblyCode(code) {
-    if (this.assemblyColumn) {
-      // Always set as plain text to avoid HTML issues
-      this.assemblyColumn.textContent = code;
-    }
+    // Always set as plain text to avoid HTML issues
+    this.assemblyColumn.textContent = code;
     this.updateAddressAndOpcodesColumns();
   }
 
   updateAddressAndOpcodesColumns() {
-    if (!this.addressColumn || !this.opcodesColumn || !this.assemblyColumn) {
-      return;
-    }
-
     const lines = this.getAssemblyCode().split("\n");
     const addressLines = [];
     const opcodeLines = [];
@@ -484,24 +409,16 @@ class Simulator {
   }
 
   clearAddressAndOpcodesColumns() {
-    if (this.addressColumn) {
-      this.addressColumn.textContent = "";
-    }
-    if (this.opcodesColumn) {
-      this.opcodesColumn.textContent = "";
-    }
+    this.addressColumn.textContent = "";
+    this.opcodesColumn.textContent = "";
   }
 
   showAddressOpcodesColumns() {
-    if (this.assemblyEditor) {
-      this.assemblyEditor.classList.add("show-address-opcodes");
-    }
+    this.assemblyEditor.classList.add("show-address-opcodes");
   }
 
   hideAddressOpcodesColumns() {
-    if (this.assemblyEditor) {
-      this.assemblyEditor.classList.remove("show-address-opcodes");
-    }
+    this.assemblyEditor.classList.remove("show-address-opcodes");
   }
 
   createGameButtons() {
@@ -511,35 +428,33 @@ class Simulator {
     // Clear existing content
     gameButtonsDiv.innerHTML = "";
 
-    // Create 5 program buttons with key names as text
-    for (let i = 1; i <= 5; i++) {
-      // Create button
+    // Create program buttons with key names as text
+    defaultKeys.forEach((defaultKey) => {
       const button = document.createElement("button");
-      button.textContent = defaultKeys[i - 1];
+      button.textContent = defaultKey;
       button.tabIndex = 0; // Make button focusable when clicked
-      button.dataset.buttonNumber = i; // Store button number for reference
 
       // Add event listeners for both game functionality and edit mode
       button.addEventListener("pointerdown", (e) => {
-        this.handleButtonClick(button, i);
+        this.handleButtonClick(button);
         e.preventDefault();
       });
       button.addEventListener("pointerup", (e) => {
-        if (!window.buttonEditMode) {
+        if (!this.buttonEditMode) {
           this.releaseKey();
         }
         e.preventDefault();
       });
 
       gameButtonsDiv.appendChild(button);
-    }
+    });
   }
 
-  handleButtonClick(button, buttonNumber) {
-    if (window.buttonEditMode) {
+  handleButtonClick(button) {
+    if (this.buttonEditMode) {
       this.editButtonText(button);
     } else {
-      this.buttonClick(buttonNumber);
+      this.buttonClick(button);
     }
   }
 
@@ -560,7 +475,7 @@ class Simulator {
     setTimeout(() => {
       input.focus();
       input.select();
-    }, 10);
+    }, BUTTON_EDIT_FOCUS_DELAY_MS);
 
     const finishEdit = () => {
       const typedCaption = input.value.trim();
@@ -635,83 +550,64 @@ class Simulator {
     const KBD_CAPTURED_MSG =
       "This area is now sending key presses to Sinclaude";
 
-    // Helper function to update keyboardStatus
-    const updateKeyboardStatus = (isCaptured) => {
-      if (keyboardStatus) {
-        keyboardStatus.textContent = isCaptured
-          ? KBD_CAPTURED_MSG
-          : KBD_NOT_CAPTURED_MSG;
-        if (isCaptured) {
-          keyboardStatus.classList.remove("get-attention");
-        } else {
-          keyboardStatus.classList.add("get-attention");
-        }
-      }
+    const renderKeyboardStatus = () => {
+      keyboardStatus.textContent = this.keyboardCaptureActive
+        ? KBD_CAPTURED_MSG
+        : KBD_NOT_CAPTURED_MSG;
+      keyboardStatus.classList.toggle(
+        "get-attention",
+        !this.keyboardCaptureActive
+      );
+    };
+
+    const activateCapture = () => {
+      this.keyboardCaptureActive = true;
+      renderKeyboardStatus();
+    };
+
+    // Releasing the held key on deactivation is required, not a bug. Once capture
+    // deactivates, keyup events are no longer processed, so an unreleased key would
+    // stay stuck. Early release on an outside tap (even mid-game on multi-touch)
+    // is the lesser evil.
+    const deactivateCapture = () => {
+      this.keyboardCaptureActive = false;
+      renderKeyboardStatus();
+      this.setKey(KBD_NO_KEY_PRESSED);
     };
 
     // Set initial state
-    updateKeyboardStatus(false);
+    renderKeyboardStatus();
 
     // Desktop: Hover-based keyboard capture
-    executionSection.addEventListener("mouseenter", () => {
-      this.keyboardCaptureActive = true;
-      updateKeyboardStatus(true);
-    });
-
-    executionSection.addEventListener("mouseleave", () => {
-      this.keyboardCaptureActive = false;
-      updateKeyboardStatus(false);
-      this.setKey(KBD_NO_KEY_PRESSED);
-    });
-
-    executionSection.addEventListener("focus", () => {
-      this.keyboardCaptureActive = true;
-      updateKeyboardStatus(true);
-    });
-
-    executionSection.addEventListener("blur", () => {
-      this.keyboardCaptureActive = false;
-      updateKeyboardStatus(false);
-      this.setKey(KBD_NO_KEY_PRESSED);
-    });
+    executionSection.addEventListener("mouseenter", activateCapture);
+    executionSection.addEventListener("mouseleave", deactivateCapture);
+    executionSection.addEventListener("focus", activateCapture);
+    executionSection.addEventListener("blur", deactivateCapture);
 
     // Mobile: Touch-based keyboard capture
-    executionSection.addEventListener("pointerdown", () => {
-      this.keyboardCaptureActive = true;
-      updateKeyboardStatus(true);
-    });
+    executionSection.addEventListener("pointerdown", activateCapture);
 
-    // Document-level touch to detect touches outside execution section.
-    // Intentional: releasing the held key here is required, not a bug. Once capture
-    // deactivates, keyup events are no longer processed, so an unreleased key would
-    // stay stuck. Early release on an outside tap (even mid-game on multi-touch)
-    // is the lesser evil. Mirrors the blur handler above.
+    // Document-level touch to detect touches outside execution section
     document.addEventListener("pointerdown", (e) => {
       if (!executionSection.contains(e.target)) {
-        this.keyboardCaptureActive = false;
-        updateKeyboardStatus(false);
-        this.setKey(KBD_NO_KEY_PRESSED);
+        deactivateCapture();
       }
     });
 
+    // Don't capture keyboard input when user is typing in input boxes or textareas
+    const isTypingInFormField = (e) =>
+      e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+
     // Document-level keyboard capture - only process when capture is active
     document.addEventListener("keydown", (e) => {
-      if (this.keyboardCaptureActive) {
-        // Don't capture keyboard input when user is typing in input boxes or textareas
-        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
-          return; // Allow normal browser behavior for form inputs
-        }
+      if (this.keyboardCaptureActive && !isTypingInFormField(e)) {
         this.setKey(e.keyCode || e.which);
         e.preventDefault(); // Prevent default browser behavior
       }
     });
 
     document.addEventListener("keyup", (e) => {
-      if (this.keyboardCaptureActive) {
-        // Don't capture keyboard input when user is typing in input boxes or textareas
-        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
-          return; // Allow normal browser behavior for form inputs
-        }
+      if (this.keyboardCaptureActive && !isTypingInFormField(e)) {
         this.setKey(KBD_NO_KEY_PRESSED);
         e.preventDefault();
       }
@@ -720,21 +616,18 @@ class Simulator {
 
   initializeKeyMappings() {
     // Pre-populate bidirectional mapping for special keys only
-    const specialKeys = [
-      [32, "Space"],
-      [27, "Escape"],
-      [38, "ArrowUp"],
-      [40, "ArrowDown"],
-      [37, "ArrowLeft"],
-      [39, "ArrowRight"],
-      [13, "Enter"],
-      [9, "Tab"],
-    ];
-
-    this.keyCodeToKeyName = new Map(specialKeys);
+    this.keyCodeToKeyName = new Map(
+      SPECIAL_KEYS.map((key) => [key.keyCode, key.name])
+    );
     // lowercase for easier find
     this.lcKeyNameToKeyCode = new Map(
-      specialKeys.map(([code, name]) => [name.toLowerCase(), code])
+      SPECIAL_KEYS.map((key) => [key.name.toLowerCase(), key.keyCode])
+    );
+    this.keyCodeToSinclairCode = new Map(
+      SPECIAL_KEYS.filter((key) => key.sinclairCode !== null).map((key) => [
+        key.keyCode,
+        key.sinclairCode,
+      ])
     );
   }
 
@@ -780,31 +673,8 @@ class Simulator {
     return null;
   }
 
-  setupTouchHints() {
-    // Show touch hints only on touch-enabled devices
-    if (this.isTouchDevice()) {
-      const touchHints = document.querySelectorAll(".touch-hint");
-      touchHints.forEach((hint) => {
-        hint.style.display = "block";
-      });
-    }
-  }
-
-  buttonClick(buttonNumber) {
-    // Get the button text instead of text box value
-    const gameButtonsDiv = document.getElementById("gameButtons");
-    const buttons = gameButtonsDiv.querySelectorAll("button");
-    // Convert to 0-based index
-    const button = buttons[buttonNumber - 1];
-
-    if (!button) {
-      userMessageAboutBug(
-        "Game button not found",
-        `buttonClick(${buttonNumber}) called but button ${buttonNumber} not found in DOM`
-      );
-      return;
-    }
-
+  buttonClick(button) {
+    // The button caption names the key to press
     const value = button.textContent.trim();
 
     const keyCodeOrNull = this.labelToKeyCodeOrNull(value);
@@ -822,10 +692,6 @@ class Simulator {
   releaseKey() {
     // Release key (send no-key value)
     this.setKey(KBD_NO_KEY_PRESSED);
-  }
-
-  pokeMemory(address, value) {
-    this.memory[address] = value;
   }
 
   OutPort(port, value) {
@@ -854,7 +720,7 @@ class Simulator {
     const gain = this.audioContext.createGain();
     oscillator.connect(gain);
     gain.connect(this.audioContext.destination);
-    gain.gain.value = 0.1;
+    gain.gain.value = BEEP_GAIN;
     oscillator.frequency.value = frequency;
     oscillator.start();
 
@@ -880,18 +746,8 @@ class Simulator {
 
     if (keyCode === KBD_NO_KEY_PRESSED) {
       this.OutPort(KEYBOARD_PORT, KBD_NO_KEY_PRESSED & 0xff); // no-key
-    } else if (keyCode === 27) {
-      this.OutPort(KEYBOARD_PORT, 12); // ESC key
-    } else if (keyCode === 13) {
-      this.OutPort(KEYBOARD_PORT, 13); // ENTER key
-    } else if (keyCode === 37) {
-      this.OutPort(KEYBOARD_PORT, 144); // LEFT arrow
-    } else if (keyCode === 38) {
-      this.OutPort(KEYBOARD_PORT, 145); // UP arrow
-    } else if (keyCode === 39) {
-      this.OutPort(KEYBOARD_PORT, 146); // RIGHT arrow
-    } else if (keyCode === 40) {
-      this.OutPort(KEYBOARD_PORT, 147); // DOWN arrow
+    } else if (this.keyCodeToSinclairCode.has(keyCode)) {
+      this.OutPort(KEYBOARD_PORT, this.keyCodeToSinclairCode.get(keyCode));
     } else {
       const sinclairCode = this.unicodeToSinclair(String.fromCharCode(keyCode));
       this.OutPort(KEYBOARD_PORT, sinclairCode);
@@ -899,22 +755,26 @@ class Simulator {
   }
 
   bootShow() {
-    // Define stage configuration (handler function, duration in ms before start the next one)
+    // Define stage configuration (stage function, duration in ms before start the next one)
     // duration -1 means last one
     this.stageConfig = [
-      { handler: "displayCharacterGrid", duration: 1000 },
-      { handler: "benchmarkCPU", duration: 1000 },
-      { handler: "showSinclairCopyright", duration: 1 },
-      { handler: "reportInstructionSetAnalysisFixThis", duration: 1 },
-      { handler: "runAssemblerTests", duration: 1 },
-      { handler: "runZ80CPUTests", duration: -1 },
+      { run: () => this.displayCharacterGrid(), duration: 1000 },
+      { run: () => this.benchmarkCPU(), duration: 1000 },
+      { run: () => this.showSinclairCopyright(), duration: 1 },
+      { run: () => this.reportInstructionSetAnalysis(), duration: 1 },
+      { run: () => this.runAssemblerTests(), duration: 1 },
+      { run: () => this.runZ80CPUTests(), duration: -1 },
     ];
 
     // Mark boot sequence as running
     this.isBootSequenceRunning = true;
 
-    // Set up click listener for boot sequence cancellation
-    this.setupBootSequenceClickHandler();
+    // A tap on the screen cancels the boot sequence
+    this.setScreenPointerHandler(() => {
+      if (this.isBootSequenceRunning) {
+        this.cancelBootSequence();
+      }
+    });
 
     // Start the transition chain
     this.startStage(0);
@@ -942,21 +802,7 @@ class Simulator {
       this.currentStageTimer = null;
     }
 
-    // stage handler
-    const handlerFunction = this[stage.handler];
-    if (typeof handlerFunction === "function") {
-      const result = handlerFunction.call(this);
-      // Store timer ID if handler returns one
-      if (result) {
-        this.currentStageTimer = result;
-      }
-    } else {
-      userMessageAboutBug(
-        "Stage handler not found",
-        `Handler function '${stage.handler}' not found`
-      );
-      return;
-    }
+    stage.run();
 
     // Schedule next stage if duration is set and there's a next stage
     if (stage.duration > 0 && stageIndex + 1 < this.stageConfig.length) {
@@ -968,29 +814,36 @@ class Simulator {
         false
       );
     } else if (stage.duration === -1) {
-      // Last stage - mark boot sequence as complete
-      this.isBootSequenceRunning = false;
+      this.finishBootSequence();
     }
   }
 
-  cancelBootSequence() {
-    // Mark boot sequence as no longer running - this will prevent startStage from continuing
+  // Cancelling and completing both end in the same state: boot over, easter egg armed.
+  // Setting isBootSequenceRunning false also stops startStage from continuing.
+  finishBootSequence() {
     this.isBootSequenceRunning = false;
-
-    // Remove boot sequence click handler
-    if (this.bootSequenceClickHandler) {
-      this.screen.removeEventListener(
-        "pointerdown",
-        this.bootSequenceClickHandler
-      );
-      this.bootSequenceClickHandler = null;
-    }
-
-    // Enable easter egg immediately when cancelled
     this.easterEggEnabled = true;
-    this.setupAnimationEasterEgg();
+    this.setScreenPointerHandler(() => {
+      if (this.easterEggEnabled) {
+        this.triggerAnimationEasterEgg();
+      }
+    });
+  }
 
+  cancelBootSequence() {
+    this.finishBootSequence();
     userMessage("Boot sequence cancelled");
+  }
+
+  // The screen has at most one pointer action at a time: cancel boot, then the easter egg, then none
+  setScreenPointerHandler(handler) {
+    if (this.screenPointerHandler) {
+      this.screen.removeEventListener("pointerdown", this.screenPointerHandler);
+    }
+    this.screenPointerHandler = handler;
+    if (handler) {
+      this.screen.addEventListener("pointerdown", handler);
+    }
   }
 
   benchmarkCPU() {
@@ -1058,8 +911,12 @@ class Simulator {
     }
   }
 
+  screenAddress(row, col) {
+    return SCREEN_START + row * SCREEN_WIDTH + col;
+  }
+
   displayTextAtPosition(text, row, col) {
-    const addr = SCREEN_START + row * SCREEN_WIDTH + col;
+    const addr = this.screenAddress(row, col);
     for (let i = 0; i < text.length && col + i < SCREEN_WIDTH; i++) {
       this.memory[addr + i] = this.unicodeToSinclair(text[i]);
     }
@@ -1072,12 +929,11 @@ class Simulator {
 
   clearScreen() {
     // Fill entire screen with spaces
-    for (let line = 0; line < SCREEN_HEIGHT; line++) {
-      for (let col = 0; col < SCREEN_WIDTH; col++) {
-        const addr = SCREEN_START + line * SCREEN_WIDTH + col;
-        this.memory[addr] = this.unicodeToSinclair(" ");
-      }
-    }
+    this.memory.fill(
+      this.unicodeToSinclair(" "),
+      SCREEN_START,
+      SCREEN_START + SCREEN_WIDTH * SCREEN_HEIGHT
+    );
   }
 
   displayCharacterGrid() {
@@ -1104,14 +960,10 @@ class Simulator {
         const groupStartCode = charCode + group * 4;
         if (groupStartCode >= 256) break;
 
-        const screenAddr =
-          SCREEN_START + currentLine * SCREEN_WIDTH + screenCol;
+        const screenAddr = this.screenAddress(currentLine, screenCol);
 
         // Write starting hex code (2 chars)
-        const startCodeStr = groupStartCode
-          .toString(16)
-          .padStart(2, "0")
-          .toUpperCase();
+        const startCodeStr = formatHex2(groupStartCode);
         this.memory[screenAddr] = this.unicodeToSinclair(startCodeStr[0]);
         this.memory[screenAddr + 1] = this.unicodeToSinclair(startCodeStr[1]);
 
@@ -1126,7 +978,7 @@ class Simulator {
           }
         }
         screenCol += 7; // 2 hex + colon + 4 chars = 7
-        this.memory[SCREEN_START + currentLine * SCREEN_WIDTH + screenCol] =
+        this.memory[this.screenAddress(currentLine, screenCol)] =
           this.unicodeToSinclair(" ");
         screenCol++;
       }
@@ -1145,7 +997,7 @@ class Simulator {
       () => {
         this.renderArtisticPattern();
       },
-      20,
+      ANIMATION_FRAME_MS,
       true
     );
 
@@ -1157,18 +1009,19 @@ class Simulator {
   }
 
   renderArtisticPattern() {
+    // Concentric diamond/wave pattern around the screen centre, animated by time
+    const centerX = SCREEN_WIDTH / 2;
+    const centerY = SCREEN_HEIGHT / 2;
+    const time = Date.now() * 0.001; // Convert to seconds
+
     for (let line = 0; line < SCREEN_HEIGHT; line++) {
       for (let col = 0; col < SCREEN_WIDTH; col++) {
-        const addr = SCREEN_START + line * SCREEN_WIDTH + col;
+        const addr = this.screenAddress(line, col);
 
-        // Create concentric diamond/wave pattern
-        const centerX = 16;
-        const centerY = 12;
         const distanceFromCenter =
           Math.abs(col - centerX) + Math.abs(line - centerY);
 
         // Create ripple effect with time-based animation
-        const time = Date.now() * 0.001; // Convert to seconds
         const wave = Math.sin(distanceFromCenter * 0.5 + time * 2);
         const pattern =
           Math.sin(line * 0.3 + col * 0.2 + time) *
@@ -1192,75 +1045,13 @@ class Simulator {
     this.clearScreen();
 
     // a-historic
-    const copyrightText = "(C) 1981 SINCLAIR RESEARCH";
-    const line = SCREEN_HEIGHT - 1;
-    const padding = Math.floor((SCREEN_WIDTH - copyrightText.length) / 2);
-    const copyrightStart = SCREEN_START + line * SCREEN_WIDTH;
-
-    for (let i = 0; i < copyrightText.length; i++) {
-      this.memory[copyrightStart + padding + i] = this.unicodeToSinclair(
-        copyrightText[i]
-      );
-    }
-  }
-
-  setupBootSequenceClickHandler() {
-    if (!this.screen) return;
-
-    const handleBootClick = () => {
-      if (this.isBootSequenceRunning) {
-        this.cancelBootSequence();
-      }
-    };
-
-    // Remove any existing boot sequence handler
-    if (this.bootSequenceClickHandler) {
-      this.screen.removeEventListener(
-        "pointerdown",
-        this.bootSequenceClickHandler
-      );
-    }
-
-    // Store handler reference for cleanup
-    this.bootSequenceClickHandler = handleBootClick;
-
-    // Add pointer listener
-    this.screen.addEventListener("pointerdown", handleBootClick);
-  }
-
-  setupAnimationEasterEgg() {
-    if (!this.screen) return;
-
-    const handleClick = () => {
-      if (this.easterEggEnabled) {
-        this.triggerAnimationEasterEgg();
-      }
-    };
-
-    // Remove existing listener to avoid duplicates
-    if (this.animationEasterEggHandler) {
-      this.screen.removeEventListener(
-        "pointerdown",
-        this.animationEasterEggHandler
-      );
-    }
-
-    // Store handler reference for cleanup
-    this.animationEasterEggHandler = handleClick;
-
-    // Add pointer listener
-    this.screen.addEventListener("pointerdown", handleClick);
+    this.displayTextCentered("(C) 1981 SINCLAIR RESEARCH", SCREEN_HEIGHT - 1);
   }
 
   triggerAnimationEasterEgg() {
     // One-shot: disable further triggers immediately and remove handler
     this.easterEggEnabled = false;
-    if (this.animationEasterEggHandler && this.screen) {
-      this.screen.removeEventListener(
-        "pointerdown",
-        this.animationEasterEggHandler
-      );
-    }
+    this.setScreenPointerHandler(null);
 
     // Show animation then return to SINCLAIR screen
     const animationTimer = this.playArtisticAnimation();
@@ -1270,110 +1061,87 @@ class Simulator {
         this.clearTimer(animationTimer);
         this.showSinclairCopyright();
       },
-      4000,
+      EASTER_EGG_DURATION_MS,
       false
     );
   }
 
-  reportInstructionSetAnalysisFixThis() {
-    // Create an instance of the test class and call its method
-    if (typeof Z80AssemblerTestClass !== "undefined") {
-      const testInstance = new Z80AssemblerTestClass();
-      return testInstance.reportInstructionSetAnalysis();
-    } else {
-      userMessageAboutBug(
-        "Z80AssemblerTestClass not available",
-        "Cannot perform instruction set analysis - test class not found"
-      );
+  // Reports inconsistencies in the assembler's instruction table
+  reportInstructionSetAnalysis() {
+    try {
+      const analysis = new Z80Assembler().getInstructionSetAnalysis();
+
+      if (analysis.duplicateMnemonicOperands.length > 0) {
+        userMessageAboutBug(
+          "Assembler table has duplicate mnemonic/operand combinations",
+          analysis.duplicateMnemonicOperands.join(", ")
+        );
+      }
+
+      if (analysis.duplicateOpcodes.length > 0) {
+        userMessageAboutBug(
+          "Assembler table has duplicate opcodes",
+          analysis.duplicateOpcodes.join(", ")
+        );
+      }
+
+      if (analysis.missingSingleBytes.length > 0) {
+        consoleLogApproved(
+          `Single-byte opcodes not implemented: ${analysis.missingSingleBytes.length}`
+        );
+      }
+    } catch (error) {
+      userMessageAboutBug("Instruction set analysis failed", error.message);
+    }
+  }
+
+  // Runs a test suite in the page. The suites report failures through
+  // console.error, which is routed into the on-page console for the run.
+  runTestSuite(TestClass, label, reportFailure) {
+    try {
+      const originalError = console.error;
+      console.error = reportFailure;
+
+      try {
+        const suite = new TestClass();
+        suite.runAllTests();
+
+        // Report summary to user console
+        userMessage(
+          `${label}: ${suite.passedCount} passed, ${suite.failedTests.length} failed`
+        );
+      } finally {
+        console.error = originalError;
+      }
+    } catch (error) {
+      userMessageAboutBug(`${label} error`, error.message);
     }
   }
 
   runAssemblerTests() {
-    try {
-      // Check if assembler_test.js Z80AssemblerTestClass is available
-      if (typeof Z80AssemblerTestClass !== "undefined") {
-        // Capture console.error and redirect to userMessage
-        const originalError = console.error;
-        console.error = (message) =>
-          userMessageAboutBug(`Assembler Test Error: ${message}`);
-
-        try {
-          const z80AssemblerTestClass = new Z80AssemblerTestClass();
-          z80AssemblerTestClass.runAllTests();
-
-          // Report summary to user console
-          userMessage(
-            `Assembler Tests: ${z80AssemblerTestClass.passedCount} passed, ${z80AssemblerTestClass.failedTests.length} failed`
-          );
-        } finally {
-          console.error = originalError;
-        }
-      } else {
-        userMessageAboutBug(
-          "Assembler tests cannot run - z80_assembler_test.js not loaded"
-        );
-      }
-    } catch (error) {
-      userMessageAboutBug("Assembler test error", error.message);
+    if (typeof Z80AssemblerTestClass === "undefined") {
+      userMessageAboutBug(
+        "Assembler tests cannot run",
+        "z80_assembler_test.js not loaded"
+      );
+      return;
     }
+    this.runTestSuite(Z80AssemblerTestClass, "Assembler Tests", (message) =>
+      userMessage(`Assembler Test Error: ${message}`)
+    );
   }
 
   runZ80CPUTests() {
-    try {
-      // Check if Z80CPUEmulatorTestClass class is available from z80_cpu_emulator_test_runner.js
-      if (typeof Z80CPUEmulatorTestClass !== "undefined") {
-        // Also check if runZ80CPUEmulatorTestClass is available since it's required
-        if (typeof runZ80CPUEmulatorTestClass === "undefined") {
-          userMessage(
-            "Z80 CPU tests cannot run - z80_cpu_emulator_test_cases.js not loaded (runZ80CPUEmulatorTestClass function missing)"
-          );
-          return;
-        }
-
-        // Capture console.error and preserve detailed error messages
-        const originalError = console.error;
-        console.error = (message) => {
-          userMessage(message);
-        };
-
-        try {
-          const z80CPUTestClass = new Z80CPUEmulatorTestClass();
-          z80CPUTestClass.runAllTests();
-
-          // Report summary to user console
-          userMessage(
-            `Z80 CPU Tests: ${z80CPUTestClass.passedCount} passed, ${z80CPUTestClass.failedTests.length} failed`
-          );
-        } finally {
-          console.error = originalError;
-        }
-      } else {
-        userMessage(
-          "Z80 CPU tests cannot run - Z80CPUEmulatorTestClass class not available"
-        );
-        // Debug information
-        userMessage(
-          `Available globals: Z80CPU=${typeof Z80CPU}, Z80Assembler=${typeof Z80Assembler}, runZ80CPUEmulatorTestClass=${typeof runZ80CPUEmulatorTestClass}`
-        );
-      }
-    } catch (error) {
-      userMessageAboutBug("Z80 CPU test error", error.message);
-    }
-
-    // Enable easter egg after tests are complete
-    this.easterEggEnabled = true;
-
-    // Remove boot sequence click handler
-    if (this.bootSequenceClickHandler) {
-      this.screen.removeEventListener(
-        "pointerdown",
-        this.bootSequenceClickHandler
+    if (typeof Z80CPUEmulatorTestClass === "undefined") {
+      userMessageAboutBug(
+        "Z80 CPU tests cannot run",
+        "z80_cpu_emulator_test_runner.js not loaded"
       );
-      this.bootSequenceClickHandler = null;
+      return;
     }
-
-    // Set up easter egg click handler
-    this.setupAnimationEasterEgg();
+    this.runTestSuite(Z80CPUEmulatorTestClass, "Z80 CPU Tests", (message) =>
+      userMessage(message)
+    );
   }
 
   toggleSpeed() {
@@ -1409,7 +1177,7 @@ class Simulator {
     return "Resumes continuous execution from the current position.";
   }
   // Timer management methods
-  createTimer(callback, interval, isInterval = true) {
+  createTimer(callback, interval, isInterval) {
     const timerId = isInterval
       ? setInterval(callback, interval)
       : setTimeout(callback, interval);
@@ -1426,11 +1194,7 @@ class Simulator {
   }
 
   clearAllTimers() {
-    this.activeTimers.forEach((id) => {
-      clearInterval(id);
-      clearTimeout(id);
-    });
-    this.activeTimers.clear();
+    this.activeTimers.forEach((timerId) => this.clearTimer(timerId));
     this.displayUpdateInterval = null;
 
     // Clean up version checker timers
@@ -1460,13 +1224,10 @@ class Simulator {
       () => {
         if (!this.fastMode) {
           this.updateScreen();
-        } else {
-          // In fast mode, make screen black
-          if (this.screen) {
-            this.screen.textContent = "";
-            // Reset screen elements cache so it rebuilds when exiting fast mode
-            this.screenElements = [];
-          }
+        } else if (this.screenElements.length !== 0) {
+          // In fast mode, make screen black once; the empty cache rebuilds it on exit
+          this.screen.textContent = "";
+          this.screenElements = [];
         }
         this.updateRefreshRate();
         this.updateHardwareDisplay();
@@ -1482,37 +1243,24 @@ class Simulator {
   }
 
   updateScreen() {
-    if (!this.screen) {
-      userMessageAboutBug(
-        "Screen update failed - screen element not found",
-        "updateScreen() called but screen element missing from DOM"
-      );
-      return;
-    }
-
-    // Initialize screen elements cache if needed
+    // Initialize screen elements cache if needed; this also primes lastScreenState
     if (this.screenElements.length === 0) {
       this.initializeScreenElements();
     }
 
-    // Only update changed characters (or if cache is invalid)
+    // Only update changed characters
     for (let i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
       const newByte = this.memory[SCREEN_START + i];
-      if (!this.lastScreenStateIsValid || this.lastScreenState[i] !== newByte) {
+      if (this.lastScreenState[i] !== newByte) {
         this.updateCharacterAt(i, newByte);
         this.lastScreenState[i] = newByte;
       }
     }
-
-    // Mark cache as valid after updating
-    if (!this.lastScreenStateIsValid) {
-      this.lastScreenStateIsValid = true;
-    }
   }
 
   invalidateScreenCache() {
-    // Mark screen state cache as invalid to force re-render
-    this.lastScreenStateIsValid = false;
+    // Force a full rebuild on the next frame (font change affects every cell)
+    this.screenElements = [];
   }
 
   initializeScreenElements() {
@@ -1542,18 +1290,11 @@ class Simulator {
     const element = this.screenElements[index];
 
     element.textContent = this.sinclairToUnicode(byte);
-
-    if (byte >= 128) {
-      element.classList.add("inverted");
-    } else {
-      element.classList.remove("inverted");
-    }
-
-    if (this.useSinclairFont && !sinclairBlockChars.includes(byte)) {
-      element.classList.add("sinclair-font");
-    } else {
-      element.classList.remove("sinclair-font");
-    }
+    element.classList.toggle("inverted", byte >= 128);
+    element.classList.toggle(
+      "sinclair-font",
+      this.useSinclairFont && !sinclairBlockChars.includes(byte)
+    );
   }
 
   updateRefreshRate() {
@@ -1570,7 +1311,13 @@ class Simulator {
 
   // Sinclair byte code → Modern Unicode character conversion
   sinclairToUnicode(byte) {
-    return this.sinclairByteToUnicodeNeverInverts[byte] || "?";
+    return this.sinclairByteToUnicode[byte & 0x7f];
+  }
+
+  setUseSinclairFont(useSinclairFont) {
+    this.useSinclairFont = useSinclairFont;
+    localStorage.setItem(LOCALSTORAGE_RETRO_FONTS_KEY, String(useSinclairFont));
+    this.invalidateScreenCache();
   }
 
   // Modern Unicode character → Sinclair byte code conversion (O(1) via reverse lookup map)
@@ -1586,87 +1333,74 @@ class Simulator {
     return 32;
   }
 
+  // Writes only when the text changed: this runs every frame, mostly with identical values
+  setText(element, value) {
+    const text = String(value);
+    if (element.textContent !== text) {
+      element.textContent = text;
+    }
+  }
+
   updateHardwareDisplay() {
     const regs = this.cpu.registers;
 
-    if (!regs) {
-      userMessageAboutBug("CPU registers are undefined");
-      return;
+    this.setText(this.pcDisplay, formatHex4(regs.PC));
+    this.setText(this.spDisplay, formatHex4(regs.SP));
+
+    // Display the next 2 words that would be popped from the stack
+    const abovebottom = this.cpu.readWordFromMemory(
+      this.memory,
+      this.cpu.adjustFFFF(regs.SP + 2)
+    );
+    const bottomword = this.cpu.readWordFromMemory(this.memory, regs.SP);
+    this.setText(
+      this.stackContentsDisplay,
+      "+2:" + formatHex4(abovebottom) + " SP:" + formatHex4(bottomword)
+    );
+
+    this.setText(this.regADisplay, formatHex2(regs.A));
+    this.setText(this.regBCDisplay, formatHex2(regs.B) + formatHex2(regs.C));
+    this.setText(this.regDEDisplay, formatHex2(regs.D) + formatHex2(regs.E));
+    this.setText(this.regHLDisplay, formatHex2(regs.H) + formatHex2(regs.L));
+    this.setText(this.flagCDisplay, regs.F.C ? "1" : "0");
+    this.setText(this.flagZDisplay, regs.F.Z ? "1" : "0");
+
+    // Show 4 bytes at PC as hex
+    const bytes = [];
+    for (let i = 0; i < 4; i++) {
+      bytes.push(formatHex2(this.memory[this.cpu.adjustFFFF(regs.PC + i)]));
+    }
+    this.setText(this.currentInstructionDisplay, bytes.join(" "));
+
+    // Display ports 0-3 (Frame, Keyboard, BeepHz, BeepMs)
+    const portValues = [];
+    for (let port = 0; port < 4; port++) {
+      portValues.push(formatHex2(this.ioMap[port]));
+    }
+    this.setText(this.portsDisplay, portValues.join(" "));
+
+    if (this.keyCodeCurrent === null) {
+      this.setText(this.keyCodeCurrentDisplay, "--");
+    } else {
+      const hex = formatHex2(this.keyCodeCurrent);
+      this.setText(
+        this.keyCodeCurrentDisplay,
+        this.keyCodeCurrentReleased ? `(${hex})` : hex
+      );
     }
 
-    if (this.pcDisplay) {
-      this.pcDisplay.textContent = formatHex4(regs.PC);
-    }
-    if (this.spDisplay) {
-      this.spDisplay.textContent = formatHex4(regs.SP);
-    }
-    if (this.stackContentsDisplay) {
-      // Display the next 2 words that would be popped from the stack
-      const abovebottom = this.cpu.readWordFromMemory(
-        this.memory,
-        this.cpu.adjustFFFF(regs.SP + 2)
+    if (typeof this.mipsValue === "number") {
+      this.setText(
+        this.mipsDisplay,
+        this.mipsValue < 10
+          ? this.mipsValue.toFixed(1)
+          : Math.round(this.mipsValue)
       );
-      const bottomword = this.cpu.readWordFromMemory(this.memory, regs.SP);
-      this.stackContentsDisplay.textContent =
-        "+2:" + formatHex4(abovebottom) + " SP:" + formatHex4(bottomword);
+    } else {
+      this.setText(this.mipsDisplay, this.mipsValue);
     }
-    if (this.regADisplay) {
-      this.regADisplay.textContent = formatHex2(regs.A);
-    }
-    if (this.regBCDisplay) {
-      this.regBCDisplay.textContent = formatHex2(regs.B) + formatHex2(regs.C);
-    }
-    if (this.regDEDisplay) {
-      this.regDEDisplay.textContent = formatHex2(regs.D) + formatHex2(regs.E);
-    }
-    if (this.regHLDisplay) {
-      this.regHLDisplay.textContent = formatHex2(regs.H) + formatHex2(regs.L);
-    }
-    if (this.flagCDisplay) {
-      this.flagCDisplay.textContent = regs.F.C ? "1" : "0";
-    }
-    if (this.flagZDisplay) {
-      this.flagZDisplay.textContent = regs.F.Z ? "1" : "0";
-    }
-    if (this.currentInstructionDisplay) {
-      // Show 4 bytes at PC as hex
-      const bytes = [];
-      for (let i = 0; i < 4; i++) {
-        bytes.push(formatHex2(this.memory[(regs.PC + i) & 0xffff]));
-      }
-      this.currentInstructionDisplay.textContent = bytes.join(" ");
-    }
-    if (this.portsDisplay) {
-      // Display ports 0-3 (Frame, Keyboard, BeepHz, BeepMs)
-      const portValues = [];
-      for (let port = 0; port < 4; port++) {
-        portValues.push(formatHex2(this.ioMap[port]));
-      }
-      this.portsDisplay.textContent = portValues.join(" ");
-    }
-    if (this.keyCodeCurrentDisplay) {
-      if (this.keyCodeCurrent === null) {
-        this.keyCodeCurrentDisplay.textContent = "--";
-      } else {
-        const hex = formatHex2(this.keyCodeCurrent);
-        this.keyCodeCurrentDisplay.textContent = this.keyCodeCurrentReleased
-          ? `(${hex})`
-          : hex;
-      }
-    }
-    if (this.mipsDisplay) {
-      if (typeof this.mipsValue === "number") {
-        this.mipsDisplay.textContent =
-          this.mipsValue < 10
-            ? this.mipsValue.toFixed(1)
-            : Math.round(this.mipsValue);
-      } else {
-        this.mipsDisplay.textContent = this.mipsValue;
-      }
-    }
-    if (this.refreshRateDisplay) {
-      this.refreshRateDisplay.textContent = Math.round(this.refreshRate);
-    }
+    this.setText(this.refreshRateDisplay, Math.round(this.refreshRate));
+
     if (this.lastPC === null || regs.PC !== this.lastPC) {
       this.lastPC = regs.PC;
       if (this.lastPC !== this.highlightedPC && this.highlightedPC !== null) {
@@ -1678,18 +1412,16 @@ class Simulator {
     }
   }
 
-  clearMagazineListing() {
+  setMagazineListing(text, isError) {
     const machineCodeDiv = document.getElementById("machineCode");
-    if (machineCodeDiv) {
-      machineCodeDiv.textContent = "";
-      machineCodeDiv.classList.remove("error");
-    }
+    machineCodeDiv.textContent = text;
+    machineCodeDiv.classList.toggle("error", isError);
   }
 
   clearAssembly() {
     this.setAssemblyCode("");
     this.clearAddressAndOpcodesColumns();
-    this.clearMagazineListing();
+    this.setMagazineListing("", false);
     this.instructionDetails = [];
     this.setState(STATE.NOT_READY);
     this.updateURL("");
@@ -1704,34 +1436,13 @@ class Simulator {
       return;
     }
 
-    const assemblySection = document.querySelector(".assembly-section");
-    if (!assemblySection) {
-      userMessageAboutBug(
-        "Assembly section not found",
-        "updateButtonVisibility() called but .assembly-section element not found in DOM"
-      );
-      return;
-    }
-
-    const code = this.getAssemblyCode();
-    const isAssemblyAreaClear = !code || code.trim().length === 0;
+    const isAssemblyAreaClear = this.getAssemblyCode().trim().length === 0;
 
     // Only update if the empty/not-empty state has changed
     if (this.lastIsAssemblyAreaClear !== isAssemblyAreaClear) {
-      // Remove all state classes first
-      assemblySection.classList.remove(
-        "assembly-empty-state",
-        "assembly-content-state"
-      );
-
-      // Apply the appropriate state class
-      if (isAssemblyAreaClear) {
-        // Empty state: show only load buttons
-        assemblySection.classList.add("assembly-empty-state");
-      } else {
-        // Content state: show clear and assemble buttons
-        assemblySection.classList.add("assembly-content-state");
-      }
+      // Empty state shows only load buttons; content state shows clear and assemble
+      this.assemblySection.classList.toggle("assembly-empty-state", isAssemblyAreaClear);
+      this.assemblySection.classList.toggle("assembly-content-state", !isAssemblyAreaClear);
 
       // Update the tracked state
       this.lastIsAssemblyAreaClear = isAssemblyAreaClear;
@@ -1739,8 +1450,6 @@ class Simulator {
   }
 
   loadAssemblyCode(code) {
-    if (!code) return;
-
     // Remove first line feed if it's followed by non-blank content
     if (code.startsWith("\n") && code.length > 1 && code[1].trim() !== "") {
       code = code.substring(1);
@@ -1752,114 +1461,97 @@ class Simulator {
   }
 
   loadDefaultAssembly() {
-    this.loadAssemblyCode(
-      typeof DEFAULT_ASM !== "undefined" ? DEFAULT_ASM : null
-    );
+    this.loadAssemblyCode(DEFAULT_ASM);
   }
   loadBasicsAssembly() {
-    this.loadAssemblyCode(
-      typeof BASICS_ASM !== "undefined" ? BASICS_ASM : null
-    );
+    this.loadAssemblyCode(BASICS_ASM);
   }
   loadSpaceInvaderAssembly() {
-    this.loadAssemblyCode(
-      typeof SPACE_INVADER_ASM !== "undefined" ? SPACE_INVADER_ASM : null
-    );
-  }
-
-  // Update assembly display to show hex addresses and opcodes when in stepping mode
-  updateAssemblyDisplayForStepping() {
-    this.updateAddressAndOpcodesColumns();
+    this.loadAssemblyCode(SPACE_INVADER_ASM);
   }
 
   assembleAndRun() {
     const sourceCode = this.getAssemblyCode();
-    const machineCodeDiv = document.getElementById("machineCode");
     const assembler = new Z80Assembler();
     const result = assembler.assemble(sourceCode);
 
-    if (result.success) {
-      this.loadAddress = result.loadAddress;
-      // Initialize audio context for beep functionality
-      if (!this.audioContext) {
-        try {
-          this.audioContext = new AudioContext();
-        } catch (e) {
-          userMessage(
-            "Audio context initialization failed - beep functionality disabled"
-          );
-        }
-      }
-
-      // Store instruction details for opcode display and line mapping
-      this.instructionDetails = result.instructionDetails || [];
-
-      // Load machine code into memory using shared memory loading function
-      Z80Assembler.loadOpcodesIntoMemory(this.memory, this.instructionDetails);
-
-      // Clear the screen when assembling and running
-      this.clearScreen();
-
-      if (this.state === STATE.FREE_RUNNING) {
-        // Hot-reload case: preserve CPU state, just inform user
-        userMessage("Code hot-reloaded - may need Reset to run properly");
-        this.cpu.set(this.loadAddress);
-      } else {
-        this.cpu.set(this.loadAddress, 0xffff);
-        this.setState(STATE.FREE_RUNNING);
-      }
-      this.lastPC = null;
-
-      machineCodeDiv.textContent = assembler.generateMachineCodeListing(
-        result.instructionDetails,
-        result.loadAddress
-      );
-
-      // Update all editor columns with new instruction details
-      this.updateAssemblyDisplayForStepping();
-
-      // Show address and opcodes columns on successful assembly
-      this.showAddressOpcodesColumns();
-
-      machineCodeDiv.classList.remove("error");
-
-      // Update URL with encoded program
-      this.updateURL(sourceCode);
-
-      // Focus execution area to enable keyboard capture UX
-      const executionSection = document.querySelector(".execution-section");
-      if (executionSection) {
-        executionSection.focus();
-        executionSection.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }
-    } else {
+    if (!result.success) {
       // Clear instruction details on assembly failure
       this.instructionDetails = [];
 
       // Show all errors in machine code window
       let errorText = "Assembly Errors:\n\n";
-      if (result.errors) {
-        const lines = sourceCode.split("\n");
-        result.errors.forEach((error) => {
-          const line = lines[error.line - 1] || "";
-          const addressText =
-            error.address !== null && error.address !== undefined
-              ? `@ address 0x${error.address.toString(16).toUpperCase()}`
-              : "@ unknown address";
-          errorText += `Line ${
-            error.line
-          }, ${addressText}: "${line.trim()}" - ${error.message}\n`;
-        });
-      } else {
-        errorText += result.error || "Unknown error";
-      }
-      machineCodeDiv.textContent = errorText;
-      machineCodeDiv.classList.add("error");
+      const lines = sourceCode.split("\n");
+      result.errors.forEach((error) => {
+        const line = lines[error.line - 1] || "";
+        const addressText =
+          error.address !== null && error.address !== undefined
+            ? `@ address 0x${error.address.toString(16).toUpperCase()}`
+            : "@ unknown address";
+        errorText += `Line ${
+          error.line
+        }, ${addressText}: "${line.trim()}" - ${error.message}\n`;
+      });
+      this.setMagazineListing(errorText, true);
       this.setState(STATE.NOT_READY);
+      return;
     }
+
+    this.loadAddress = result.loadAddress;
+    // Initialize audio context for beep functionality
+    if (!this.audioContext) {
+      try {
+        this.audioContext = new AudioContext();
+      } catch (e) {
+        userMessage(
+          "Audio context initialization failed - beep functionality disabled"
+        );
+      }
+    }
+
+    // Store instruction details for opcode display and line mapping
+    this.instructionDetails = result.instructionDetails;
+
+    // Load machine code into memory using shared memory loading function
+    Z80Assembler.loadOpcodesIntoMemory(this.memory, this.instructionDetails);
+
+    // Clear the screen when assembling and running
+    this.clearScreen();
+
+    if (this.state === STATE.FREE_RUNNING) {
+      // Hot-reload case: preserve CPU state, just inform user
+      userMessage("Code hot-reloaded - may need Reset to run properly");
+      this.cpu.set(this.loadAddress);
+    } else {
+      this.cpu.set(this.loadAddress, 0xffff);
+      this.setState(STATE.FREE_RUNNING);
+    }
+    this.lastPC = null;
+
+    this.setMagazineListing(
+      assembler.generateMachineCodeListing(
+        result.instructionDetails,
+        result.loadAddress
+      ),
+      false
+    );
+
+    // Update all editor columns with new instruction details
+    this.updateAddressAndOpcodesColumns();
+
+    // Show address and opcodes columns on successful assembly
+    this.showAddressOpcodesColumns();
+
+    // Update URL with encoded program
+    this.updateURL(sourceCode);
+
+    // Focus execution area to enable keyboard capture UX
+    const executionSection = document.querySelector(".execution-section");
+    executionSection.focus();
+    executionSection.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
   }
 
   updateURL(sourceCode) {
@@ -1884,42 +1576,36 @@ class Simulator {
       return;
     }
 
-    try {
+    const newUrl = new URL(window.location);
 
-      const newUrl = new URL(window.location);
+    if (desiredEncoded === null) {
+      // Remove asm parameter when clearing
+      newUrl.searchParams.delete("asm");
+    } else {
+      // Set asm parameter when there's code
+      const baseUrl =
+        window.location.origin + window.location.pathname + "?asm=";
+      const totalLength = baseUrl.length + desiredEncoded.length;
 
-      if (desiredEncoded === null) {
-        // Remove asm parameter when clearing
-        newUrl.searchParams.delete("asm");
-      } else {
-        // Set asm parameter when there's code
-        const maxUrlLength = 2000; // supposed to be 32K but erring at a lot less
-        const baseUrl =
-          window.location.origin + window.location.pathname + "?asm=";
-        const totalLength = baseUrl.length + desiredEncoded.length;
-
-        if (totalLength > maxUrlLength) {
-          const overage = totalLength - maxUrlLength;
-          userMessage(
-            `Source code was not encoded on URL because it's too large (${totalLength} bytes, ${overage} over ${maxUrlLength} limit). See Docs.`
-          );
-          return;
-        }
-
-        newUrl.searchParams.set("asm", desiredEncoded);
-      }
-
-      // History update (supported on non-file protocols)
-      try {
-        window.history.replaceState(null, "", newUrl);
-      } catch (historyError) {
-        userMessageAboutBug(
-          "Failed to update URL history",
-          historyError.message
+      if (totalLength > MAX_URL_LENGTH) {
+        const overage = totalLength - MAX_URL_LENGTH;
+        userMessage(
+          `Source code was not encoded on URL because it's too large (${totalLength} bytes, ${overage} over ${MAX_URL_LENGTH} limit). See Docs.`
         );
+        return;
       }
-    } catch (e) {
-      userMessageAboutBug("Failed to update URL", e.message);
+
+      newUrl.searchParams.set("asm", desiredEncoded);
+    }
+
+    // History update (supported on non-file protocols)
+    try {
+      window.history.replaceState(null, "", newUrl);
+    } catch (historyError) {
+      userMessageAboutBug(
+        "Failed to update URL history",
+        historyError.message
+      );
     }
   }
 
@@ -2053,9 +1739,11 @@ class Simulator {
     this.cpu.reset();
     // Set PC to the program's load address (ORG)
     if (this.loadAddress !== undefined) {
-      this.cpu.registers.PC = this.loadAddress;
+      this.cpu.set(this.loadAddress);
     }
+    // Restart the instruction counters together so the MIPS delta never goes negative
     this.instructionCount = 0;
+    this.mipsInstructionCount = 0;
     this.updateHardwareDisplay();
     // Clear any animation timers during reset
     this.clearNonEssentialTimers();
@@ -2154,15 +1842,11 @@ class Simulator {
     if (this.state !== STATE.FREE_RUNNING) return;
 
     const endTime = performance.now() + 1000 / FPS / 2;
-    // at 1 mips, 1/60 of a second is 16,000 instructions
-    // closest prime so i doesnt sync with refresh rate
-    const numberOfInstructions = 15991;
     while (performance.now() < endTime) {
       const result = this.cpu.executeSteps(
         this.memory,
         this.ioMap,
-        numberOfInstructions,
-        this.cpu.registers
+        RUN_BATCH_INSTRUCTIONS
       );
       this.instructionCount += result.instructionsExecuted;
 
@@ -2196,9 +1880,8 @@ class Simulator {
 
     const currentTime = performance.now();
     const timeElapsed = (currentTime - this.mipsLastUpdate) / 1000;
-    let instructionsExecuted =
+    const instructionsExecuted =
       this.instructionCount - this.mipsInstructionCount;
-    if (instructionsExecuted < 0) instructionsExecuted = 0;
 
     const instantMips = instructionsExecuted / timeElapsed / one_million;
 
@@ -2231,19 +1914,14 @@ class Simulator {
         "stepRequest() called while state === STATE.FREE_RUNNING"
       );
       return;
-    } else if (this.state === STATE.STEPPING) {
-      // Execute one instruction in stepping mode
-      this.executeOneInstruction();
     }
+
+    // Execute one instruction in stepping mode
+    this.executeOneInstruction();
   }
 
   executeOneInstruction() {
-    const result = this.cpu.executeSteps(
-      this.memory,
-      this.ioMap,
-      1,
-      this.cpu.registers
-    );
+    const result = this.cpu.executeSteps(this.memory, this.ioMap, 1);
     this.instructionCount += result.instructionsExecuted;
 
     // Check for beep port changes after Z80 execution
@@ -2287,107 +1965,75 @@ class Simulator {
       }
     }
 
-    // Clear any existing highlights first
-    this.clearHighlight();
-
     // Only highlight if we found a matching line
-    if (targetLine !== null && this.assemblyColumn) {
-      // Save cursor position before modifying content
-      const selection = window.getSelection();
-      let savedRange = null;
-      if (
-        selection.rangeCount > 0 &&
-        this.assemblyColumn.contains(selection.anchorNode)
-      ) {
-        savedRange = selection.getRangeAt(0).cloneRange();
+    if (targetLine === null) {
+      return;
+    }
+    const lines = this.getAssemblyCode().split("\n");
+    if (targetLine >= lines.length) {
+      return;
+    }
+
+    // Save cursor position before modifying content
+    const selection = window.getSelection();
+    let savedRange = null;
+    if (
+      selection.rangeCount > 0 &&
+      this.assemblyColumn.contains(selection.anchorNode)
+    ) {
+      savedRange = selection.getRangeAt(0).cloneRange();
+    }
+
+    // Rewrite the content with the target line wrapped for CSS highlighting;
+    // this replaces any previous highlight span at the same time
+    const highlightedLines = lines.map((line, index) => {
+      if (index === targetLine) {
+        return `<span class="highlighted-line">${this.escapeHtml(
+          line
+        )}</span>`;
       }
+      return this.escapeHtml(line);
+    });
 
-      // Add CSS class-based highlighting for the 3-column editor
-      const lines = this.getAssemblyCode().split("\n");
-      if (targetLine < lines.length) {
-        // Create a highlighted version of the content
-        const highlightedLines = lines.map((line, index) => {
-          if (index === targetLine) {
-            return `<span class="highlighted-line">${this.escapeHtml(
-              line
-            )}</span>`;
-          }
-          return this.escapeHtml(line);
-        });
+    this.assemblyColumn.innerHTML = highlightedLines.join("\n");
 
-        this.assemblyColumn.innerHTML = highlightedLines.join("\n");
-
-        // Restore cursor position if it was saved
-        if (savedRange) {
-          try {
-            selection.removeAllRanges();
-            selection.addRange(savedRange);
-          } catch (e) {
-            // If restoring cursor fails, place it at the end
-            this.setCursorToEnd();
-          }
-        }
-
-        // Scroll the highlighted line into view if not currently editing
-        // Only scroll if it won't move the step button out of view
-        if (!savedRange) {
-          if (fancy_highlight_scroll) {
-            scrollNearestKeepAnchorVisible(
-              ".highlighted-line",
-              "#executionControls button"
-            );
-          } else {
-            const highlightedElement =
-              this.assemblyColumn.querySelector(".highlighted-line");
-            const stepButton = document.querySelector(
-              "#executionControls button"
-            );
-
-            if (highlightedElement && stepButton) {
-              const elementRect = highlightedElement.getBoundingClientRect();
-              const buttonRect = stepButton.getBoundingClientRect();
-
-              // Calculate how far we'd scroll and if button would stay visible
-              const scrollTarget = elementRect.top - window.innerHeight / 2;
-              const buttonAfterScroll = buttonRect.top - scrollTarget;
-
-              // Only scroll if step button will remain in viewport after scroll
-              if (
-                buttonAfterScroll > 0 &&
-                buttonAfterScroll < window.innerHeight
-              ) {
-                highlightedElement.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            }
-          }
-        }
+    // Restore cursor position if it was saved
+    if (savedRange) {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(savedRange);
+      } catch (e) {
+        // If restoring cursor fails, place it at the end
+        this.setCursorToEnd();
       }
+    }
+
+    // Scroll the highlighted line into view if not currently editing
+    // Only scroll if it won't move the step button out of view
+    if (!savedRange) {
+      scrollNearestKeepAnchorVisible(
+        ".highlighted-line",
+        "#executionControls button"
+      );
     }
   }
 
   setCursorToEnd() {
-    if (this.assemblyColumn) {
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.selectNodeContents(this.assemblyColumn);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
+    const range = document.createRange();
+    const selection = window.getSelection();
+    range.selectNodeContents(this.assemblyColumn);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
   clearHighlight() {
-    if (this.assemblyColumn) {
-      const currentCode = this.getAssemblyCode();
-      this.assemblyColumn.textContent = currentCode;
+    const currentCode = this.getAssemblyCode();
+    this.assemblyColumn.textContent = currentCode;
 
-      // If the user was editing, restore cursor to end
-      if (document.activeElement === this.assemblyColumn) {
-        this.setCursorToEnd();
-      }
+    // If the user was editing, restore cursor to end
+    if (document.activeElement === this.assemblyColumn) {
+      this.setCursorToEnd();
     }
     this.highlightedPC = null;
   }
@@ -2409,17 +2055,9 @@ class Simulator {
       return;
     }
 
-    // Find the expansion handler for this element
-    const expandedElements = document.querySelectorAll(".expanded-element");
-    const isAlreadyExpanded = Array.from(expandedElements).some(
-      (el) => el === targetElement
-    );
-
-    if (isAlreadyExpanded) {
-      // Element is already expanded, restore it
-      this.restoreElement(targetElement.id);
+    if (targetElement.classList.contains("expanded-element")) {
+      this.restoreElement(targetElement);
     } else {
-      // Expand the element
       this.performExpansion(targetElement);
     }
   }
@@ -2427,26 +2065,24 @@ class Simulator {
   performExpansion(element) {
     // Store original styles
     const originalStyles = {
-      position: element.style.position || "",
-      top: element.style.top || "",
-      left: element.style.left || "",
-      width: element.style.width || "",
-      height: element.style.height || "",
-      zIndex: element.style.zIndex || "",
+      position: element.style.position,
+      top: element.style.top,
+      left: element.style.left,
+      width: element.style.width,
+      height: element.style.height,
     };
     element.dataset.originalStyles = JSON.stringify(originalStyles);
 
     // Hide columns when maximizing the editing area
     this.hideAddressOpcodesColumns();
 
-    // Create and show restore note
+    // Create and show restore note (its z-index comes from the stylesheet)
     const noteHowToRestoreSize = document.createElement("div");
     noteHowToRestoreSize.id = "expandnoteHowToRestoreSize";
     noteHowToRestoreSize.className = "restore-size-note";
     noteHowToRestoreSize.textContent = "Touch to restore size";
-    noteHowToRestoreSize.style.zIndex = Z_INDEX.RESTORE_MESSAGE;
     noteHowToRestoreSize.addEventListener("pointerdown", () =>
-      this.restoreElement(element.id)
+      this.restoreElement(element)
     );
     document.body.appendChild(noteHowToRestoreSize);
 
@@ -2455,76 +2091,36 @@ class Simulator {
     element.style.left = "0";
     element.style.width = "100vw";
     element.style.height = "96vh";
-    element.style.zIndex = Z_INDEX.EXPANDED_ELEMENT;
     element.classList.add("expanded-element");
-
-    // Prevent window scrolling when textarea is expanded
-    const textarea = element.querySelector("textarea");
-    if (textarea) {
-      const wheelHandler = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      };
-      textarea.addEventListener("wheel", wheelHandler, { passive: false });
-      // Store handler reference for cleanup
-      textarea._expandedWheelHandler = wheelHandler;
-    }
   }
 
-  restoreElement(elementId) {
-    const element = document.getElementById(elementId);
-    if (!element) {
-      userMessageAboutBug(
-        "Element restore failed - element not found",
-        `restoreElement('${elementId}') called but element not found in DOM`
-      );
-      return;
-    }
-
+  restoreElement(element) {
     // Restore original styles
-    const originalStyles = JSON.parse(element.dataset.originalStyles || "{}");
+    const originalStyles = JSON.parse(element.dataset.originalStyles);
     Object.keys(originalStyles).forEach((key) => {
       element.style[key] = originalStyles[key];
     });
 
     // Remove restore note
-    const noteHowToRestoreSize = document.getElementById(
-      "expandnoteHowToRestoreSize"
-    );
-    if (noteHowToRestoreSize) {
-      noteHowToRestoreSize.remove();
-    }
-
-    // Clean up wheel event handler
-    const textarea = element.querySelector("textarea");
-    if (textarea && textarea._expandedWheelHandler) {
-      textarea.removeEventListener("wheel", textarea._expandedWheelHandler);
-      delete textarea._expandedWheelHandler;
-    }
+    document.getElementById("expandnoteHowToRestoreSize").remove();
 
     element.classList.remove("expanded-element");
     delete element.dataset.originalStyles;
   }
-}
 
-window.buttonEditMode = false;
+  applyButtonEditMode(enabled) {
+    this.buttonEditMode = enabled;
+    const toggle = document.querySelector(".button-caption-edit-toggle");
+    toggle.textContent = enabled
+      ? "Click here to end button customization"
+      : "Customize button-to-key mapping";
+    toggle.classList.toggle("active", enabled);
+    document
+      .querySelectorAll(".game-buttons button")
+      .forEach((button) => button.classList.toggle("edit-mode", enabled));
+  }
 
-function toggleButtonCaptionEdit() {
-  window.buttonEditMode = !window.buttonEditMode;
-  const button_caption_edit_toggle = document.querySelector(
-    ".button-caption-edit-toggle"
-  );
-  const gameButtons = document.querySelectorAll(".game-buttons button");
-
-  if (window.buttonEditMode) {
-    button_caption_edit_toggle.textContent =
-      "Click here to end button customization";
-    button_caption_edit_toggle.classList.add("active");
-    gameButtons.forEach((button) => button.classList.add("edit-mode"));
-  } else {
-    button_caption_edit_toggle.textContent =
-      "Customize button-to-key mapping";
-    button_caption_edit_toggle.classList.remove("active");
-    gameButtons.forEach((button) => button.classList.remove("edit-mode"));
+  toggleButtonCaptionEdit() {
+    this.applyButtonEditMode(!this.buttonEditMode);
   }
 }

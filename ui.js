@@ -1,6 +1,3 @@
-// Constants
-const LOCALSTORAGE_RETRO_FONTS_KEY = "useRetroFont";
-
 // Menu functionality
 function toggleMenu() {
   const dropdown = document.getElementById("menuDropdown");
@@ -41,22 +38,9 @@ function updateRetroFontsToggle() {
 }
 
 function toggleRetroFontsFromMenu() {
-  window.sinclaude.useSinclairFont = !window.sinclaude.useSinclairFont;
-  localStorage.setItem(
-    LOCALSTORAGE_RETRO_FONTS_KEY,
-    window.sinclaude.useSinclairFont.toString()
-  );
+  window.sinclaude.setUseSinclairFont(!window.sinclaude.useSinclairFont);
   updateRetroFontsToggle();
-  window.sinclaude.invalidateScreenCache();
   closeMenu();
-}
-
-function initializeRetroFonts() {
-  if (window.sinclaude) {
-    window.sinclaude.useSinclairFont =
-      localStorage.getItem(LOCALSTORAGE_RETRO_FONTS_KEY) !== "false";
-    updateRetroFontsToggle();
-  }
 }
 
 function getFormattedVersionInfo() {
@@ -83,9 +67,11 @@ function getFormattedVersionInfo() {
 
 // DOM-dependent setup waits for DOM ready
 document.addEventListener("DOMContentLoaded", function () {
+  const headerMenu = document.querySelector(".header-items");
+  const dropdown = document.getElementById("menuDropdown");
+  // Close the menu on a press outside it; nothing to do while it is closed
   document.addEventListener("pointerdown", function (event) {
-    const headerMenu = document.querySelector(".header-items");
-    if (headerMenu && !headerMenu.contains(event.target)) {
+    if (dropdown.style.display === "block" && !headerMenu.contains(event.target)) {
       closeMenu();
     }
   });

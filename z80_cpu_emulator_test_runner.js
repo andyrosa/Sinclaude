@@ -40,20 +40,58 @@ class Z80CPUEmulatorTestClass extends TestFramework {
   }
 
   runAllTests() {
-    // Load dependencies using inherited method
-    const { Z80CPU, Z80Assembler, TestFramework } = this.loadDependencies([
-      "Z80CPU", 
-      "Z80Assembler", 
-      "TestFramework"
-    ]);
-
     const assembler = new Z80Assembler();
     const cpu = new Z80CPU();
     const memory = new Uint8Array(65536);
     const iomap = new Uint8Array(256);
+    // Snapshots taken before each run; reused so 740 runs do not allocate 64KB each
+    const memorySnapshot = new Uint8Array(memory.length);
+    const iomapSnapshot = new Uint8Array(iomap.length);
+
+    const BYTE_REGISTERS = ["A", "B", "C", "D", "E", "H", "L"];
+    const CHECKED_REGISTERS = [...BYTE_REGISTERS, "SP"];
+
+    // Flag-specific expectation sections, one pattern per Z/C combination in flagCombos order
+    const FLAG_COMBO_NAMES = ["Z0C0", "Z0C1", "Z1C0", "Z1C1"];
+    const FLAG_COMBO_PATTERNS = FLAG_COMBO_NAMES.map(
+      (name) => new RegExp(`\\b${name}:([^Z]*?)(?=\\s*Z[01]C[01]:|$)`)
+    );
 
     // Capture reference to 'this' for use in nested functions
     const TestClass = this;
+
+    // Expectation values are hex with a 0x prefix, otherwise decimal
+    function parseNumberLiteral(text) {
+      return /^0x/i.test(text) ? parseInt(text, 16) : parseInt(text, 10);
+    }
+
+    // One instruction executes per non-blank source line
+    function countInstructionLines(assembly) {
+      return assembly.split("\n").filter((line) => line.trim()).length;
+    }
+
+    // Compare a byte array against its snapshot and throw listing the first
+    // few differences outside allowedIndexes
+    function assertNoUnexpectedChanges(current, initial, allowedIndexes, label, formatIndex, maxShown) {
+      const unexpectedChanges = [];
+      for (let index = 0; index < current.length; index++) {
+        if (current[index] !== initial[index] && !allowedIndexes.has(index)) {
+          unexpectedChanges.push(
+            `${formatIndex(index)}: 0x${formatHex2(initial[index])}→0x${formatHex2(current[index])}`
+          );
+        }
+      }
+
+      if (unexpectedChanges.length > 0) {
+        const moreText =
+          unexpectedChanges.length > maxShown
+            ? ` and ${unexpectedChanges.length - maxShown} more`
+            : "";
+        throw new Error(
+          `Unexpected ${label} changes: ${unexpectedChanges.slice(0, maxShown).join(", ")}${moreText}`
+        );
+      }
+    }
 
     function parseExpectations(expectStr, flagComboIndex = 0) {
       if (!expectStr) return {};
@@ -62,18 +100,13 @@ class Z80CPUEmulatorTestClass extends TestFramework {
 
       // Split by flag-specific sections first
       // Format: "base expectations Z0C0:flag-specific Z0C1:flag-specific Z1C0:flag-specific Z1C1:flag-specific"
-      const flagCombos = ["Z0C0", "Z0C1", "Z1C0", "Z1C1"];
-      const currentFlagCombo = flagCombos[flagComboIndex];
 
       // Split the expectation string by flag combo patterns
       let baseExpectations = expectStr;
       let flagSpecificExpectations = "";
 
       // Extract the current flag combo's expectations
-      const flagPattern = new RegExp(
-        `\\b${currentFlagCombo}:([^Z]*?)(?=\\s*Z[01]C[01]:|$)`
-      );
-      const flagMatch = expectStr.match(flagPattern);
+      const flagMatch = expectStr.match(FLAG_COMBO_PATTERNS[flagComboIndex]);
 
       if (flagMatch) {
         flagSpecificExpectations = flagMatch[1].trim();
@@ -107,49 +140,25 @@ class Z80CPUEmulatorTestClass extends TestFramework {
 
         // Check for memory expectation syntax: [0x1234] or [1234]
         if (key.startsWith("[") && key.endsWith("]")) {
-          const addrStr = key.slice(1, -1); // Remove brackets
-          let address;
-          if (addrStr.startsWith("0x") || addrStr.startsWith("0X")) {
-            address = parseInt(addrStr, 16);
-          } else {
-            address = parseInt(addrStr, 10);
-          }
+          const address = parseNumberLiteral(key.slice(1, -1)); // Remove brackets
 
           if (!isNaN(address)) {
             if (!expectations.memory) expectations.memory = {};
 
-            let expectedValue;
-            if (value.startsWith("0x") || value.startsWith("0X")) {
-              expectedValue = parseInt(value, 16);
-            } else {
-              expectedValue = parseInt(value, 10);
-            }
-            expectations.memory[address] = expectedValue;
+            expectations.memory[address] = parseNumberLiteral(value);
             continue;
           }
         }
 
         // Check for I/O port expectation syntax: port[0x7F] or port[127]
         if (key.toLowerCase().startsWith("port[") && key.endsWith("]")) {
-          const portStr = key.slice(5, -1); // Remove 'port[' and ']'
-          let port;
-          if (portStr.startsWith("0x") || portStr.startsWith("0X")) {
-            port = parseInt(portStr, 16);
-          } else {
-            port = parseInt(portStr, 10);
-          }
+          const port = parseNumberLiteral(key.slice(5, -1)); // Remove 'port[' and ']'
 
           if (!isNaN(port) && port >= 0 && port <= 255) {
             if (!expectations.ioports) expectations.ioports = {};
 
             // I/O ports are never affected by flags, so no flag-specific syntax needed
-            let expectedValue;
-            if (value.startsWith("0x") || value.startsWith("0X")) {
-              expectedValue = parseInt(value, 16);
-            } else {
-              expectedValue = parseInt(value, 10);
-            }
-            expectations.ioports[port] = expectedValue;
+            expectations.ioports[port] = parseNumberLiteral(value);
             continue;
           }
         }
@@ -161,10 +170,8 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           expectations[lowerKey] = true;
         } else if (lowerValue === "f" || lowerValue === "false") {
           expectations[lowerKey] = false;
-        } else if (value.startsWith("0x") || value.startsWith("0X")) {
-          expectations[lowerKey] = parseInt(value, 16);
         } else if (!isNaN(value)) {
-          expectations[lowerKey] = parseInt(value, 10);
+          expectations[lowerKey] = parseNumberLiteral(value);
         } else {
           expectations[lowerKey] = value; // String value
         }
@@ -187,6 +194,16 @@ class Z80CPUEmulatorTestClass extends TestFramework {
         { Z: true, C: true },
       ];
 
+      // The source does not depend on the initial flags, so assemble once for all four runs
+      const result = assembler.assemble(assembly);
+      const machineCodeLength = result.success
+        ? result.instructionDetails.reduce(
+            (total, instruction) => total + instruction.opcodes.length,
+            0
+          )
+        : 0;
+      const instructionCount = countInstructionLines(assembly);
+
       flagCombos.forEach((initialFlags, flagComboIndex) => {
 
         // Parse expectations with flag combination index for Z0C0 syntax support
@@ -200,8 +217,6 @@ class Z80CPUEmulatorTestClass extends TestFramework {
         let execResult; // Declare outside try block for error reporting
 
         try {
-          // Assemble the code
-          const result = assembler.assemble(assembly);
           if (!result.success) {
             throw new Error(`Assembly failed: ${result.errors[0].message}`);
           }
@@ -214,36 +229,25 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           cpu.registers.F = { ...initialFlags };
 
           // Capture complete initial state for comprehensive change verification
+          iomapSnapshot.set(iomap);
           const initialState = {
             registers: { ...cpu.registers, F: { ...cpu.registers.F } },
-            shadowRegisters: cpu.shadowRegisters ? { 
-              A: cpu.shadowRegisters.A, 
-              F: { ...cpu.shadowRegisters.F } 
-            } : null,
+            shadowRegisters: {
+              A: cpu.shadowRegisters.A,
+              F: { ...cpu.shadowRegisters.F }
+            },
             halted: cpu.halted,
-            iomap: new Uint8Array(iomap),
+            iomap: iomapSnapshot,
           };
 
           // Load machine code into memory
           Z80Assembler.loadOpcodesIntoMemory(memory, result.instructionDetails);
 
-          // Calculate total machine code length for PC expectation
-          const machineCodeLength = result.instructionDetails.reduce(
-            (total, instruction) => {
-              return (
-                total + (instruction.opcodes ? instruction.opcodes.length : 0)
-              );
-            },
-            0
-          );
-
           // Capture memory state after loading code (to ignore code loading changes)
-          initialState.memory = new Uint8Array(memory);
+          memorySnapshot.set(memory);
+          initialState.memory = memorySnapshot;
 
           // Execute - run one step per instruction line
-          const instructionCount = assembly
-            .split("\n")
-            .filter((line) => line.trim()).length;
           execResult = cpu.executeSteps(memory, iomap, instructionCount);
 
           // Check for execution errors first
@@ -351,24 +355,21 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           }
 
           // 1. Check explicit register expectations first
-          const allRegisters = ["A", "B", "C", "D", "E", "H", "L", "SP"];
-          for (const reg of allRegisters) {
+          for (const reg of CHECKED_REGISTERS) {
             const regKey = reg.toLowerCase();
             if (expected.hasOwnProperty(regKey)) {
               if (execResult.registers[reg] !== expected[regKey]) {
                 throw new Error(
-                  `Register ${reg}: expected 0x${expected[regKey]
-                    .toString(16)
-                    .toUpperCase()}, got 0x${execResult.registers[reg]
-                    .toString(16)
-                    .toUpperCase()}`
+                  `Register ${reg}: expected 0x${formatHex2(
+                    expected[regKey]
+                  )}, got 0x${formatHex2(execResult.registers[reg])}`
                 );
               }
             }
           }
 
           // 2. Check unexpected register changes (only for registers not explicitly expected)
-          for (const reg of allRegisters) {
+          for (const reg of CHECKED_REGISTERS) {
             const regKey = reg.toLowerCase();
             if (!expected.hasOwnProperty(regKey)) {
               if (execResult.registers[reg] !== initialState.registers[reg]) {
@@ -382,29 +383,22 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           }
 
           // 2a. Check for unexpected shadow register changes
-          if (execResult.shadowRegisters) {
-            // Check shadow A register
-            if (execResult.shadowRegisters.A !== initialState.shadowRegisters?.A) {
-              throw new Error(
-                `Shadow register A: unexpected change from 0x${formatHex2(
-                  initialState.shadowRegisters?.A || 0
-                )} to 0x${formatHex2(execResult.shadowRegisters.A)}`
-              );
-            }
-            
-            // Check shadow flags
-            if (execResult.shadowRegisters.F && initialState.shadowRegisters?.F) {
-              if (execResult.shadowRegisters.F.Z !== initialState.shadowRegisters.F.Z) {
-                throw new Error(
-                  `Shadow flag Z: unexpected change from ${initialState.shadowRegisters.F.Z} to ${execResult.shadowRegisters.F.Z}`
-                );
-              }
-              if (execResult.shadowRegisters.F.C !== initialState.shadowRegisters.F.C) {
-                throw new Error(
-                  `Shadow flag C: unexpected change from ${initialState.shadowRegisters.F.C} to ${execResult.shadowRegisters.F.C}`
-                );
-              }
-            }
+          if (execResult.shadowRegisters.A !== initialState.shadowRegisters.A) {
+            throw new Error(
+              `Shadow register A: unexpected change from 0x${formatHex2(
+                initialState.shadowRegisters.A
+              )} to 0x${formatHex2(execResult.shadowRegisters.A)}`
+            );
+          }
+          if (execResult.shadowRegisters.F.Z !== initialState.shadowRegisters.F.Z) {
+            throw new Error(
+              `Shadow flag Z: unexpected change from ${initialState.shadowRegisters.F.Z} to ${execResult.shadowRegisters.F.Z}`
+            );
+          }
+          if (execResult.shadowRegisters.F.C !== initialState.shadowRegisters.F.C) {
+            throw new Error(
+              `Shadow flag C: unexpected change from ${initialState.shadowRegisters.F.C} to ${execResult.shadowRegisters.F.C}`
+            );
           }
 
           // 2b. Check for unexpected halted state changes
@@ -416,92 +410,34 @@ class Z80CPUEmulatorTestClass extends TestFramework {
             }
           }
 
-          // 3. Calculate legitimate memory regions that can be modified
-          const allowedMemoryChangesSet = new Set();
+          // 3. Memory and I/O may change only where the expectations say so
+          const allowedMemoryChangesSet = new Set(
+            expected.hasOwnProperty("memory")
+              ? Object.keys(expected.memory).map(Number)
+              : []
+          );
+          assertNoUnexpectedChanges(
+            memory,
+            initialState.memory,
+            allowedMemoryChangesSet,
+            "memory",
+            (address) => `[0x${formatHex4(address)}]`,
+            5
+          );
 
-          // Add memory addresses from expectations (they are expected to change)
-          if (expected.hasOwnProperty("memory")) {
-            for (const address of Object.keys(expected.memory)) {
-              allowedMemoryChangesSet.add(parseInt(address));
-            }
-          }
-
-          // 4. Check for unexpected memory changes
-          const unexpectedMemoryChanges = [];
-          for (let addr = 0; addr < memory.length; addr++) {
-            if (
-              memory[addr] !== initialState.memory[addr] &&
-              !allowedMemoryChangesSet.has(addr)
-            ) {
-              unexpectedMemoryChanges.push({
-                address: addr,
-                initial: initialState.memory[addr],
-                final: memory[addr],
-              });
-            }
-          }
-
-          if (unexpectedMemoryChanges.length > 0) {
-            const changes = unexpectedMemoryChanges
-              .slice(0, 5)
-              .map(
-                (change) =>
-                  `[0x${formatHex4(
-                    change.address
-                  )}]: 0x${formatHex2(
-                    change.initial
-                  )}→0x${formatHex2(change.final)}`
-              )
-              .join(", ");
-            const moreText =
-              unexpectedMemoryChanges.length > 5
-                ? ` and ${unexpectedMemoryChanges.length - 5} more`
-                : "";
-            throw new Error(`Unexpected memory changes: ${changes}${moreText}`);
-          }
-
-          // 5. Check for unexpected I/O port changes
-          const allowedIOChangesSet = new Set();
-
-          // Add I/O ports from expectations (they are expected to change)
-          if (expected.hasOwnProperty("ioports")) {
-            for (const port of Object.keys(expected.ioports)) {
-              allowedIOChangesSet.add(parseInt(port));
-            }
-          }
-
-          const unexpectedIOChanges = [];
-          for (let port = 0; port < iomap.length; port++) {
-            if (
-              iomap[port] !== initialState.iomap[port] &&
-              !allowedIOChangesSet.has(port)
-            ) {
-              unexpectedIOChanges.push({
-                port: port,
-                initial: initialState.iomap[port],
-                final: iomap[port],
-              });
-            }
-          }
-
-          if (unexpectedIOChanges.length > 0) {
-            const changes = unexpectedIOChanges
-              .slice(0, 3)
-              .map(
-                (change) =>
-                  `Port[0x${formatHex2(
-                    change.port
-                  )}]: 0x${formatHex2(
-                    change.initial
-                  )}→0x${formatHex2(change.final)}`
-              )
-              .join(", ");
-            const moreText =
-              unexpectedIOChanges.length > 3
-                ? ` and ${unexpectedIOChanges.length - 3} more`
-                : "";
-            throw new Error(`Unexpected I/O changes: ${changes}${moreText}`);
-          }
+          const allowedIOChangesSet = new Set(
+            expected.hasOwnProperty("ioports")
+              ? Object.keys(expected.ioports).map(Number)
+              : []
+          );
+          assertNoUnexpectedChanges(
+            iomap,
+            initialState.iomap,
+            allowedIOChangesSet,
+            "I/O",
+            (port) => `Port[0x${formatHex2(port)}]`,
+            3
+          );
 
           // Check if we expected an error but the test passed
           if (expectedError !== null) {
@@ -535,78 +471,22 @@ class Z80CPUEmulatorTestClass extends TestFramework {
             }`,
           ];
 
-          // Try to get CPU state for error reporting if execution was attempted
-          let execResultForReport = execResult;
-          if (!execResultForReport) {
-            // Try to re-execute to get state for debugging (if assembly succeeded)
-            try {
-              if (typeof result !== "undefined" && result.success) {
-                memory.fill(0);
-                cpu.reset();
-                cpu.set(0x0000, 0xffff);
-                cpu.registers.F = { ...initialFlags };
-                Z80Assembler.loadOpcodesIntoMemory(
-                  memory,
-                  result.instructionDetails
-                );
-                execResultForReport = cpu.executeSteps(
-                  memory,
-                  iomap,
-                  assembly.split("\n").filter((line) => line.trim()).length
-                );
-              }
-            } catch (e) {
-              // Re-execution failed, leave execResultForReport undefined
-            }
-          }
-
-          // Add CPU state if available
-          if (execResultForReport) {
+          // Add CPU state if execution was attempted
+          if (execResult) {
+            const finalRegisters = execResult.registers;
             failureDetails.push(`Final CPU state:`);
             failureDetails.push(
-              `  Registers: A=${execResultForReport.registers.A.toString(16)
-                .padStart(2, "0")
-                .toUpperCase()}H, B=${execResultForReport.registers.B.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H, C=${execResultForReport.registers.C.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H, D=${execResultForReport.registers.D.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H, E=${execResultForReport.registers.E.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H, H=${execResultForReport.registers.H.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H, L=${execResultForReport.registers.L.toString(
-                16
-              )
-                .padStart(2, "0")
-                .toUpperCase()}H`
+              `  Registers: ${BYTE_REGISTERS.map(
+                (name) => `${name}=${formatHex2(finalRegisters[name])}H`
+              ).join(", ")}`
             );
             failureDetails.push(
-              `  PC=${execResultForReport.registers.PC.toString(16)
-                .padStart(4, "0")
-                .toUpperCase()}H, SP=${execResultForReport.registers.SP.toString(
-                16
-              )
-                .padStart(4, "0")
-                .toUpperCase()}H`
+              `  PC=${formatHex4(finalRegisters.PC)}H, SP=${formatHex4(finalRegisters.SP)}H`
             );
             failureDetails.push(
-              `  Flags: Z=${execResultForReport.registers.F.Z ? 1 : 0}, C=${
-                execResultForReport.registers.F.C ? 1 : 0
-              }`
+              `  Flags: Z=${finalRegisters.F.Z ? 1 : 0}, C=${finalRegisters.F.C ? 1 : 0}`
             );
-            if (execResultForReport.halted) {
+            if (execResult.halted) {
               failureDetails.push(`  Status: HALTED`);
             }
           }
@@ -624,9 +504,7 @@ class Z80CPUEmulatorTestClass extends TestFramework {
     // Test function with optional test name
     function test(assembly, expectations = "", testName = null) {
       // Check if test name is required (more than one instruction line)
-      const instructionLines = assembly
-        .split("\n")
-        .filter((line) => line.trim()).length;
+      const instructionLines = countInstructionLines(assembly);
       if (instructionLines > 1 && !testName) {
         // Log failure for missing test name
         const errorMsg = `Test name is required for multi-instruction tests. Assembly has ${instructionLines} lines:\n${assembly}`;
@@ -644,31 +522,11 @@ class Z80CPUEmulatorTestClass extends TestFramework {
 
     consoleLogIfNode("Starting Z80 CPU tests with key=value expectations...\n");
 
-    // Load and execute test cases
-    if (typeof require !== "undefined") {
-      // Node.js environment - load test cases as a function
-      const runTestCases = require("./z80_cpu_emulator_test_cases.js");
-      runTestCases(test, test_expect_error);
-    } else {
-      // Browser environment - test cases should be globally available
-      if (typeof runZ80CPUEmulatorTestClass === "function") {
-        runZ80CPUEmulatorTestClass(test, test_expect_error);
-      } else {
-        throw new Error(
-          "Test cases not available in browser environment - ensure z80_cpu_emulator_test_cases.js is loaded"
-        );
-      }
-    }
+    runZ80CPUEmulatorTestClass(test, test_expect_error);
 
     // Complete tests using inherited method
     return this.completeTests();
   }
-}
-
-// Run tests if this file is executed directly in Node.js
-if (typeof require !== "undefined" && require.main === module) {
-  const z80CPUTestClass = new Z80CPUEmulatorTestClass();
-  z80CPUTestClass.runAllTests();
 }
 
 // Export for use in other modules (Node.js environment)

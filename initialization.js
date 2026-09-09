@@ -18,11 +18,9 @@ window.addEventListener('load', () => {
     }
     
     window.sinclaude = new Simulator();
-    
-    // Initialize retro fonts from localStorage
-    if (typeof initializeRetroFonts === 'function') {
-        initializeRetroFonts();
-    }
+
+    // Show the persisted retro font choice in the menu
+    updateRetroFontsToggle();
 
     // Load assembly: from URL if present, otherwise default
     if (!window.sinclaude.loadFromURL()) {

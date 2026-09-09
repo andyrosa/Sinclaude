@@ -32,12 +32,6 @@
 // RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL); BIT 0,A; BIT 1,A;
 // BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
 
-// In the browser, constants_and_css_vars.js provides formatHex2/formatHex4 as globals;
-// in Node.js, load them onto globalThis to mirror that.
-if (typeof formatHex2 === 'undefined' && typeof require !== 'undefined') {
-    Object.assign(globalThis, require('./constants_and_css_vars.js'));
-}
-
 class Z80CPU {
     constructor() {
         // Use reset to initialize to avoid code duplication
@@ -68,29 +62,9 @@ class Z80CPU {
         }
     }
 
-    // regPairs register constants for register pairs
-    static regPairs = {
-        HL: ['H', 'L'],
-        DE: ['D', 'E'], 
-        BC: ['B', 'C'],
-    };
-
-    // Convert LSB/MSB register pair to 16-bit integer
-    lsbMsbToWord(lsb, msb) {
-        return (this.registers[msb] << 8) | this.registers[lsb];
-    }
-
-    // Get register pair value using regPairs register constant
-    getReg(regPair) {
-        const [msb, lsb] = regPair;
-        return this.lsbMsbToWord(lsb, msb);
-    }
-
-    // Set register pair value using regPairs register constant  
-    setReg(regPair, value) {
-        const [msb, lsb] = regPair;
-        this.registers[msb] = (value >> 8) & 0xFF;
-        this.registers[lsb] = value & 0xFF;
+    // Combine two bytes into a 16-bit word
+    bytesToWord(lsb, msb) {
+        return lsb | (msb << 8);
     }
 
     /**
@@ -98,34 +72,27 @@ class Z80CPU {
      * @param {Uint8Array} memory - System memory array (64KB for Z80)
      * @param {Uint8Array} iomap - I/O port map for IN/OUT instructions (256 ports)
      * @param {number} steps - Maximum number of instructions to execute
-     * @param {Object|null} initialRegisters - Optional register state to load before execution
-     * @param {Object} initialRegisters.F - Flag register object with Z, C, N, H properties
      * @returns {Object} Execution result
      * @returns {number} returns.instructionsExecuted - Actual instructions completed
      * @returns {boolean} returns.halted - Whether CPU halted (HLT instruction)
      * @returns {Object} returns.registers - Final CPU register state
      * @returns {string|null} returns.error - Error message if execution failed
      */
-    executeSteps(memory, iomap, steps, initialRegisters = null) {
+    executeSteps(memory, iomap, steps) {
         let instructionsExecuted = 0;
         let error = null;
-        
+
         // Reset halted state when starting execution
-        this.halted = false;        
-       
-        // Load initial registers if provided
-        if (initialRegisters) {
-            this.registers = { 
-                ...initialRegisters,
-                F: { ...initialRegisters.F } // Deep copy F register
-            };
-        }
-        
+        this.halted = false;
+
+        // Store memory and iomap references for helper functions
+        this.memory = memory;
+        this.iomap = iomap;
+
         for (let i = 0; i < steps && !this.halted && !error; i++) {
             try {
-                const result = this.executeInstruction(memory,iomap);
-                if (result.error) {
-                    error = result.error;
+                error = this.executeInstruction();
+                if (error !== null) {
                     break;
                 }
                 instructionsExecuted++;
@@ -161,30 +128,29 @@ class Z80CPU {
     fetchWord() {
         const lsb = this.fetchByte();
         const msb = this.fetchByte();
-        return lsb | (msb << 8);
+        return this.bytesToWord(lsb, msb);
     }
 
     // Pop 16-bit word from stack and set PC
     popPC() {
-        const [lsb, msb] = this.popLSB_MSB();
-        this.registers.PC = lsb | (msb << 8);
+        this.registers.PC = this.popWord();
     }
 
-    // Pop from stack returning [lsb, msb] pair
-    popLSB_MSB() {
+    // Pop 16-bit word from stack (LSB at SP, MSB at SP+1)
+    popWord() {
         const lsb = this.memory[this.registers.SP];
         this.registers.SP = this.adjustFFFF(this.registers.SP + 1);
         const msb = this.memory[this.registers.SP];
         this.registers.SP = this.adjustFFFF(this.registers.SP + 1);
-        return [lsb, msb];
+        return this.bytesToWord(lsb, msb);
     }
 
-    // Push [lsb, msb] pair to stack
-    pushLSB_MSB(lsb, msb) {
+    // Push 16-bit word to stack (MSB first so LSB ends up at the lower address)
+    pushWord(word) {
         this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-        this.memory[this.registers.SP] = msb;
+        this.memory[this.registers.SP] = this.adjustFF(word >> 8);
         this.registers.SP = this.adjustFFFF(this.registers.SP - 1);
-        this.memory[this.registers.SP] = lsb;
+        this.memory[this.registers.SP] = this.adjustFF(word);
     }
 
     // Helper functions to adjust register values with proper overflow/underflow handling
@@ -200,7 +166,18 @@ class Z80CPU {
     readWordFromMemory(memory, address) {
         const lsb = memory[address];
         const msb = memory[this.adjustFFFF(address + 1)];
-        return (msb << 8) | lsb;
+        return this.bytesToWord(lsb, msb);
+    }
+
+    // Carry flag as an arithmetic operand (ADC, SBC, RL, RR)
+    carryIn() {
+        return this.registers.F.C ? 1 : 0;
+    }
+
+    // CP: subtract without storing, flags only
+    compareA(value) {
+        this.registers.F.Z = this.registers.A === value;
+        this.registers.F.C = this.registers.A < value;
     }
 
     adjustFFPlusUpdateZC(result) {
@@ -236,39 +213,37 @@ class Z80CPU {
         this.memory[address] = this.adjustFFPlusUpdateZ(this.memory[address] - 1);
     }
 
-    // Convert word to [lsb, msb] pair
-    wordToLSB_MSB(value) {
-        return [this.adjustFF(value), this.adjustFF(value >> 8)];
-    }
-
-    // Convenience methods for common register pair access to reduce duplication
+    // Register pair access; named properties keep these on the hot path cheap
     getHL() {
-        return this.getReg(Z80CPU.regPairs.HL);
+        return this.bytesToWord(this.registers.L, this.registers.H);
     }
 
     getBC() {
-        return this.getReg(Z80CPU.regPairs.BC);
+        return this.bytesToWord(this.registers.C, this.registers.B);
     }
 
     getDE() {
-        return this.getReg(Z80CPU.regPairs.DE);
+        return this.bytesToWord(this.registers.E, this.registers.D);
     }
 
     setHL(value) {
-        this.setReg(Z80CPU.regPairs.HL, value);
+        this.registers.H = this.adjustFF(value >> 8);
+        this.registers.L = this.adjustFF(value);
     }
 
     setBC(value) {
-        this.setReg(Z80CPU.regPairs.BC, value);
+        this.registers.B = this.adjustFF(value >> 8);
+        this.registers.C = this.adjustFF(value);
     }
 
     setDE(value) {
-        this.setReg(Z80CPU.regPairs.DE, value);
+        this.registers.D = this.adjustFF(value >> 8);
+        this.registers.E = this.adjustFF(value);
     }
 
     // Push current PC to stack and jump to target address
     callAddress(targetAddress) {
-        this.pushLSB_MSB(...this.wordToLSB_MSB(this.registers.PC));
+        this.pushWord(this.registers.PC);
         this.registers.PC = targetAddress;
     }
 
@@ -277,11 +252,30 @@ class Z80CPU {
         return (byte > 127) ? byte - 256 : byte;
     }
 
-    // executes one Z80 instruction
-    executeInstruction(memory,iomap) {
-        // Store memory and iomap references for helper functions
-        this.memory = memory;
-        this.iomap = iomap;
+    // Conditional control flow. The operand is always fetched so PC advances
+    // past the instruction whether or not the branch is taken.
+    jumpRelativeIf(condition) {
+        const displacement = this.toSignedByte(this.fetchByte());
+        if (condition) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
+    }
+
+    jumpIf(condition) {
+        const address = this.fetchWord();
+        if (condition) this.registers.PC = address;
+    }
+
+    callIf(condition) {
+        const address = this.fetchWord();
+        if (condition) this.callAddress(address);
+    }
+
+    returnIf(condition) {
+        if (condition) this.popPC();
+    }
+
+    // Executes one Z80 instruction; returns null on success or an error string
+    executeInstruction() {
+        const memory = this.memory;
         const instructionAddress = this.registers.PC;
         const opcode = this.fetchByte();
         
@@ -312,14 +306,14 @@ class Z80CPU {
                 break;
             case 0x17: // RLA
                 // Rotate Left Accumulator through carry
-                const oldCarry = this.registers.F.C ? 1 : 0;
+                const oldCarry = this.carryIn();
                 const newCarry = (this.registers.A & 0x80) !== 0;
                 this.registers.A = this.adjustFF((this.registers.A << 1) | oldCarry);
                 this.registers.F.C = newCarry;
                 break;
             case 0x1F: // RRA
                 // Rotate Right Accumulator through carry
-                const oldCarryRRA = this.registers.F.C ? 0x80 : 0;
+                const oldCarryRRA = this.carryIn() << 7;
                 const newCarryRRA = (this.registers.A & 0x01) !== 0;
                 this.registers.A = this.adjustFF((this.registers.A >> 1) | oldCarryRRA);
                 this.registers.F.C = newCarryRRA;
@@ -353,30 +347,19 @@ class Z80CPU {
                 this.popPC();
                 break;
             case 0xC0: // RET NZ
-                if (!this.registers.F.Z) {
-                    this.popPC();
-                }
+                this.returnIf(!this.registers.F.Z);
                 break;
             case 0xC8: // RET Z
-                if (this.registers.F.Z) {
-                    this.popPC();
-                }
+                this.returnIf(this.registers.F.Z);
                 break;
             case 0xD0: // RET NC
-                if (!this.registers.F.C) {
-                    this.popPC();
-                }
+                this.returnIf(!this.registers.F.C);
                 break;
             case 0xD8: // RET C
-                if (this.registers.F.C) {
-                    this.popPC();
-                }
+                this.returnIf(this.registers.F.C);
                 break;
             case 0x18: // JR n
-                {
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.jumpRelativeIf(true);
                 break;
             case 0x21: // LD HL, nn
                 this.registers.L = this.fetchByte();
@@ -763,10 +746,10 @@ class Z80CPU {
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + memory[this.getHL()]);
                 break;
             case 0x8C: // ADC A, H
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.registers.H + (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.registers.H + this.carryIn());
                 break;
             case 0xCE: // ADC A, n
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.fetchByte() + (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A + this.fetchByte() + this.carryIn());
                 break;
             case 0x97: // SUB A
                 this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.A);
@@ -798,31 +781,31 @@ class Z80CPU {
             
             // SBC (Subtract with Carry) instructions
             case 0x9F: // SBC A, A
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.A - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.A - this.carryIn());
                 break;
             case 0x98: // SBC A, B
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.B - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.B - this.carryIn());
                 break;
             case 0x99: // SBC A, C
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.C - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.C - this.carryIn());
                 break;
             case 0x9A: // SBC A, D
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.D - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.D - this.carryIn());
                 break;
             case 0x9B: // SBC A, E
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.E - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.E - this.carryIn());
                 break;
             case 0x9C: // SBC A, H
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.H - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.H - this.carryIn());
                 break;
             case 0x9D: // SBC A, L
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.L - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.registers.L - this.carryIn());
                 break;
             case 0x9E: // SBC A, (HL)
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.memory[this.getHL()] - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.memory[this.getHL()] - this.carryIn());
                 break;
             case 0xDE: // SBC A, n
-                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.fetchByte() - (this.registers.F.C ? 1 : 0));
+                this.registers.A = this.adjustFFPlusUpdateZC(this.registers.A - this.fetchByte() - this.carryIn());
                 break;
             case 0xD3: // OUT (n), A
                 const outPort = this.fetchByte();
@@ -861,45 +844,32 @@ class Z80CPU {
                 
             // Comparison and logic
             case 0xFE: // CP n
-                const cpVal = this.fetchByte();
-                this.registers.F.Z = this.registers.A === cpVal;
-                this.registers.F.C = this.registers.A < cpVal;
+                this.compareA(this.fetchByte());
                 break;
             case 0xB8: // CP B
-                this.registers.F.Z = this.registers.A === this.registers.B;
-                this.registers.F.C = this.registers.A < this.registers.B;
+                this.compareA(this.registers.B);
                 break;
             case 0xB9: // CP C
-                this.registers.F.Z = this.registers.A === this.registers.C;
-                this.registers.F.C = this.registers.A < this.registers.C;
+                this.compareA(this.registers.C);
                 break;
             case 0xBA: // CP D
-                this.registers.F.Z = this.registers.A === this.registers.D;
-                this.registers.F.C = this.registers.A < this.registers.D;
+                this.compareA(this.registers.D);
                 break;
             case 0xBB: // CP E
-                this.registers.F.Z = this.registers.A === this.registers.E;
-                this.registers.F.C = this.registers.A < this.registers.E;
+                this.compareA(this.registers.E);
                 break;
             case 0xBC: // CP H
-                this.registers.F.Z = this.registers.A === this.registers.H;
-                this.registers.F.C = this.registers.A < this.registers.H;
+                this.compareA(this.registers.H);
                 break;
             case 0xBD: // CP L
-                this.registers.F.Z = this.registers.A === this.registers.L;
-                this.registers.F.C = this.registers.A < this.registers.L;
+                this.compareA(this.registers.L);
                 break;
             case 0xBE: // CP (HL)
-                {
-                    const hlValue = memory[this.getHL()];
-                    this.registers.F.Z = this.registers.A === hlValue;
-                    this.registers.F.C = this.registers.A < hlValue;
-                }
+                this.compareA(memory[this.getHL()]);
                 break;
             case 0xBF: // CP A
                 // Deliberate self-comparison: keeps CP A in the same form as CP B..CP L
-                this.registers.F.Z = this.registers.A === this.registers.A;
-                this.registers.F.C = this.registers.A < this.registers.A;
+                this.compareA(this.registers.A);
                 break;
             case 0xB7: // OR A
                 this.updateAZC(this.registers.A);
@@ -961,59 +931,32 @@ class Z80CPU {
                 
             // Conditional jumps
             case 0x28: // JR Z, n
-                {
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    if (this.registers.F.Z) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.jumpRelativeIf(this.registers.F.Z);
                 break;
             case 0x20: // JR NZ, n
-                {
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    if (!this.registers.F.Z) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.jumpRelativeIf(!this.registers.F.Z);
                 break;
             case 0x38: // JR C, n
-                {
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    if (this.registers.F.C) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.jumpRelativeIf(this.registers.F.C);
                 break;
             case 0x30: // JR NC, n
-                {
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    if (!this.registers.F.C) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.jumpRelativeIf(!this.registers.F.C);
                 break;
             case 0x10: // DJNZ n
-                {
-                    this.registers.B = (this.registers.B - 1) & 0xFF;
-                    const displacement = this.toSignedByte(this.fetchByte());
-                    if (this.registers.B !== 0) this.registers.PC = this.adjustFFFF(this.registers.PC + displacement);
-                }
+                this.registers.B = this.adjustFF(this.registers.B - 1);
+                this.jumpRelativeIf(this.registers.B !== 0);
                 break;
             case 0xCA: // JP Z, nn
-                const jpZAddr = this.fetchWord();
-                if (this.registers.F.Z) {
-                    this.registers.PC = jpZAddr;
-                }
+                this.jumpIf(this.registers.F.Z);
                 break;
             case 0xC2: // JP NZ, nn
-                const jpNzAddr = this.fetchWord();
-                if (!this.registers.F.Z) {
-                    this.registers.PC = jpNzAddr;
-                }
+                this.jumpIf(!this.registers.F.Z);
                 break;
             case 0xDA: // JP C, nn
-                const jpCAddr = this.fetchWord();
-                if (this.registers.F.C) {
-                    this.registers.PC = jpCAddr;
-                }
+                this.jumpIf(this.registers.F.C);
                 break;
             case 0xD2: // JP NC, nn
-                const jpNCAddr = this.fetchWord();
-                if (!this.registers.F.C) {
-                    this.registers.PC = jpNCAddr;
-                }
+                this.jumpIf(!this.registers.F.C);
                 break;
             case 0xC3: // JP nn
                 this.registers.PC = this.fetchWord();
@@ -1024,61 +967,49 @@ class Z80CPU {
             
             // Conditional CALL instructions
             case 0xC4: // CALL NZ, nn
-                {
-                    const addr = this.fetchWord();
-                    if (!this.registers.F.Z) this.callAddress(addr);
-                }
+                this.callIf(!this.registers.F.Z);
                 break;
             case 0xCC: // CALL Z, nn
-                {
-                    const addr = this.fetchWord();
-                    if (this.registers.F.Z) this.callAddress(addr);
-                }
+                this.callIf(this.registers.F.Z);
                 break;
             case 0xD4: // CALL NC, nn
-                {
-                    const addr = this.fetchWord();
-                    if (!this.registers.F.C) this.callAddress(addr);
-                }
+                this.callIf(!this.registers.F.C);
                 break;
             case 0xDC: // CALL C, nn
-                {
-                    const addr = this.fetchWord();
-                    if (this.registers.F.C) this.callAddress(addr);
-                }
+                this.callIf(this.registers.F.C);
                 break;
-                
+
             // Stack operations
             case 0xC5: // PUSH BC
-                this.pushLSB_MSB(this.registers.C, this.registers.B);
+                this.pushWord(this.getBC());
                 break;
             case 0xC1: // POP BC
-                [this.registers.C, this.registers.B] = this.popLSB_MSB();
+                this.setBC(this.popWord());
                 break;
             case 0xD5: // PUSH DE
-                this.pushLSB_MSB(this.registers.E, this.registers.D);
+                this.pushWord(this.getDE());
                 break;
             case 0xE5: // PUSH HL
-                this.pushLSB_MSB(this.registers.L, this.registers.H);
+                this.pushWord(this.getHL());
                 break;
             case 0xF5: // PUSH AF
                 // Create proper F register encoding - Z80 flag register format
-                // Bit 7: S (sign), Bit 6: Z (zero), Bit 5: unused, Bit 4: H (half-carry) 
+                // Bit 7: S (sign), Bit 6: Z (zero), Bit 5: unused, Bit 4: H (half-carry)
                 // Bit 3: unused, Bit 2: P/V (parity/overflow), Bit 1: N (subtract), Bit 0: C (carry)
                 const flagByte = (this.registers.F.Z ? 0x40 : 0) | (this.registers.F.C ? 0x01 : 0);
-                this.pushLSB_MSB(flagByte, this.registers.A);
+                this.pushWord(this.bytesToWord(flagByte, this.registers.A));
                 break;
             case 0xD1: // POP DE
-                [this.registers.E, this.registers.D] = this.popLSB_MSB();
+                this.setDE(this.popWord());
                 break;
             case 0xE1: // POP HL
-                [this.registers.L, this.registers.H] = this.popLSB_MSB();
+                this.setHL(this.popWord());
                 break;
             case 0xF1: // POP AF
-                const [flags, aReg] = this.popLSB_MSB();
-                this.registers.A = aReg;
-                this.registers.F.Z = (flags & 0x40) !== 0;
-                this.registers.F.C = (flags & 0x01) !== 0;
+                const af = this.popWord();
+                this.registers.A = this.adjustFF(af >> 8);
+                this.registers.F.Z = (af & 0x40) !== 0;
+                this.registers.F.C = (af & 0x01) !== 0;
                 break;
                 
             // Extended instructions (0xED prefix)
@@ -1112,23 +1043,21 @@ class Z80CPU {
                         this.setBC(bc);
                         break;
                     default:
-                        const extErrorMsg = `Unknown extended opcode: 0xED 0x${formatHex2(extOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}`;
-                        return { error: extErrorMsg };
+                        return `Unknown extended opcode: 0xED 0x${formatHex2(extOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}`;
                 }
                 break;
-                
+
             case 0xCB: // CB prefix - shift and bit instructions
                 const cbOpcode = this.fetchByte();
                 this.executeCBInstruction(cbOpcode);
                 break;
-                
+
             default:
                 // Return error for unknown instructions
-                const errorMsg = `Unknown opcode: 0x${formatHex2(opcode)} at address 0x${formatHex4(instructionAddress)}`;
-                return { error: errorMsg };
+                return `Unknown opcode: 0x${formatHex2(opcode)} at address 0x${formatHex4(instructionAddress)}`;
         }
         this.registers.PC &= 0xFFFF;
-        return {}; // Success - no error
+        return null; // Success - no error
     }
     
     // CB-prefixed instructions (shift and bit operations)
@@ -1269,147 +1198,109 @@ class Z80CPU {
             case 0xFF: this.registers.A = this.setBit(7, this.registers.A); break;
             
             default:
-                return { error: `Unknown CB opcode: 0xCB 0x${formatHex2(cbOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}` };
+                return `Unknown CB opcode: 0xCB 0x${formatHex2(cbOpcode)} at address 0x${formatHex4(this.registers.PC - 2)}`;
         }
+        return null;
     }
-    
+
     // Helper methods for shift operations
     shiftLeftArithmetic(value) {
         this.registers.F.C = (value & 0x80) !== 0;  // Save bit 7 to carry
-        const result = (value << 1) & 0xFF;
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ(value << 1);
     }
-    
+
     shiftLeftArithmeticAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        this.registers.F.C = (value & 0x80) !== 0;
-        this.memory[addr] = (value << 1) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.shiftLeftArithmetic(this.memory[addr]);
     }
-    
+
     shiftRightArithmetic(value) {
         this.registers.F.C = (value & 0x01) !== 0;  // Save bit 0 to carry
-        const result = ((value >> 1) | (value & 0x80)) & 0xFF;  // Preserve sign bit
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ((value >> 1) | (value & 0x80));  // Preserve sign bit
     }
-    
+
     shiftRightArithmeticAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        this.registers.F.C = (value & 0x01) !== 0;
-        this.memory[addr] = ((value >> 1) | (value & 0x80)) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.shiftRightArithmetic(this.memory[addr]);
     }
-    
+
     shiftRightLogical(value) {
         this.registers.F.C = (value & 0x01) !== 0;  // Save bit 0 to carry
-        const result = (value >> 1) & 0xFF;  // No sign preservation
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ(value >> 1);  // No sign preservation
     }
-    
+
     shiftRightLogicalAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        this.registers.F.C = (value & 0x01) !== 0;
-        this.memory[addr] = (value >> 1) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.shiftRightLogical(this.memory[addr]);
     }
-    
+
     testBit(bit, value) {
         const bitMask = 1 << bit;
         this.registers.F.Z = (value & bitMask) === 0;
     }
-    
+
     // Rotate instructions helper methods
     rotateLeftCircular(value) {
         const bit7 = (value & 0x80) >> 7;
         this.registers.F.C = bit7 !== 0;
-        const result = ((value << 1) | bit7) & 0xFF;
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ((value << 1) | bit7);
     }
-    
+
     rotateLeftCircularAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        const bit7 = (value & 0x80) >> 7;
-        this.registers.F.C = bit7 !== 0;
-        this.memory[addr] = ((value << 1) | bit7) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.rotateLeftCircular(this.memory[addr]);
     }
-    
+
     rotateRightCircular(value) {
         const bit0 = value & 0x01;
         this.registers.F.C = bit0 !== 0;
-        const result = ((value >> 1) | (bit0 << 7)) & 0xFF;
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ((value >> 1) | (bit0 << 7));
     }
-    
+
     rotateRightCircularAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        const bit0 = value & 0x01;
-        this.registers.F.C = bit0 !== 0;
-        this.memory[addr] = ((value >> 1) | (bit0 << 7)) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.rotateRightCircular(this.memory[addr]);
     }
-    
+
     rotateLeftThroughCarry(value) {
-        const oldCarry = this.registers.F.C ? 1 : 0;
+        const oldCarry = this.carryIn();
         this.registers.F.C = (value & 0x80) !== 0;
-        const result = ((value << 1) | oldCarry) & 0xFF;
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ((value << 1) | oldCarry);
     }
-    
+
     rotateLeftThroughCarryAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        const oldCarry = this.registers.F.C ? 1 : 0;
-        this.registers.F.C = (value & 0x80) !== 0;
-        this.memory[addr] = ((value << 1) | oldCarry) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.rotateLeftThroughCarry(this.memory[addr]);
     }
-    
+
     rotateRightThroughCarry(value) {
-        const oldCarry = this.registers.F.C ? 0x80 : 0;
+        const oldCarry = this.carryIn() << 7;
         this.registers.F.C = (value & 0x01) !== 0;
-        const result = ((value >> 1) | oldCarry) & 0xFF;
-        this.registers.F.Z = result === 0;
-        return result;
+        return this.adjustFFPlusUpdateZ((value >> 1) | oldCarry);
     }
-    
+
     rotateRightThroughCarryAtHL() {
         const addr = this.getHL();
-        const value = this.memory[addr];
-        const oldCarry = this.registers.F.C ? 0x80 : 0;
-        this.registers.F.C = (value & 0x01) !== 0;
-        this.memory[addr] = ((value >> 1) | oldCarry) & 0xFF;
-        this.registers.F.Z = this.memory[addr] === 0;
+        this.memory[addr] = this.rotateRightThroughCarry(this.memory[addr]);
     }
-    
+
     // Bit manipulation helper methods
     setBit(bit, value) {
         return value | (1 << bit);
     }
-    
+
     setBitAtHL(bit) {
         const addr = this.getHL();
-        this.memory[addr] = this.memory[addr] | (1 << bit);
+        this.memory[addr] = this.setBit(bit, this.memory[addr]);
     }
-    
+
     resetBit(bit, value) {
         return value & (~(1 << bit));
     }
-    
+
     resetBitAtHL(bit) {
         const addr = this.getHL();
-        this.memory[addr] = this.memory[addr] & (~(1 << bit));
+        this.memory[addr] = this.resetBit(bit, this.memory[addr]);
     }
 
     // I/O Port handling - use stored iomap (named to match Simulator.OutPort/InPort)

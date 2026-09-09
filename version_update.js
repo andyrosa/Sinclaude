@@ -7,13 +7,7 @@ window.versionChecker = {
   // Initialize version checking system
   init: function(timerManager) {
     this.timerManager = timerManager;
-
-    // Start version checking 
-    this.versionCheckInterval = this.timerManager.createTimer(
-      () => this.checkForVersionChange(),
-      version_update_check_interval_ms,
-      true
-    );
+    this.resumeVersionChecking();
   },
 
   // Check for version change and show dialog if update available
@@ -28,13 +22,7 @@ window.versionChecker = {
       return;
     }
 
-    this.checkForVersionUpdate((newVersion, error) => {
-      if (error) {
-        // Silently handle errors to avoid disrupting user experience
-        console.error('Version check failed:', error);
-        return;
-      }
-      
+    this.checkForVersionUpdate((newVersion) => {
       if (newVersion) {
         this.showUpdateDialog(newVersion);
       }
@@ -91,9 +79,8 @@ window.versionChecker = {
     });
   },
 
-  // Resume version checking after dialog cancellation
+  // Start the periodic check; also used to resume after dialog cancellation
   resumeVersionChecking: function() {
-    // Simply restart the regular version checking interval
     if (!this.versionCheckInterval && this.timerManager) {
       this.versionCheckInterval = this.timerManager.createTimer(
         () => this.checkForVersionChange(),
@@ -111,16 +98,16 @@ window.versionChecker = {
     }
   },
 
-  // Check for version update
+  // Reload version.js and call back with the new build info, or null when unchanged
   checkForVersionUpdate: function(callback) {
     const savedTimestamp = this.currentVersionTimestamp;
     loadVersionWithCallback(function() {
       const newBuildDate = typeof BUILD_VERSION_BY_YAML !== "undefined" ? BUILD_VERSION_BY_YAML().buildDate : null;
 
       if (newBuildDate && newBuildDate !== savedTimestamp) {
-        callback(BUILD_VERSION_BY_YAML(), null);
+        callback(BUILD_VERSION_BY_YAML());
       } else {
-        callback(null, null);
+        callback(null);
       }
     });
   }

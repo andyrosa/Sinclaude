@@ -36,9 +36,6 @@
     /* darker yellow for text if button bg is white */
     --attention-button-text-c: color-mix(in lch, var(--attention-c), var(--_button-bgc-inverted-grayscale) 30%);
     
-    /* Screen sizing */
-    --screen-height: min(360px, calc(100vw * 3 / 4));
-
     /* Typography */
     --font-mono: 'Courier New', Consolas, 'Liberation Mono', monospace;
 
@@ -123,7 +120,6 @@ button {
     border: 2px solid var(--button-border-c);
     border-radius: 12px;
     box-shadow: var(--button-shadow);
-    box-sizing: border-box;
     color: var(--button-text-c);
     cursor: pointer;
     flex: 1;
@@ -141,7 +137,6 @@ button {
 
 button:hover {
     background: var(--button-hover-bgc);
-    box-shadow: var(--button-shadow);
 }
 
 button:active {
@@ -159,13 +154,11 @@ button:focus-visible {
 #assemble-run-btn {
     background: var(--important-button-bgc);
     color: var(--surface-text-c);
-    box-shadow: var(--button-shadow);
 }
 
 #assemble-run-btn:hover {
     background: var(--button-hover-bgc);
     color: var(--button-text-c);
-    box-shadow: var(--button-shadow);
 }
 
 #assemble-run-btn:active {
@@ -175,7 +168,6 @@ button:focus-visible {
 }
 
 /* Menu */
-.touch-hint,
 .header-item {
     display: flex;
     align-items: center;
@@ -224,22 +216,9 @@ button:focus-visible {
     color: var(--surface-bgc);
 }
 
-.touch-hint {
-    font-size: 9px;
-    gap: 0;
-    height: 40px;
-    line-height: 1.1;
-    padding: 0 2px;
-    width: 35px;
-}
-
-.touch-hint:hover,
 .header-item:hover {
     background: var(--button-hover-bgc);
     border-color: var(--button-bgc);
-}
-
-.header-item:hover {
     transform: scale(1.1);
 }
 
@@ -286,36 +265,31 @@ button:focus-visible {
     word-break: break-all;
 }
 
-.address-column {
+/* The two read-only gutter columns share everything but width and alignment */
+.address-column,
+.opcodes-column {
     border-right: 1px solid var(--border-c);
     color: var(--surface-muted-text-c);
-    flex: 0 0 27px;
     font-size: 9px;
     line-height: 12px;
     overflow: hidden;
     padding: 10px 2px;
-    text-align: center;
     -webkit-user-select: none;
     user-select: none;
 }
 
+.address-column {
+    flex: 0 0 27px;
+    text-align: center;
+}
+
 .opcodes-column {
-    border-right: 1px solid var(--border-c);
-    color: var(--surface-muted-text-c);
     flex: 0 0 53px;
-    font-family: var(--font-mono);
-    font-size: 9px;
-    line-height: 12px;
-    overflow: hidden;
-    padding: 10px 2px;
-    -webkit-user-select: none;
-    user-select: none;
 }
 
 .assembly-column {
     flex: 1;
     outline: none;
-    word-wrap: break-word;
     overflow-wrap: break-word;
 }
 
@@ -367,11 +341,8 @@ button:focus-visible {
     flex: 1;
 }
 
-/* Ensure textareas in expanded elements have vertical scrolling */
-.expanded-element textarea {
-    overflow-y: auto;
-    /* Focus the textarea and capture all scroll events */
-    pointer-events: auto;
+.expanded-element {
+    z-index: var(--z-expanded-element);
 }
 
 /* Note shown when an element is expanded telling user how to restore size */
@@ -389,19 +360,17 @@ button:focus-visible {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* z-index set dynamically in JS to use constant */
+    z-index: var(--z-restore-message);
 }
 
 /* Screen */
 #screen {
     background: var(--editable-text-bgc);
     border: 2px solid var(--border-c);
-    box-sizing: border-box;
     color: var(--editable-text-fgc);
     contain: layout style;
     display: grid;
     flex: 0 0 auto;
-    flex-shrink: 0;
     grid-template-columns: repeat(32, 1fr);
     grid-template-rows: repeat(24, calc(100% / 24));
     /* Responsive sizing: 50% container width, height = 3/4 width */
@@ -464,7 +433,6 @@ button:focus-visible {
 .section {
     border: 1px solid var(--border-c);
     border-radius: 5px;
-    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     margin-bottom: 4px;
@@ -512,8 +480,7 @@ button:focus-visible {
     min-width: 300px;
 }
 
-/* Text areas and outputs */
-textarea,
+/* Text outputs */
 #machineCode,
 #console {
     background: var(--editable-text-bgc);
@@ -521,19 +488,9 @@ textarea,
     color: var(--editable-text-fgc);
     flex: 1;
     font-family: var(--font-mono);
-    padding: 10px;
-}
-
-textarea {
-    font-size: 12px;
-    min-height: 100px;
-    resize: none;
-}
-
-#machineCode,
-#console {
     font-size: 11px;
     overflow-y: auto;
+    padding: 10px;
     white-space: pre-wrap;
 }
 
@@ -543,7 +500,6 @@ textarea {
 }
 
 /* Heights */
-.execution-section,
 .assembly-section,
 .listing-section,
 .console-section {
@@ -802,9 +758,18 @@ textarea {
     transition: .3s;
 }
 
+/* Edit toggle specific adjustments */
 .button-caption-edit-toggle {
     background: var(--button-bgc);
     border: 2px solid var(--attention-c);
+    border-radius: 0;
+    box-shadow:
+        inset 1px 1px 2px color-mix(in srgb, var(--button-shadow-c), black 30%),
+        inset -1px -1px 2px color-mix(in srgb, var(--button-shadow-c), white 30%);
+    font-style: normal;
+    margin: 4px 0;
+    padding: 4px;
+    transition: .2s;
 }
 
 .not-ready-message {
@@ -814,18 +779,6 @@ textarea {
 
 .button-caption-edit-toggle.active {
     background: var(--attention-c);
-}
-
-/* Edit toggle specific adjustments */
-.button-caption-edit-toggle {
-    border-radius: 0;
-    box-shadow:
-        inset 1px 1px 2px color-mix(in srgb, var(--button-shadow-c), black 30%),
-        inset -1px -1px 2px color-mix(in srgb, var(--button-shadow-c), white 30%);
-    font-style: normal;
-    margin: 4px 0;
-    padding: 4px;
-    transition: .2s;
 }
 
 /* Header menu */
