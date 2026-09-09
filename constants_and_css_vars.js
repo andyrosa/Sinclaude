@@ -11,6 +11,26 @@ const RUN_BATCH_INSTRUCTIONS = 15991;
 const VERSION_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const LOCALSTORAGE_RETRO_FONTS_KEY = "useRetroFont";
 
+// Each nonzero code increases duration by the same ratio (about 3.32%).
+// Code 0 is reserved for no request; codes 1-255 span 1ms to four seconds.
+const BEEP_DURATION_MIN_MS = 1;
+const BEEP_DURATION_MAX_MS = 4000;
+const BEEP_DURATION_RATIO = (BEEP_DURATION_MAX_MS / BEEP_DURATION_MIN_MS) ** (1 / 254);
+function decodeBeepDuration(byte) {
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+        throw new RangeError("Beep duration must be a byte (0-255)");
+    }
+    if (byte === 0) return 0;
+    return BEEP_DURATION_MIN_MS * (BEEP_DURATION_MAX_MS / BEEP_DURATION_MIN_MS) ** ((byte - 1) / 254);
+}
+function encodeBeepDuration(milliseconds) {
+    if (milliseconds === 0) return 0;
+    if (!Number.isFinite(milliseconds) || milliseconds < BEEP_DURATION_MIN_MS || milliseconds > BEEP_DURATION_MAX_MS) {
+        throw new RangeError("Beep duration is outside the encodable range");
+    }
+    return 1 + Math.round(Math.log(milliseconds / BEEP_DURATION_MIN_MS) / Math.log(BEEP_DURATION_RATIO));
+}
+
 // Hex formatting helpers
 const formatHex2 = (value) => value.toString(16).padStart(2, "0").toUpperCase();
 const formatHex4 = (value) => value.toString(16).padStart(4, "0").toUpperCase();
@@ -60,5 +80,6 @@ if (typeof document !== 'undefined') {
 
 // Export for Node.js
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { formatHex2, formatHex4, RUN_BATCH_INSTRUCTIONS };
+    module.exports = { formatHex2, formatHex4, RUN_BATCH_INSTRUCTIONS,
+        BEEP_DURATION_MIN_MS, BEEP_DURATION_MAX_MS, BEEP_DURATION_RATIO, decodeBeepDuration, encodeBeepDuration };
 }

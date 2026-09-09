@@ -37,7 +37,8 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - **Port 0:** Frame counter: increments each display refresh (~60Hz), useful for timing
 - **Port 1:** Keyboard input: reads current key press
 - **Port 2:** Beep frequency port: in units of 10Hz
-- **Port 3:** Beep duration port: in milliseconds
+- **Port 3:** Exponential beep duration: `milliseconds = 4000^((byte-1)/254)` for codes 1-255. Zero means no request; 1 gives 1 ms and 255 gives 4 seconds.
+- **Port 4:** Beep volume: 0 is silent, 255 is the former full level. Default 85 gives one-third of the former gain. Persists until changed; assembling a program or resetting restores 85.
 
 ## Usage
 
@@ -61,6 +62,8 @@ Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over th
 
 The compass shows your facing direction. The map faces north: **@** is you, **\*** is Claudasaur, and **E** is the exit. The map does not pause the hunt. Claudasaur wakes after about six seconds and follows the shortest available path, moving more slowly than you. Each retry resets the same connected 16x16 maze so you can learn its routes.
 
+The title screen plays a compact 6.2-second beep arrangement of the opening fanfare from Richard Strauss's [*Also sprach Zarathustra*, Op. 30](https://imslp.org/wiki/Also_sprach_Zarathustra,_Op.30_(Strauss,_Richard)): the rising C-G-C call, a crescendo, and low drum-like responses. Each trumpet note is a single sustained tone, using the nonlinear duration encoding. Pressing **Space** starts the game immediately and cancels the remaining queued music notes. During play, a low double heartbeat starts when Claudasaur is within six maze steps and doubles its pace within three. Capture plays four descending notes; escape plays a three-note rising chime. Pause stops new heartbeat notes, and retry cancels any remaining queued melody notes. Sounds advance alongside gameplay and remain active on the live map.
+
 The game runs as Z80 assembly, including perspective drawing, keyboard input, pathfinding, and win/loss logic. JavaScript prepares the assembly source and drawing data. It uses the simulator's monochrome display, with a starburst creature inspired by the Claude logo.
 
 Run its gameplay and rendering checks with `node run_claudasaur_tests_node.js`.
@@ -68,13 +71,31 @@ Run its gameplay and rendering checks with `node run_claudasaur_tests_node.js`.
 ### Making a beep sound
 
 ```assembly
+LD A, 85          ; One-third volume (0=mute, 255=full)
+OUT (4), A        ; Set volume before requesting a beep
 LD A, 44          ; 440Hz (44 * 10Hz)
 OUT (2), A        ; Set frequency
-LD A, 100         ; 100ms duration
-OUT (3), A        ; Set duration
+LD A, 142         ; Approximately 100ms on the exponential scale
+OUT (3), A        ; Request beep with encoded duration
 ```
 
-A new sound plays on the next screen refresh. A new sound does not cancel other sounds being played.
+The simulator starts a new sound after a CPU execution batch and clears ports 2 and 3. Port 4 retains its value. A new sound does not cancel other sounds being played; volume is captured independently for each note. Existing programs that only write ports 2 and 3 use the quieter default.
+
+For nonzero codes, port 3 uses `t = k * a^byte`, with `a = 4000^(1/254)` and `k = 1/a` milliseconds. Each increment lengthens the note by about 3.32%, giving smooth proportional growth across the range. To encode 1-4000 ms, use `byte = 1 + round(254 * log(milliseconds) / log(4000))`. Code 0 is reserved for no request. For example:
+
+| Duration byte | Requested duration |
+| --- | --- |
+| 1 | 1 ms |
+| 22 | About 1.99 ms |
+| 43 | About 3.94 ms |
+| 128 | About 63.25 ms |
+| 142 | About 99.90 ms |
+| 200 | About 663.88 ms |
+| 255 | 4 seconds |
+
+`BEEP_DURATION_MIN_MS` and `BEEP_DURATION_MAX_MS` in `constants_and_css_vars.js` define the endpoints, and `BEEP_DURATION_RATIO` gives the multiplier between codes. The shared `encodeBeepDuration(ms)` and `decodeBeepDuration(byte)` helpers keep generated samples and playback consistent, with duration rounding within about 1.7%. The bundled samples have been converted; older saved assembly using raw milliseconds or the earlier quadratic scale needs its duration values re-encoded.
+
+The direct JavaScript method still takes milliseconds: `playBeep(frequencyHz, durationMs, volume = 85)`. Claudasaur uses volume for the fanfare's crescendo and the gameplay sound effects, with every sound at or below 85. Run `node run_speaker_tests_node.js` to check duration and volume handling.
 
 ### Delaying using the Frame Counter
 

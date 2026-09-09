@@ -39,6 +39,14 @@
                         <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Load a test program that demonstrates basic Z80 instructions - starts halted for single-stepping">Load Basics Test</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()" title="Load a playable Space Invader micro-game">Load 'Space Invader'</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadClaudasaurAssembly()" title="Find the exit in a first-person maze before the spiky Claudasaur catches you. W/S move, A/D turn, Space starts or shows the map, P pauses.">Load 'Claudasaur'</button>
+                        <!-- Narrow screens show this select instead of the four load buttons above -->
+                        <select class="load-select" aria-label="Load a program" onchange="sinclaude.loadProgramFromSelect(this)">
+                            <option value="" disabled selected hidden>Load a program...</option>
+                            <option value="default">Default Program</option>
+                            <option value="basics">Basics Test</option>
+                            <option value="spaceInvader">'Space Invader'</option>
+                            <option value="claudasaur">'Claudasaur'</option>
+                        </select>
                         <button type="button" id="assemble-run-btn" class="important-button" onclick="sinclaude.assembleAndRun()" title="Compile the Z80 assembly code and start execution">Assemble and Run</button>
                     </div>
                 </div>

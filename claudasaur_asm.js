@@ -1,6 +1,8 @@
 // Geometry is compiled to ordinary Z80 data. Movement, drawing, input and the
 // breadth-first monster pursuit all execute inside the emulated CPU.
 const CLAUDASAUR_ASM = (() => {
+  const duration = typeof module !== 'undefined' && module.exports
+    ? require('./constants_and_css_vars.js').encodeBeepDuration : encodeBeepDuration;
   const art = [];
   const packet = (name, pixels) => {
     art.push(`${name}:`);
@@ -101,6 +103,9 @@ const CLAUDASAUR_ASM = (() => {
 ; Space: start/retry, or toggle live map. P: pause/resume.
 ; Map legend: @ you, * Claudasaur, E exit. North is up.
 ; The monster wakes after six seconds, then takes a step every 1.2s.
+; Nearby: heartbeat pairs, faster in danger. Capture falls; escape rises.
+; The title screen loops the opening fanfare of Also sprach Zarathustra.
+; Sounds advance on game ticks, so melodies never block movement or retry.
 ; Rendering uses a back buffer; no JavaScript game logic is required.
 ORG 0
   JP title
@@ -117,6 +122,9 @@ paused: DB 0
 map_on: DB 0
 countdown: DB 60
 distance: DB 255
+sound_pointer: DEFW 0
+sound_wait: DB 0
+heart_phase: DB 0
 head: DB 0
 tail: DB 0
 cell: DB 0
@@ -132,6 +140,7 @@ title:
   LD SP,65535
   XOR A
   LD (state),A
+  CALL sound_reset
   CALL clear
   LD HL,heading
   CALL paint
@@ -144,6 +153,11 @@ title:
   LD HL,intro_3
   CALL paint
   CALL present
+  LD HL,title_music
+  LD (sound_pointer),HL
+  ; Give the browser time to display the title before the first note.
+  LD A,3
+  LD (sound_wait),A
   JP wait_key
 
 start_game:
@@ -157,6 +171,7 @@ start_game:
   XOR A
   LD (paused),A
   LD (map_on),A
+  CALL sound_reset
   LD A,60
   LD (countdown),A
   LD A,255
@@ -182,9 +197,11 @@ frame_wait:
   JP Z,playing
   LD A,B
   CP C
-  JR Z,wait_key
+  JR Z,menu_tick
   CP ' '
   JP Z,start_game
+menu_tick:
+  CALL sound_tick
   JR wait_key
 
 playing:
@@ -274,6 +291,7 @@ tick:
   CP 1
   JP NZ,wait_key
 draw_tick:
+  CALL sound_tick
   CALL render
   JP wait_key
 
@@ -304,11 +322,131 @@ finish:
   CALL paint
   LD HL,retry_text
   CALL paint
-  LD A,22
-  OUT (2),A
-  LD A,180
-  OUT (3),A
+  CALL sound_reset
+  LD HL,capture_sound
+  LD A,(state)
+  CP 2
+  JR NZ,finish_sound
+  LD HL,escape_sound
+finish_sound:
+  LD (sound_pointer),HL
+  CALL sound_tick
   JP present
+
+; One note per tick at most: the host samples ports after CPU batches, so
+; consecutive OUT pairs without yielding would overwrite unheard notes.
+sound_reset:
+  XOR A
+  LD (sound_wait),A
+  LD (heart_phase),A
+  LD HL,0
+  LD (sound_pointer),HL
+  OUT (2),A
+  OUT (3),A
+  LD A,85
+  OUT (4),A
+  RET
+sound_tick:
+  LD HL,(sound_pointer)
+  LD A,H
+  OR L
+  JR NZ,sound_sequence
+  LD A,(state)
+  CP 1
+  RET NZ
+  LD A,(paused)
+  OR A
+  JR NZ,heart_reset
+  LD A,(distance)
+  CP 7
+  JR NC,heart_reset
+  LD B,12
+  CP 4
+  JR NC,heart_period
+  LD B,6
+heart_period:
+  LD A,(heart_phase)
+  LD C,A
+  INC A
+  CP B
+  JR C,heart_store
+  XOR A
+heart_store:
+  LD (heart_phase),A
+  LD A,C
+  OR A
+  JR Z,heart_first
+  CP 2
+  RET NZ
+  LD A,50
+  OUT (4),A
+  LD A,12
+  OUT (2),A
+  LD A,${duration(65)}
+  OUT (3),A
+  RET
+heart_first:
+  LD A,75
+  OUT (4),A
+  LD A,16
+  OUT (2),A
+  LD A,${duration(55)}
+  OUT (3),A
+  RET
+heart_reset:
+  XOR A
+  LD (heart_phase),A
+  RET
+
+; Notes contain pitch / 10 Hz, volume, encoded duration, and delay ticks.
+; Port 3 duration: milliseconds = 4000^((byte-1)/254), or zero for no request.
+; A zero pitch ends the sequence; only the title theme loops. Terminal sounds
+; replace the heartbeat, and starting/retrying discards all pending notes.
+sound_sequence:
+  LD A,(sound_wait)
+  OR A
+  JR Z,sound_note
+  DEC A
+  LD (sound_wait),A
+  RET NZ
+sound_note:
+  LD A,(HL)
+  OR A
+  JR Z,sound_end
+  LD B,A
+  INC HL
+  LD A,(HL)
+  OUT (4),A
+  LD A,B
+  OUT (2),A
+  INC HL
+  LD A,(HL)
+  OUT (3),A
+  INC HL
+  LD A,(HL)
+  LD (sound_wait),A
+  INC HL
+  LD (sound_pointer),HL
+  RET
+sound_end:
+  LD A,(state)
+  OR A
+  JP NZ,sound_reset
+  LD HL,title_music
+  JR sound_note
+; Richard Strauss, Also sprach Zarathustra, Op.30 (1896), opening fanfare.
+; Source: https://imslp.org/wiki/Also_sprach_Zarathustra,_Op.30_(Strauss,_Richard)
+; Compact monophonic reduction: C4-G4-C5, E5-Eb5, then low G-C drum hits.
+; Each trumpet tone is sustained in a single beep. Durations are quantized
+; just below each note's next onset. The crescendo stays at or below volume 85.
+; The 6.2-second loop includes breathing room after the drum response.
+title_music:
+  DB 26,60,${duration(780)},8, 39,72,${duration(780)},8, 52,85,${duration(1180)},12
+  DB 66,85,${duration(180)},2, 62,70,${duration(580)},6
+  DB 10,60,${duration(80)},3, 13,70,${duration(80)},3, 10,60,${duration(80)},3
+  DB 13,75,${duration(80)},3, 10,60,${duration(80)},3, 13,80,${duration(80)},11, 0
+capture_sound: DB 64,85,${duration(80)},2, 42,75,${duration(90)},2, 26,65,${duration(100)},2, 12,55,${duration(240)},3, 0
+escape_sound: DB 52,55,${duration(100)},2, 66,65,${duration(100)},2, 78,85,${duration(240)},3, 0
 
 ; A cell index uses one byte: y*16+x. The sealed border ensures that
 ; traversable cells never wrap around the edges during neighbor expansion.

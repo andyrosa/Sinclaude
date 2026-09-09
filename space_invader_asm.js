@@ -1,4 +1,7 @@
-const SPACE_INVADER_ASM = `
+const SPACE_INVADER_ASM = (() => {
+const duration = typeof module !== 'undefined' && module.exports
+    ? require('./constants_and_css_vars.js').encodeBeepDuration : encodeBeepDuration;
+return `
 ORG 0
 
 start:
@@ -27,13 +30,13 @@ MESSAGE_ROW         EQU SCREEN_ROWS/2
 FRAME_COUNT_PORT    EQU 0
 KEYBOARD_PORT       EQU 1
 BEEP_10HZ_PORT      EQU 2
-BEEP_MS_PORT        EQU 3
+BEEP_DURATION_PORT  EQU 3
 
 MISSILE_BEEP_10HZ   EQU 160
-MISSILE_BEEP_MS     EQU 2
+MISSILE_BEEP_DURATION EQU ${duration(2)} ; about 2ms, exponential duration code
 
 BOMB_BEEP_10HZ      EQU 20
-BOMB_BEEP_MS        EQU 4
+BOMB_BEEP_DURATION  EQU ${duration(4)} ; about 4ms
 
 PLAYER_ROW          EQU SCREEN_ROWS-3
 PLAYER_START_COL    EQU SCREEN_COLS/2
@@ -183,8 +186,8 @@ fire_missile:
   ; Play missile sound
   LD   A, MISSILE_BEEP_10HZ
   OUT  (BEEP_10HZ_PORT), A
-  LD   A, MISSILE_BEEP_MS 
-  OUT  (BEEP_MS_PORT), A
+  LD   A, MISSILE_BEEP_DURATION
+  OUT  (BEEP_DURATION_PORT), A
   RET
 
 quit_game:
@@ -295,8 +298,8 @@ random_bomb_drop:
   ; Play bomb sound
   LD   A, BOMB_BEEP_10HZ
   OUT  (BEEP_10HZ_PORT), A
-  LD   A, BOMB_BEEP_MS 
-  OUT  (BEEP_MS_PORT), A
+  LD   A, BOMB_BEEP_DURATION
+  OUT  (BEEP_DURATION_PORT), A
   RET
 
 invader_reached_player:
@@ -584,6 +587,7 @@ controls_msg:     DB "   A=LEFT D=RIGHT SPACE=FIRE    "
   END start
 
 `;
+})();
 
 // Export for use in the simulator
 if (typeof window !== 'undefined') {

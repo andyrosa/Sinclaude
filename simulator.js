@@ -6,7 +6,9 @@ const FRAME_COUNT_PORT = 0;
 const KEYBOARD_PORT = 1;
 const KBD_NO_KEY_PRESSED = -1;
 const BEEP_10HZ_PORT = 2;
-const BEEP_MS_PORT = 3;
+const BEEP_DURATION_PORT = 3;
+const BEEP_VOLUME_PORT = 4;
+const BEEP_DEFAULT_VOLUME = 85;
 
 const MAX_URL_LENGTH = 2000; // supposed to be 32K but erring at a lot less
 const BEEP_GAIN = 0.1;
@@ -33,6 +35,7 @@ class Simulator {
     this.cpu = new Z80CPU();
     this.memory = new Uint8Array(MEMORY_SIZE);
     this.ioMap = new Uint8Array(256);
+    this.resetBeepPorts();
     this.setState(STATE.NOT_READY);
     this.instructionCount = 0;
     this.mipsValue = 0.0;
@@ -338,6 +341,9 @@ class Simulator {
       subtree: true,
       characterData: true,
     });
+
+    // The program loaded before the observer existed does not fire it
+    this.updateButtonVisibility();
   }
 
   // Helper method to check if we're on a narrow viewport that needs dynamic buttons
@@ -692,21 +698,29 @@ class Simulator {
     this.ioMap[port] = value;
   }
 
+  resetBeepPorts() {
+    // Older programs never write volume, so a new run must not inherit mute
+    // or a composition's last note level from the previous program.
+    this.OutPort(BEEP_10HZ_PORT, 0);
+    this.OutPort(BEEP_DURATION_PORT, 0);
+    this.OutPort(BEEP_VOLUME_PORT, BEEP_DEFAULT_VOLUME);
+  }
+
   handleBeepPortChange() {
     const beepHz = this.ioMap[BEEP_10HZ_PORT] * 10;
-    const beepMs = this.ioMap[BEEP_MS_PORT];
+    const beepMs = decodeBeepDuration(this.ioMap[BEEP_DURATION_PORT]);
 
-    // If both values are non-zero, start sound and reset to zero
+    // Consume muted requests too, while retaining volume for the next note.
     if (beepHz > 0 && beepMs > 0) {
-      this.playBeep(beepHz, beepMs);
+      this.playBeep(beepHz, beepMs, this.ioMap[BEEP_VOLUME_PORT]);
       this.OutPort(BEEP_10HZ_PORT, 0);
-      this.OutPort(BEEP_MS_PORT, 0);
+      this.OutPort(BEEP_DURATION_PORT, 0);
     }
   }
 
-  playBeep(frequency, duration) {
-    // Don't play if duration is zero or no audio context
-    if (duration === 0 || !this.audioContext) {
+  playBeep(frequency, duration, volume = BEEP_DEFAULT_VOLUME) {
+    // A muted request needs no oscillator, but the caller still clears it.
+    if (duration === 0 || volume === 0 || !this.audioContext) {
       return;
     }
 
@@ -714,7 +728,7 @@ class Simulator {
     const gain = this.audioContext.createGain();
     oscillator.connect(gain);
     gain.connect(this.audioContext.destination);
-    gain.gain.value = BEEP_GAIN;
+    gain.gain.value = BEEP_GAIN * (volume / 255);
     oscillator.frequency.value = frequency;
     oscillator.start();
 
@@ -1270,9 +1284,9 @@ class Simulator {
     }
     this.setText(this.currentInstructionDisplay, bytes.join(" "));
 
-    // Display ports 0-3 (Frame, Keyboard, BeepHz, BeepMs)
+    // Display ports 0-4 (Frame, Keyboard, BeepHz, EncodedDuration, BeepVolume)
     const portValues = [];
-    for (let port = 0; port < 4; port++) {
+    for (let port = 0; port <= BEEP_VOLUME_PORT; port++) {
       portValues.push(formatHex2(this.ioMap[port]));
     }
     this.setText(this.portsDisplay, portValues.join(" "));
@@ -1371,6 +1385,27 @@ class Simulator {
     this.loadAssemblyCode(CLAUDASAUR_ASM);
   }
 
+  // The narrow-screen program select (simulator.html); option values name the loaders
+  loadProgramFromSelect(select) {
+    const loaders = {
+      default: () => this.loadDefaultAssembly(),
+      basics: () => this.loadBasicsAssembly(),
+      spaceInvader: () => this.loadSpaceInvaderAssembly(),
+      claudasaur: () => this.loadClaudasaurAssembly(),
+    };
+    const loader = loaders[select.value];
+    if (loader === undefined) {
+      userMessageAboutBug(
+        "Unknown program selected",
+        `loadProgramFromSelect() called with value '${select.value}', which has no loader`
+      );
+      return;
+    }
+    loader();
+    // Back to the placeholder so the same program can be chosen again after Clear
+    select.value = "";
+  }
+
   assembleAndRun() {
     const sourceCode = this.getAssemblyCode();
     const assembler = new Z80Assembler();
@@ -1399,6 +1434,7 @@ class Simulator {
     }
 
     this.loadAddress = result.loadAddress;
+    this.resetBeepPorts();
     // Initialize audio context for beep functionality
     if (!this.audioContext) {
       try {
@@ -1633,6 +1669,7 @@ class Simulator {
 
   // Handle Reset button click
   resetRequest() {
+    this.resetBeepPorts();
     this.cpu.reset();
     // Set PC to the program's load address (ORG)
     if (this.loadAddress !== undefined) {

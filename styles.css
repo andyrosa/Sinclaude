@@ -112,7 +112,8 @@ body {
 }
 
 /* Buttons */
-button {
+button,
+.load-select {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -173,8 +174,9 @@ button:focus-visible {
     color: var(--button-text-c);
     font-size: 20px;
     height: 24px;
-    min-width: 72px;
-    width: 72px;
+    /* Icon-sized: these buttons show a single glyph */
+    min-width: 36px;
+    width: 36px;
 }
 
 .menu-dropdown {
@@ -573,26 +575,15 @@ button:focus-visible {
     flex-direction: column;
 }
 
-.assembly-section .section-controls .controls button {
+.assembly-section .section-controls .controls button,
+.assembly-section .section-controls .controls .load-select {
     flex: none;
 }
 
-/* Assembly button lifecycle states */
-.assembly-empty-state .load-btn {
-    display: inline-block;
-}
-
-.assembly-empty-state #assemble-run-btn,
-.assembly-empty-state .clear-btn {
-    display: none;
-}
-
-.assembly-content-state .clear-btn,
-.assembly-content-state #assemble-run-btn {
-    display: inline-block;
-}
-
-.assembly-content-state .load-btn {
+/* Program loaders: one button each on wide screens; the select replaces them on
+   narrow screens (see the narrow media query) where four stacked buttons cost a
+   quarter of the viewport */
+.load-select {
     display: none;
 }
 
@@ -631,6 +622,12 @@ button:focus-visible {
     .header-item[title="Expand Magazine Listing"] {
         display: none;
     }
+
+    /* The page menu (.header-items) overlays the top-right corner, which is where
+       this heading's own buttons end when the sections sit side by side */
+    .listing-section h3 {
+        padding-right: 48px;
+    }
 }
 
 /* Responsive */
@@ -642,6 +639,28 @@ button:focus-visible {
 
     .controls {
         gap: 0;
+    }
+
+    /* Loaders take one row: the select instead of the four buttons */
+    .load-btn {
+        display: none;
+    }
+
+    .load-select {
+        display: inline-block;
+    }
+
+    /* Editor lifecycle (narrow screens only, see updateButtonVisibility): loaders while
+       the editor is empty, Clear and Assemble once it has content */
+    .assembly-empty-state #assemble-run-btn,
+    .assembly-empty-state .clear-btn,
+    .assembly-content-state .load-select {
+        display: none;
+    }
+
+    .assembly-content-state .clear-btn,
+    .assembly-content-state #assemble-run-btn {
+        display: inline-block;
     }
 
     body .header-items {
@@ -715,8 +734,8 @@ button:focus-visible {
         height: 33.33vh;
     }
 
-    /* Hide load buttons when stepping */
-    body.stepping .load-btn {
+    /* Hide the program loader when stepping */
+    body.stepping .load-select {
         display: none;
     }
 }
