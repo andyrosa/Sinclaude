@@ -69,32 +69,33 @@ assert.equal(sounds.length, 0, 'Drawing the title does not start music');
 ticks(2);
 assert.equal(sounds.length, 0, 'Title remains silent for the first 200ms');
 tick();
-assertSounds([[3, 260, 780]], 'Music begins 300ms after drawing the title');
-assert.equal(sounds[0].volume, 60);
-ticks(131);
+assertSounds([[3, 260, 120]], 'Music begins 300ms after drawing the title');
+assert.equal(sounds[0].volume, 54);
+ticks(109);
 assert.equal(get('state'), 0);
 assert.deepEqual(memory.slice(60000, 60768), titleScreen, 'Music preserves the title screen');
-assert.equal(sounds.length, 23, '6.2-second fanfare repeats twice without dropping notes');
-assert.deepEqual(sounds.slice(11, 22).map(n => ({ ...n, tick: n.tick - 62 })), sounds.slice(0, 11),
+assert.equal(sounds.length, 45, '5.4-second broom theme repeats twice without dropping notes');
+assert.deepEqual(sounds.slice(22, 44).map(n => ({ ...n, tick: n.tick - 54 })), sounds.slice(0, 22),
   'Each loop repeats the complete pattern with the same rhythm');
-assert.equal(sounds[22].tick, 127);
-assert.deepEqual(sounds.slice(0, 5).map(n => n.hz),
-  [260, 390, 520, 660, 620], 'Fanfare preserves the C-G-C, E-Eb motif with rounded pitches');
+assert.equal(sounds[44].tick, 111);
+assert.deepEqual(sounds.slice(0, 10).map(n => n.hz),
+  [260, 290, 330, 350, 420, 350, 420, 390, 350, 330],
+  'Broom theme preserves the C-D-E pickup, repeated F-Ab, and G-F-E reply');
 assert.ok(sounds.every(n => n.volume > 0 && n.volume <= 85), 'Music never exceeds one-third of the former gain');
-assert.ok(sounds[2].volume > sounds[0].volume, 'Fanfare builds toward its peak');
-assert.deepEqual(sounds.slice(0, 5).map(n => n.tick), [3, 11, 19, 31, 33],
-  'Long fanfare tones use one request each');
-[780, 780, 1180, 180, 580].forEach((ms, i) => {
-  durationClose(sounds[i].ms, ms);
-  assert.ok(sounds[i].ms < (sounds[i + 1].tick - sounds[i].tick) * 100,
-    'Quantized sustained notes finish before the next note');
+assert.ok(sounds[3].volume > sounds[0].volume, 'Downbeat accents stand above the pickup');
+assert.deepEqual(sounds.slice(0, 10).map(n => n.tick), [3, 5, 7, 9, 13, 15, 19, 21, 23, 25],
+  'The 3/8 march preserves eighth-note rests between F and Ab');
+sounds.slice(0, -1).forEach((note, i) => {
+  assert.ok(note.ms >= 115 && note.ms <= 155, 'The broom theme uses short staccato gates');
+  assert.ok(note.ms < (sounds[i + 1].tick - note.tick) * 100,
+    'Quantized notes leave audible silence before the next note');
 });
 // Start exactly when the next title note is due: input must win over music.
 tick(' ');
 assert.equal(get('state'), 1);
 assert.equal(get('player'), 17);
 ticks(12);
-assert.equal(sounds.length, 23, 'Starting cancels pending title notes');
+assert.equal(sounds.length, 45, 'Starting cancels pending title notes');
 press('W');
 assert.equal(get('player'), 18);
 press('A');

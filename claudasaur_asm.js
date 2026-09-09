@@ -104,7 +104,7 @@ const CLAUDASAUR_ASM = (() => {
 ; Map legend: @ you, * Claudasaur, E exit. North is up.
 ; The monster wakes after six seconds, then takes a step every 1.2s.
 ; Nearby: heartbeat pairs, faster in danger. Capture falls; escape rises.
-; The title screen loops the opening fanfare of Also sprach Zarathustra.
+; The title screen loops the broom theme from The Sorcerer's Apprentice.
 ; Sounds advance on game ticks, so melodies never block movement or retry.
 ; Rendering uses a back buffer; no JavaScript game logic is required.
 ORG 0
@@ -434,17 +434,24 @@ sound_end:
   JP NZ,sound_reset
   LD HL,title_music
   JR sound_note
-; Richard Strauss, Also sprach Zarathustra, Op.30 (1896), opening fanfare.
-; Source: https://imslp.org/wiki/Also_sprach_Zarathustra,_Op.30_(Strauss,_Richard)
-; Compact monophonic reduction: C4-G4-C5, E5-Eb5, then low G-C drum hits.
-; Each trumpet tone is sustained in a single beep. Durations are quantized
-; just below each note's next onset. The crescendo stays at or below volume 85.
-; The 6.2-second loop includes breathing room after the drum response.
+; Paul Dukas, The Sorcerer's Apprentice (1897), bassoons, rehearsal 7.
+; Source: https://s9.imslp.org/files/imglnks/usimg/b/b3/IMSLP35118-PMLP15848-Dukas-SorcerersAppr.Bassoons.pdf
+; Start at the C-D-natural-E-natural pickup, then eight bars of the broom
+; theme. Raise it one octave for clearer beeps; round pitches to 10 Hz.
+; Each eighth lasts two ticks (3/8, dotted-quarter = 100). A four-tick
+; delay includes the written eighth rest between F and Ab. Short gates
+; preserve the staccato march, with accents below the volume-85 ceiling.
+; The pickup and eight bars loop in 5.4 seconds.
 title_music:
-  DB 26,60,${duration(780)},8, 39,72,${duration(780)},8, 52,85,${duration(1180)},12
-  DB 66,85,${duration(180)},2, 62,70,${duration(580)},6
-  DB 10,60,${duration(80)},3, 13,70,${duration(80)},3, 10,60,${duration(80)},3
-  DB 13,75,${duration(80)},3, 10,60,${duration(80)},3, 13,80,${duration(80)},11, 0
+  DB 26,54,${duration(120)},2, 29,56,${duration(120)},2, 33,60,${duration(120)},2
+  DB 35,74,${duration(150)},4, 42,64,${duration(120)},2
+  DB 35,72,${duration(150)},4, 42,62,${duration(120)},2
+  DB 39,68,${duration(120)},2, 35,62,${duration(120)},2, 33,56,${duration(120)},2
+  DB 35,74,${duration(150)},4, 42,64,${duration(120)},2
+  DB 35,72,${duration(150)},4, 42,62,${duration(120)},2
+  DB 39,68,${duration(120)},2, 35,62,${duration(120)},2, 33,56,${duration(120)},2
+  DB 35,74,${duration(150)},4, 42,64,${duration(120)},2
+  DB 35,70,${duration(120)},2, 42,66,${duration(120)},2, 39,60,${duration(120)},2, 0
 capture_sound: DB 64,85,${duration(80)},2, 42,75,${duration(90)},2, 26,65,${duration(100)},2, 12,55,${duration(240)},3, 0
 escape_sound: DB 52,55,${duration(100)},2, 66,65,${duration(100)},2, 78,85,${duration(240)},3, 0
 
