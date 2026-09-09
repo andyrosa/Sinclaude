@@ -1,22 +1,6 @@
 // Initialization script - waits for all dependencies to load then starts the app
 window.addEventListener('load', () => {
-    if (typeof Z80CPU === 'undefined') {
-        userMessageAboutBug('Z80CPU class not found!', 'Critical dependency missing');
-        return;
-    }
-    if (typeof Z80Assembler === 'undefined') {
-        userMessageAboutBug('Z80Assembler class not found!', 'Critical dependency missing');
-        return;
-    }
-    
-    // Check for test suites (non-critical)
-    if (typeof Z80AssemblerTestClass === 'undefined') {
-        userMessageAboutBug('Z80AssemblerTestClass not loaded - assembler tests will be skipped', 'Non-critical dependency missing');
-    }
-    if (typeof Z80CPUEmulatorTestClass === 'undefined') {
-        userMessageAboutBug('Z80CPUEmulatorTestClass not loaded - CPU tests will be skipped', 'Non-critical dependency missing');
-    }
-    
+    // A script that failed to load was already reported by boot.js
     window.sinclaude = new Simulator();
 
     // Show the persisted retro font choice in the menu

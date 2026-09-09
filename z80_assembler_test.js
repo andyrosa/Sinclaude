@@ -6,8 +6,8 @@
 // Import the assembler (adjust path if needed) - only in Node.js environment
 
 class Z80AssemblerTestClass extends TestFramework {
-  constructor() {
-    super("Z80 Assembler");
+  constructor(sinks) {
+    super("Z80 Assembler", sinks);
     // In browser environment, Z80Assembler is passed as parameter or available globally
     this.assembler = null;
   }
@@ -104,7 +104,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 13: Line addresses functionality
   testLineAddresses() {
-    consoleLogIfNode("\nTesting Instruction Details");
+    this.sinks.log("\nTesting Instruction Details");
 
     // Test that assembler returns instruction details with addresses
     const simpleProgram =
@@ -252,7 +252,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 1: Line parsing and comments (Grammar lines 6-7, 14-15)
   testLineParsingAndComments() {
-    consoleLogIfNode("\nTesting Line Parsing and Comments");
+    this.sinks.log("\nTesting Line Parsing and Comments");
 
     // Empty lines should be ignored
     this.assertAssemblySuccess("", []);
@@ -278,7 +278,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 2: Labels and constants (Grammar lines 10-12, 64-65)
   testLabelsAndConstants() {
-    consoleLogIfNode("\nTesting Labels and Constants");
+    this.sinks.log("\nTesting Labels and Constants");
 
     // Code labels with colon
     this.assertAssemblySuccess(`
@@ -329,7 +329,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 3: All directive types (Grammar lines 17-25)
   testDirectives() {
-    consoleLogIfNode("\nTesting Directives");
+    this.sinks.log("\nTesting Directives");
 
     // ORG directive
     this.assertAssemblySuccess("ORG $8000\nNOP", [0x00]);
@@ -369,7 +369,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 4: Instructions (Grammar lines 27-31)
   testInstructions() {
-    consoleLogIfNode("\nTesting Instructions");
+    this.sinks.log("\nTesting Instructions");
 
     // Basic instructions without operands
     this.assertAssemblySuccess("NOP", [0x00]);
@@ -415,7 +415,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 5: Registers and memory references (Grammar lines 34, 36-39)
   testRegistersAndMemoryReferences() {
-    consoleLogIfNode("\nTesting Registers and Memory References");
+    this.sinks.log("\nTesting Registers and Memory References");
 
     // All 8-bit registers
     this.assertAssemblySuccess("INC A", [0x3c]);
@@ -451,7 +451,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 6: Expression evaluation (Grammar lines 41-46, 72-74)
   testExpressionEvaluation() {
-    consoleLogIfNode("\nTesting Expression Evaluation");
+    this.sinks.log("\nTesting Expression Evaluation");
 
     // Basic arithmetic
     this.assertAssemblySuccess("LD A, 5 + 3", [0x3e, 8]);
@@ -487,7 +487,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 7: All number formats (Grammar lines 48-51)
   testNumberFormats() {
-    consoleLogIfNode("\nTesting Number Formats");
+    this.sinks.log("\nTesting Number Formats");
 
     // Decimal numbers
     this.assertAssemblySuccess("LD A, 42", [0x3e, 42]);
@@ -518,7 +518,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 8: String and character literals (Grammar lines 53-55)
   testStringAndCharacterLiterals() {
-    consoleLogIfNode("\nTesting String and Character Literals");
+    this.sinks.log("\nTesting String and Character Literals");
 
     // String literals in DB
     this.assertAssemblySuccess('DB "Hello"', [72, 101, 108, 108, 111]);
@@ -720,7 +720,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 9: Function calls (Grammar line 58)
   testFunctionCalls() {
-    consoleLogIfNode("\nTesting Function Calls");
+    this.sinks.log("\nTesting Function Calls");
 
     // len() function with DB strings
     this.assertAssemblySuccess(`
@@ -758,7 +758,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 10: Error handling and edge cases
   testErrorHandling() {
-    consoleLogIfNode("\nTesting Error Handling");
+    this.sinks.log("\nTesting Error Handling");
 
     // Syntax errors
     this.assertAssemblyError("LD A B", "Invalid operand combination");
@@ -796,7 +796,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 11: Complex programs combining multiple features
   testComplexPrograms() {
-    consoleLogIfNode("\nTesting Complex Programs");
+    this.sinks.log("\nTesting Complex Programs");
 
     // Program with all grammar features
     const complexProgram = `
@@ -907,7 +907,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 12: Comprehensive instruction coverage - every supported mnemonic
   testComprehensiveInstructions() {
-    consoleLogIfNode("\nTesting Comprehensive Instruction Coverage");
+    this.sinks.log("\nTesting Comprehensive Instruction Coverage");
 
     // No operand instructions
     this.assertAssemblySuccess("NOP", [0x00]);
@@ -1164,7 +1164,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test: Case Insensitivity
   testCaseInsensitivity() {
-    consoleLogIfNode("\nTesting Case Insensitivity");
+    this.sinks.log("\nTesting Case Insensitivity");
 
     // Test instructions in different cases
     this.assertAssemblySuccess("nop", [0x00]);
@@ -1302,7 +1302,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test 14: Branch range limits
   testBranchRange() {
-    consoleLogIfNode("\nTesting Branch Range Limits");
+    this.sinks.log("\nTesting Branch Range Limits");
 
     // Test 1: 127 NOPs forward - should succeed
     let sourceCode127 = `
@@ -1431,7 +1431,7 @@ class Z80AssemblerTestClass extends TestFramework {
 
   // Test multiple ORG directives functionality
   testMultipleOrg() {
-    consoleLogIfNode("\nTesting Multiple ORG Directives");
+    this.sinks.log("\nTesting Multiple ORG Directives");
 
     // Test 0 ORG directives - default address 0
     const noOrgProgram =

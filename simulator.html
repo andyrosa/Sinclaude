@@ -8,31 +8,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-    <!-- FOUC averted -->
-    <script>
-        function handleRequiredScriptError(scriptName) {
-            alert(`Error: Failed to load required script ${scriptName}. The simulator will not work correctly.`);
-        }
-        
-        function loadScriptWithCacheBust(src) {
-            var script = document.createElement('script');
-            script.src = src + '?cb=' + Date.now();
-            script.onerror = function() { handleRequiredScriptError(src); };
-            document.head.appendChild(script);
-        }
-        
-        function loadStyleWithCacheBust(href) {
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = href + '?cb=' + Date.now();
-            document.head.appendChild(link);
-        }
-        
-        loadScriptWithCacheBust('constants_and_css_vars.js');
-        loadScriptWithCacheBust('ui.js');
-        loadScriptWithCacheBust('boot.js');
-        loadStyleWithCacheBust('styles.css');
-    </script>
+    <!-- The cb query strings hold a placeholder that .github/workflows/deploy.yml replaces with
+         the commit id, so a deploy invalidates browser caches while an unchanged build stays
+         cached. Local copies keep the placeholder. -->
+    <link rel="stylesheet" href="styles.css?cb=__BUILD__">
+    <script src="constants_and_css_vars.js?cb=__BUILD__"></script>
+    <script src="console-utils.js?cb=__BUILD__"></script>
+    <script src="ui.js?cb=__BUILD__"></script>
 </head>
 
 <body>
@@ -56,15 +38,17 @@
                         <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()" title="Load a performance test that increments a counter and displays it in hexadecimal">Load Default Program</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Load a test program that demonstrates basic Z80 instructions - starts halted for single-stepping">Load Basics Test</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()" title="Load a playable Space Invader micro-game">Load 'Space Invader'</button>
-                        <button type="button" id="assemble-run-btn" onclick="sinclaude.assembleAndRun()" title="Compile the Z80 assembly code and start execution">Assemble and Run</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadClaudasaurAssembly()" title="Find the exit in a first-person maze before the spiky Claudasaur catches you. W/S move, A/D turn, Space starts or shows the map, P pauses.">Load 'Claudasaur'</button>
+                        <button type="button" id="assemble-run-btn" class="important-button" onclick="sinclaude.assembleAndRun()" title="Compile the Z80 assembly code and start execution">Assemble and Run</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="section listing-section">
-            <h3 title="Click to collapse/expand section">2. Magazine Listing 
+            <h3 title="Click to collapse/expand section">2. Magazine Listing
                 <button type="button" class="header-item" onclick="event.stopPropagation(); window.sinclaude.expandElement('machineCode')" title="Expand Magazine Listing">⤢</button>
+                <button type="button" class="header-item" onclick="event.stopPropagation(); copyMagazineListingToClipboard()" title="Copy Magazine Listing to clipboard">📋</button>
             </h3>
             <div class="section-content">
                 <div class="section-main">
@@ -133,6 +117,8 @@
         </div>
     </div>
 
+    <!-- Loads the remaining scripts; placed after the console element so load errors can be shown in it -->
+    <script src="boot.js?cb=__BUILD__"></script>
 </body>
 
 </html>

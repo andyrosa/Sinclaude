@@ -3,20 +3,33 @@
 window.versionChecker = {
   currentVersionTimestamp: null,
   versionCheckInterval: null,
-  
+  updateDialogOverlay: null, // set while the update dialog is open
+
   // Initialize version checking system
   init: function(timerManager) {
     this.timerManager = timerManager;
     this.resumeVersionChecking();
+
+    // A user coming back to the tab is the moment a new build matters most
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        this.checkForVersionChange();
+      }
+    });
   },
 
   // Check for version change and show dialog if update available
   checkForVersionChange: function() {
+    // One dialog at a time; the timer is stopped while it is open but visibilitychange is not
+    if (this.updateDialogOverlay) {
+      return;
+    }
+
     // Get current version timestamp
     if (typeof BUILD_VERSION_BY_YAML !== "undefined") {
       this.currentVersionTimestamp = BUILD_VERSION_BY_YAML().buildDate;
     }
-    
+
     // Only check if we have current version timestamp
     if (!this.currentVersionTimestamp) {
       return;
@@ -36,6 +49,7 @@ window.versionChecker = {
     // Create dialog overlay
     const dialogOverlay = document.createElement('div');
     dialogOverlay.className = 'update-dialog-overlay';
+    this.updateDialogOverlay = dialogOverlay;
     
     // Create dialog box using section styling
     const dialog = document.createElement('div');
@@ -61,6 +75,7 @@ window.versionChecker = {
 
     const dismissDialog = () => {
       dialogOverlay.remove();
+      this.updateDialogOverlay = null;
       this.resumeVersionChecking();
     };
 
@@ -84,7 +99,7 @@ window.versionChecker = {
     if (!this.versionCheckInterval && this.timerManager) {
       this.versionCheckInterval = this.timerManager.createTimer(
         () => this.checkForVersionChange(),
-        version_update_check_interval_ms,
+        VERSION_CHECK_INTERVAL_MS,
         true
       );
     }

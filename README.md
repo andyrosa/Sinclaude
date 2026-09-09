@@ -23,7 +23,7 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - Share and save small programs using serverless URL
 - Runs directly from the file system — no server or Node required
 - For screens less than 768 pixels wide the UI hides less-relevant assembly buttons and auto-collapses sections in stepping mode
-- 3 sample programs
+- 4 sample programs
 
 ## Technical Details
 
@@ -44,11 +44,26 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 1. Open `simulator.html` directly in a web browser, or open `index.html` and click the simulator button
 2. The **Default** performance test program loads automatically. To use something else:
    - Click **Clear** to write your own Z80 assembly code, or
-   - Click **Basics** (register operations demo, starts halted) or **Space Invader** (playable micro-game)
+   - Click **Basics** (register operations demo, starts halted), **Space Invader** (playable micro-game), or **Claudasaur** (first-person monster maze)
 3. Click "Assemble and Run" to compile and execute the code
 4. Use "Break" to pause and switch to single-step mode
 5. Use "Run" to resume continuous execution
 6. Use "Fast" to disable screen updates for slightly better performance
+
+### Playing Claudasaur
+
+Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over the execution screen (or tap it) to activate keyboard capture, then press **Space** to start. Find the exit before the Claude-logo-inspired, spiky Claudasaur catches you.
+
+- **W/S** or **Up/Down**: walk forward/backward. Hold to keep moving.
+- **A/D** or **Left/Right**: turn a quarter turn per press.
+- **Space**: toggle the live map; start again after escape or capture.
+- **P**: pause/resume. The existing on-screen W/S/A/D/Space buttons also work.
+
+The compass shows your facing direction. The map faces north: **@** is you, **\*** is Claudasaur, and **E** is the exit. The map does not pause the hunt. Claudasaur wakes after about six seconds and follows the shortest available path, moving more slowly than you. Each retry resets the same connected 16x16 maze so you can learn its routes.
+
+The game runs as Z80 assembly, including perspective drawing, keyboard input, pathfinding, and win/loss logic. JavaScript prepares the assembly source and drawing data. It uses the simulator's monochrome display, with a starburst creature inspired by the Claude logo.
+
+Run its gameplay and rendering checks with `node run_claudasaur_tests_node.js`.
 
 ### Making a beep sound
 
@@ -144,6 +159,7 @@ When you assemble a small program, the URL automatically updates to include the 
 - `default_asm.js`: Performance benchmark program with hex counter
 - `basics_asm.js`: Basic test program demonstrating register operations
 - `space_invader_asm.js`: A lone 'Space Invader' game
+- `claudasaur_asm.js`: First-person maze game with a pursuing starburst monster
 
 ### Testing:
 - `tester.js`: Testing framework and utilities
@@ -204,7 +220,7 @@ test("CCF", "carry=flip");
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
 - It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you develop a need for speed
 - The sample assembly programs are not optimized.
-- The emulator uses a long switch case statement. In the old days we exploited the patterns in the opcodes. For one, nobody had time for all this typing or RAM to hold it.
+- The emulator decodes the regular opcode groups (register loads, INC/DEC, the 8-bit ALU and the CB prefix) from their bit fields, the way it was done in the old days when nobody had time for all that typing or RAM to hold it; the irregular opcodes are a switch statement.
 - Saving program to query params not implemented for file:// URLs.
 - Saving program limited to 2000 characters even though more are possible
 
@@ -219,7 +235,6 @@ test("CCF", "carry=flip");
 Since you got this far, might as well spoil the Easter eggs:
 
 - **Character Set Verification:** Clicking the boot screen while the character set is rendering pauses the output.
-- **Before you press "Assemble and Run":** Clicking on the simulated screen triggers a small grayscale animation, one-shotted by Claude
 - **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs
 
 ## About This Project

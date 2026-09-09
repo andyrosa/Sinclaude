@@ -8,12 +8,7 @@ const KBD_NO_KEY_PRESSED = -1;
 const BEEP_10HZ_PORT = 2;
 const BEEP_MS_PORT = 3;
 
-// Run loop batch: at 1 MIPS, 1/60 of a second is 16,000 instructions;
-// the closest prime keeps batch boundaries from syncing with the refresh rate
-const RUN_BATCH_INSTRUCTIONS = 15991;
 const MAX_URL_LENGTH = 2000; // supposed to be 32K but erring at a lot less
-const EASTER_EGG_DURATION_MS = 4000;
-const ANIMATION_FRAME_MS = 20;
 const BEEP_GAIN = 0.1;
 const BUTTON_EDIT_FOCUS_DELAY_MS = 10;
 
@@ -50,7 +45,6 @@ class Simulator {
     this.keyCodeCurrentReleased = true;
     this.runLoopInterval = null;
     this.fastMode = false;
-    this.easterEggEnabled = false;
     this.isBootSequenceRunning = false;
 
     // Line highlighting for stepping
@@ -818,16 +812,11 @@ class Simulator {
     }
   }
 
-  // Cancelling and completing both end in the same state: boot over, easter egg armed.
+  // Cancelling and completing both end in the same state: boot over, screen taps ignored.
   // Setting isBootSequenceRunning false also stops startStage from continuing.
   finishBootSequence() {
     this.isBootSequenceRunning = false;
-    this.easterEggEnabled = true;
-    this.setScreenPointerHandler(() => {
-      if (this.easterEggEnabled) {
-        this.triggerAnimationEasterEgg();
-      }
-    });
+    this.setScreenPointerHandler(null);
   }
 
   cancelBootSequence() {
@@ -835,7 +824,7 @@ class Simulator {
     userMessage("Boot sequence cancelled");
   }
 
-  // The screen has at most one pointer action at a time: cancel boot, then the easter egg, then none
+  // The screen has at most one pointer action at a time: cancel boot, then none
   setScreenPointerHandler(handler) {
     if (this.screenPointerHandler) {
       this.screen.removeEventListener("pointerdown", this.screenPointerHandler);
@@ -991,79 +980,11 @@ class Simulator {
     }
   }
 
-  playArtisticAnimation() {
-    // Set up animation interval and return the timer ID
-    const animationTimer = this.createTimer(
-      () => {
-        this.renderArtisticPattern();
-      },
-      ANIMATION_FRAME_MS,
-      true
-    );
-
-    // Call the animation function immediately for the first frame
-    this.renderArtisticPattern();
-
-    // Return timer ID so caller can clean it up
-    return animationTimer;
-  }
-
-  renderArtisticPattern() {
-    // Concentric diamond/wave pattern around the screen centre, animated by time
-    const centerX = SCREEN_WIDTH / 2;
-    const centerY = SCREEN_HEIGHT / 2;
-    const time = Date.now() * 0.001; // Convert to seconds
-
-    for (let line = 0; line < SCREEN_HEIGHT; line++) {
-      for (let col = 0; col < SCREEN_WIDTH; col++) {
-        const addr = this.screenAddress(line, col);
-
-        const distanceFromCenter =
-          Math.abs(col - centerX) + Math.abs(line - centerY);
-
-        // Create ripple effect with time-based animation
-        const wave = Math.sin(distanceFromCenter * 0.5 + time * 2);
-        const pattern =
-          Math.sin(line * 0.3 + col * 0.2 + time) *
-          Math.cos(distanceFromCenter * 0.4 + time * 1.5);
-
-        const combinedPattern =
-          (wave + pattern + Math.sin(time + line * col * 0.01)) / 3;
-        const charIndex = Math.floor(
-          (combinedPattern + 1) * 0.5 * sinclairBlockChars.length
-        );
-
-        this.memory[addr] =
-          sinclairBlockChars[
-            Math.max(0, Math.min(sinclairBlockChars.length - 1, charIndex))
-          ];
-      }
-    }
-  }
-
   showSinclairCopyright() {
     this.clearScreen();
 
     // a-historic
     this.displayTextCentered("(C) 1981 SINCLAIR RESEARCH", SCREEN_HEIGHT - 1);
-  }
-
-  triggerAnimationEasterEgg() {
-    // One-shot: disable further triggers immediately and remove handler
-    this.easterEggEnabled = false;
-    this.setScreenPointerHandler(null);
-
-    // Show animation then return to SINCLAIR screen
-    const animationTimer = this.playArtisticAnimation();
-
-    this.createTimer(
-      () => {
-        this.clearTimer(animationTimer);
-        this.showSinclairCopyright();
-      },
-      EASTER_EGG_DURATION_MS,
-      false
-    );
   }
 
   // Reports inconsistencies in the assembler's instruction table
@@ -1095,53 +1016,30 @@ class Simulator {
     }
   }
 
-  // Runs a test suite in the page. The suites report failures through
-  // console.error, which is routed into the on-page console for the run.
-  runTestSuite(TestClass, label, reportFailure) {
+  // Runs a test suite in the page: progress lines are dropped, failures go to the on-page console
+  runTestSuite(TestClass, label) {
     try {
-      const originalError = console.error;
-      console.error = reportFailure;
+      const suite = new TestClass({
+        log: () => {},
+        fail: (message) => userMessage(message),
+      });
+      suite.runAllTests();
 
-      try {
-        const suite = new TestClass();
-        suite.runAllTests();
-
-        // Report summary to user console
-        userMessage(
-          `${label}: ${suite.passedCount} passed, ${suite.failedTests.length} failed`
-        );
-      } finally {
-        console.error = originalError;
-      }
+      // Report summary to user console
+      userMessage(
+        `${label}: ${suite.passedCount} passed, ${suite.failedTests.length} failed`
+      );
     } catch (error) {
       userMessageAboutBug(`${label} error`, error.message);
     }
   }
 
   runAssemblerTests() {
-    if (typeof Z80AssemblerTestClass === "undefined") {
-      userMessageAboutBug(
-        "Assembler tests cannot run",
-        "z80_assembler_test.js not loaded"
-      );
-      return;
-    }
-    this.runTestSuite(Z80AssemblerTestClass, "Assembler Tests", (message) =>
-      userMessage(`Assembler Test Error: ${message}`)
-    );
+    this.runTestSuite(Z80AssemblerTestClass, "Assembler Tests");
   }
 
   runZ80CPUTests() {
-    if (typeof Z80CPUEmulatorTestClass === "undefined") {
-      userMessageAboutBug(
-        "Z80 CPU tests cannot run",
-        "z80_cpu_emulator_test_runner.js not loaded"
-      );
-      return;
-    }
-    this.runTestSuite(Z80CPUEmulatorTestClass, "Z80 CPU Tests", (message) =>
-      userMessage(message)
-    );
+    this.runTestSuite(Z80CPUEmulatorTestClass, "Z80 CPU Tests");
   }
 
   toggleSpeed() {
@@ -1469,6 +1367,9 @@ class Simulator {
   loadSpaceInvaderAssembly() {
     this.loadAssemblyCode(SPACE_INVADER_ASM);
   }
+  loadClaudasaurAssembly() {
+    this.loadAssemblyCode(CLAUDASAUR_ASM);
+  }
 
   assembleAndRun() {
     const sourceCode = this.getAssemblyCode();
@@ -1511,6 +1412,7 @@ class Simulator {
 
     // Store instruction details for opcode display and line mapping
     this.instructionDetails = result.instructionDetails;
+    this.renderAssemblyLines();
 
     // Load machine code into memory using shared memory loading function
     Z80Assembler.loadOpcodesIntoMemory(this.memory, this.instructionDetails);
@@ -1672,11 +1574,6 @@ class Simulator {
           });
         }
         break;
-    }
-
-    // Disable easter egg when entering execution states
-    if (newState === STATE.FREE_RUNNING || newState === STATE.STEPPING) {
-      this.easterEggEnabled = false;
     }
   }
 
@@ -1945,73 +1842,50 @@ class Simulator {
     }
 
     // Only act if PC has changed from what's currently highlighted
-    if (this.highlightedPC === this.cpu.registers.PC) {
+    const pc = this.cpu.PC;
+    if (this.highlightedPC === pc) {
       return;
     }
-
-    this.highlightedPC = this.cpu.registers.PC;
 
     // Find the last source line that corresponds to the current PC (to skip labels)
     let targetLine = null;
     for (let i = 0; i < this.instructionDetails.length; i++) {
       const detail = this.instructionDetails[i];
-      if (detail && detail.startAddress === this.highlightedPC) {
+      if (detail && detail.startAddress === pc) {
         targetLine = i;
       } else if (
         detail &&
         detail.startAddress !== null &&
-        detail.startAddress > this.highlightedPC
+        detail.startAddress > pc
       ) {
         break;
       }
     }
 
+    this.clearHighlight();
+
     // Only highlight if we found a matching line
     if (targetLine === null) {
       return;
     }
-    const lines = this.getAssemblyCode().split("\n");
-    if (targetLine >= lines.length) {
+
+    // Lines were wrapped in spans at assemble time (renderAssemblyLines). Edits since
+    // then can change that structure; the line mapping is stale then and nothing is
+    // highlighted until the next assembly.
+    const lineSpan = this.assemblyColumn.querySelectorAll(".source-line")[targetLine];
+    if (lineSpan === undefined) {
       return;
     }
-
-    // Save cursor position before modifying content
-    const selection = window.getSelection();
-    let savedRange = null;
-    if (
-      selection.rangeCount > 0 &&
-      this.assemblyColumn.contains(selection.anchorNode)
-    ) {
-      savedRange = selection.getRangeAt(0).cloneRange();
-    }
-
-    // Rewrite the content with the target line wrapped for CSS highlighting;
-    // this replaces any previous highlight span at the same time
-    const highlightedLines = lines.map((line, index) => {
-      if (index === targetLine) {
-        return `<span class="highlighted-line">${this.escapeHtml(
-          line
-        )}</span>`;
-      }
-      return this.escapeHtml(line);
-    });
-
-    this.assemblyColumn.innerHTML = highlightedLines.join("\n");
-
-    // Restore cursor position if it was saved
-    if (savedRange) {
-      try {
-        selection.removeAllRanges();
-        selection.addRange(savedRange);
-      } catch (e) {
-        // If restoring cursor fails, place it at the end
-        this.setCursorToEnd();
-      }
-    }
+    lineSpan.classList.add("highlighted-line");
+    this.highlightedPC = pc;
 
     // Scroll the highlighted line into view if not currently editing
     // Only scroll if it won't move the step button out of view
-    if (!savedRange) {
+    const selection = window.getSelection();
+    const isEditing =
+      selection.rangeCount > 0 &&
+      this.assemblyColumn.contains(selection.anchorNode);
+    if (!isEditing) {
       scrollNearestKeepAnchorVisible(
         ".highlighted-line",
         "#executionControls button"
@@ -2019,30 +1893,28 @@ class Simulator {
     }
   }
 
-  setCursorToEnd() {
-    const range = document.createRange();
-    const selection = window.getSelection();
-    range.selectNodeContents(this.assemblyColumn);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
   clearHighlight() {
-    const currentCode = this.getAssemblyCode();
-    this.assemblyColumn.textContent = currentCode;
-
-    // If the user was editing, restore cursor to end
-    if (document.activeElement === this.assemblyColumn) {
-      this.setCursorToEnd();
+    const highlighted = this.assemblyColumn.querySelector(".highlighted-line");
+    if (highlighted) {
+      highlighted.classList.remove("highlighted-line");
     }
     this.highlightedPC = null;
   }
 
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
+  // Wraps each source line in a span so stepping can highlight a line by toggling a
+  // class instead of rewriting the editor content (which also disturbed the cursor)
+  renderAssemblyLines() {
+    const lines = this.getAssemblyCode().split("\n");
+    this.assemblyColumn.replaceChildren();
+    lines.forEach((line, index) => {
+      if (index > 0) {
+        this.assemblyColumn.append("\n");
+      }
+      const lineSpan = document.createElement("span");
+      lineSpan.className = "source-line";
+      lineSpan.textContent = line;
+      this.assemblyColumn.append(lineSpan);
+    });
   }
 
   expandElement(elementId) {

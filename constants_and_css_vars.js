@@ -2,7 +2,13 @@
 const one_million = 1000000; // hard to read so many zeros; get_with_the_program_js!
 const FPS = 60;
 const RUN_LOOP_INTERVAL_MS = 1;
-const version_update_check_interval_ms = 5000;
+// Instructions the simulator asks the CPU for per call: at 1 MIPS, 1/60 of a second is
+// 16,000 instructions; the closest prime keeps batch boundaries from syncing with the
+// refresh rate. The Node benchmark uses the same batch size.
+const RUN_BATCH_INSTRUCTIONS = 15991;
+// GitHub Pages caches files for 10 minutes, so polling faster cannot see a new build sooner;
+// returning to the tab also triggers a check
+const VERSION_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const LOCALSTORAGE_RETRO_FONTS_KEY = "useRetroFont";
 
 // Hex formatting helpers
@@ -54,5 +60,5 @@ if (typeof document !== 'undefined') {
 
 // Export for Node.js
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { formatHex2, formatHex4 };
+    module.exports = { formatHex2, formatHex4, RUN_BATCH_INSTRUCTIONS };
 }

@@ -3,8 +3,11 @@
  * Provides shared functionality for all test classes
  */
 class TestFramework {
-  constructor(testName = "Test") {
+  // sinks: { log(message), fail(message) } - where progress and failures go.
+  // The host decides (terminal in Node, on-page console in the browser).
+  constructor(testName, sinks) {
     this.testName = testName;
+    this.sinks = sinks;
     this.testCount = 0;
     this.passedCount = 0;
     this.failedTests = [];
@@ -15,34 +18,35 @@ class TestFramework {
     this.testCount++;
     if (condition) {
       this.passedCount++;
-      consoleLogIfNode(`PASS ${testName}`);
+      this.sinks.log(`PASS ${testName}`);
     } else {
       this.failedTests.push({ name: testName, details });
-      console.error(`FAIL ${testName} - ${details}`);
+      this.sinks.fail(`FAIL ${testName} - ${details}`);
     }
   }
 
   // Print comprehensive test results
   printResults() {
-    consoleLogIfNode("\n" + "=".repeat(60));
-    consoleLogIfNode(`${this.testName.toUpperCase()} TEST RESULTS SUMMARY`);
-    consoleLogIfNode("=".repeat(60));
-    consoleLogIfNode(`Total tests: ${this.testCount}`);
-    consoleLogIfNode(`Passed: ${this.passedCount}`);
-    consoleLogIfNode(`Failed: ${this.testCount - this.passedCount}`);
-    consoleLogIfNode(
+    const log = this.sinks.log;
+    log("\n" + "=".repeat(60));
+    log(`${this.testName.toUpperCase()} TEST RESULTS SUMMARY`);
+    log("=".repeat(60));
+    log(`Total tests: ${this.testCount}`);
+    log(`Passed: ${this.passedCount}`);
+    log(`Failed: ${this.testCount - this.passedCount}`);
+    log(
       `Success rate: ${((this.passedCount / this.testCount) * 100).toFixed(1)}%`
     );
 
     if (this.failedTests.length > 0) {
-      consoleLogIfNode("\nFAILED TESTS:");
+      log("\nFAILED TESTS:");
       this.failedTests.forEach((test, i) => {
-        consoleLogIfNode(`${i + 1}. ${test.name}`);
+        log(`${i + 1}. ${test.name}`);
       });
     }
 
     if (this.passedCount === this.testCount) {
-      consoleLogIfNode(
+      log(
         `\nALL TESTS PASSED! The ${this.testName} fully implements the specification.`
       );
     }

@@ -11,13 +11,10 @@ function loadVersionWithCallback(callback) {
       "https://andyrosa.github.io/Sinclaude/version.js?cb=" + Date.now();
     githubVersionScript.onload = callback;
     githubVersionScript.onerror = function () {
-      console.error("Failed to load version.js from local and remote source");
-      if (typeof userMessageAboutBug === "function") {
-        userMessageAboutBug(
-          "Unable to load version information from local and remote sources",
-          `version.js failed to load from ${githubVersionScript.src}`
-        );
-      }
+      userMessageAboutBug(
+        "Unable to load version information from local and remote sources",
+        `version.js failed to load from ${githubVersionScript.src}`
+      );
       callback();
     };
     document.head.appendChild(githubVersionScript);
@@ -42,8 +39,8 @@ function loadScripts() {
     typeof BUILD_VERSION_BY_YAML !== "undefined"
       ? BUILD_VERSION_BY_YAML().buildDate
       : Date.now();
+  // console-utils.js, constants_and_css_vars.js and ui.js are static tags in simulator.html
   const scripts = [
-    "console-utils.js",
     "clipboard-utils.js",
     "scroll_target.js",
     "version_update.js",
@@ -56,46 +53,25 @@ function loadScripts() {
     "default_asm.js",
     "basics_asm.js",
     "space_invader_asm.js",
+    "claudasaur_asm.js",
     "simulator.js",
     "initialization.js",
   ];
 
-  let scriptIndex = 0;
-
-  function loadNextScript() {
-    if (scriptIndex >= scripts.length) {
-      // All scripts loaded
-      return;
-    }
-
-    const src = scripts[scriptIndex];
+  // All tags are inserted at once so the browser downloads them in parallel;
+  // async=false keeps execution in list order, which the modules depend on.
+  // A failed script is reported here, once; the later scripts still run and
+  // any missing dependency surfaces as a ReferenceError at its first use.
+  scripts.forEach(function (src) {
     const script = document.createElement("script");
     script.src = src + "?cb=" + cacheBust;
-
-    function advance() {
-      scriptIndex++;
-      loadNextScript();
-    }
-
-    script.onload = advance;
+    script.async = false;
     script.onerror = function () {
-      if (typeof userMessageAboutBug === "function") {
-        userMessageAboutBug(
-          `Failed to load script: ${src}`,
-          `Script loading error for ${src}`
-        );
-      } else {
-        console.error(`Failed to load script: ${src}`);
-        alert(
-          `Error: Failed to load required script ${src}. The simulator may not work correctly.`
-        );
-      }
-      // Continue loading even if one script fails
-      advance();
+      userMessageAboutBug(
+        `Failed to load script: ${src}`,
+        `Script loading error for ${script.src}`
+      );
     };
     document.body.appendChild(script);
-  }
-
-  // Start loading scripts sequentially
-  loadNextScript();
+  });
 }

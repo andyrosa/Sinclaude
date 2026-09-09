@@ -35,8 +35,8 @@
 //   - All other registers, memory locations, and flags must remain unchanged
 
 class Z80CPUEmulatorTestClass extends TestFramework {
-  constructor() {
-    super("Z80 CPU Emulator");
+  constructor(sinks) {
+    super("Z80 CPU Emulator", sinks);
   }
 
   runAllTests() {
@@ -226,16 +226,14 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           iomap.fill(0);
           cpu.reset();
           cpu.set(0x0000, 0xffff);
-          cpu.registers.F = { ...initialFlags };
+          cpu.setFlags(initialFlags.Z, initialFlags.C);
 
           // Capture complete initial state for comprehensive change verification
+          // (the register getters return fresh snapshots)
           iomapSnapshot.set(iomap);
           const initialState = {
-            registers: { ...cpu.registers, F: { ...cpu.registers.F } },
-            shadowRegisters: {
-              A: cpu.shadowRegisters.A,
-              F: { ...cpu.shadowRegisters.F }
-            },
+            registers: cpu.registers,
+            shadowRegisters: cpu.shadowRegisters,
             halted: cpu.halted,
             iomap: iomapSnapshot,
           };
@@ -496,7 +494,7 @@ class Z80CPUEmulatorTestClass extends TestFramework {
           TestClass.assert(false, finalTestName, detailsForAssert);
           
           // Still show detailed failure info for debugging
-          console.error(failureDetails.join("\n    "));
+          TestClass.sinks.fail(failureDetails.join("\n    "));
         }
       });
     }
@@ -520,7 +518,7 @@ class Z80CPUEmulatorTestClass extends TestFramework {
       test_helper(assembly, "", null, expectedError);
     }
 
-    consoleLogIfNode("Starting Z80 CPU tests with key=value expectations...\n");
+    this.sinks.log("Starting Z80 CPU tests with key=value expectations...\n");
 
     runZ80CPUEmulatorTestClass(test, test_expect_error);
 

@@ -93,38 +93,8 @@
  * NEWLINE: EQU '\n'              ; Character literal with escape sequence  
  * NULLTERM: DB "test", chr(0)    ; String followed by null character
  * TABCHAR: EQU chr(9)            ; Tab character using chr() function
- * 
- * IMPLEMENTED INSTRUCTIONS: NOP; HALT; LD A,n; LD B,n; LD C,n; LD D,n; LD E,n; LD H,n; LD L,n;
- * LD A,(nn); LD (nn),A; LD A,(BC); LD A,(DE); LD A,(HL); LD (BC),A; LD (DE),A; LD (HL),A; LD (HL),B;
- * LD (HL),C; LD (HL),D; LD (HL),E; LD (HL),H; LD (HL),L; LD B,(HL); LD C,(HL); LD D,(HL); LD E,(HL);
- * LD H,(HL); LD L,(HL); LD E,A; LD A,E; LD A,C; LD B,A; LD C,A; LD B,C; LD B,H; LD A,B; LD A,H;
- * LD A,L; LD H,A; LD L,A; LD A,D; LD D,A; LD B,B; LD B,D; LD B,E; LD B,L; LD C,B; LD C,C; LD C,D;
- * LD C,E; LD C,H; LD C,L; LD D,B; LD D,C; LD D,D; LD D,E; LD D,H; LD D,L; LD E,B; LD E,C; LD E,D;
- * LD E,E; LD E,H; LD E,L; LD H,B; LD H,C; LD H,D; LD H,E; LD H,H; LD H,L; LD L,B; LD L,C; LD L,D;
- * LD L,E; LD L,H; LD L,L; EX AF,AF'; EX DE,HL; EX (SP),HL; LD HL,nn; LD (nn),HL; LD HL,(nn);
- * LD BC,nn; LD DE,nn; LD SP,nn; LD (HL),n; CALL nn; CALL Z,nn; CALL NZ,nn; CALL C,nn; CALL NC,nn;
- * RET; RET NZ; RET Z; RET NC; RET C; JR d; JR Z,d; JR NZ,d; JR C,d; JR NC,d; DJNZ d; JP nn;
- * JP (HL); JP Z,nn; JP NZ,nn; JP C,nn; JP NC,nn;
- * INC A; INC B; INC C; INC D; INC E; INC H; INC L; INC BC; INC DE; INC HL; INC SP; INC (HL);
- * DEC A; DEC B; DEC C; DEC D; DEC E; DEC H; DEC L; DEC (HL); DEC BC; DEC DE; DEC HL; DEC SP;
- * ADD HL,BC; ADD HL,DE; ADD HL,HL; ADD HL,SP; ADD A,A; ADD A,B; ADD A,C; ADD A,D; ADD A,E; ADD A,H;
- * ADD A,L; ADD A,n; ADD A,(HL); ADC A,H; ADC A,n; SUB A; SUB n; SUB B; SUB C; SUB D; SUB E; SUB H; SUB L;
- * SUB (HL);
- * CP n; CP B; CP C; CP D; CP E; CP H; CP L; CP (HL); CP A; OR A; OR B; OR C; OR D; OR E; OR H;
- * OR L; OR (HL); OR n; XOR A; XOR B; XOR C; XOR D; XOR E; XOR H; XOR L; XOR (HL); XOR n;
- * AND A; AND B; AND C; AND D; AND E; AND H; AND L; AND (HL); AND n; NEG; RLCA; SCF; CCF; CPL;
- * LDIR; PUSH BC; PUSH DE; PUSH HL; PUSH AF; POP BC; POP DE; POP HL; POP AF; IN A,(n); OUT (n),A;
- * SLA A; SLA B; SLA C; SLA D; SLA E; SLA H; SLA L; SLA (HL); SRA A; SRA B; SRA C; SRA D; SRA E;
- * SRA H; SRA L; SRA (HL); SRL A; SRL B; SRL C; SRL D; SRL E; SRL H; SRL L; SRL (HL); RLA; RRCA; RRA;
- * RLC A; RLC B; RLC C; RLC D; RLC E; RLC H; RLC L; RLC (HL); RRC A; RRC B; RRC C; RRC D; RRC E;
- * RRC H; RRC L; RRC (HL); RL A; RL B; RL C; RL D; RL E; RL H; RL L; RL (HL); RR A; RR B; RR C;
- * RR D; RR E; RR H; RR L; RR (HL); SBC A,A; SBC A,B; SBC A,C; SBC A,D; SBC A,E; SBC A,H; SBC A,L;
- * SBC A,(HL); SBC A,n; SET 0,A; SET 0,B; SET 0,C; SET 0,D; SET 0,E; SET 0,H; SET 0,L; SET 0,(HL);
- * SET 1,A; SET 1,B; SET 1,C; SET 1,D; SET 1,E; SET 1,H; SET 1,L; SET 1,(HL); SET 7,A; SET 7,B;
- * SET 7,C; SET 7,D; SET 7,E; SET 7,H; SET 7,L; SET 7,(HL); RES 0,A; RES 0,B; RES 0,C; RES 0,D;
- * RES 0,E; RES 0,H; RES 0,L; RES 0,(HL); RES 1,A; RES 1,B; RES 1,C; RES 1,D; RES 1,E; RES 1,H;
- * RES 1,L; RES 1,(HL); RES 7,A; RES 7,B; RES 7,C; RES 7,D; RES 7,E; RES 7,H; RES 7,L; RES 7,(HL);
- * BIT 0,A; BIT 1,A; BIT 2,A; BIT 3,A; BIT 4,A; BIT 5,A; BIT 6,A; BIT 7,A; BIT 7,E; BIT 7,D
+ *
+ * The instruction set is the definitions table in _buildInstructionSet.
  */
 
 class Z80Assembler {
@@ -196,38 +166,26 @@ class Z80Assembler {
         this.instructionDetails = []; // Track instruction details for each source line
         this.firstOrgFound = false; // Track if we've seen the first ORG directive
 
-        try {
-            // --- First Pass: Parse lines, define symbols, and calculate addresses ---
-            this._performFirstPass();
+        // --- First Pass: Parse lines, define symbols, and calculate addresses ---
+        this._performFirstPass();
 
-            if (this.errors.length > 0) {
-                // Abort if there were errors in the first pass
-                throw new Error("Assembly failed due to errors in the first pass.");
-            }
-
-            // --- Second Pass: Generate machine code ---
+        // --- Second Pass: Generate machine code (only with a complete symbol table) ---
+        if (this.errors.length === 0) {
             this._performSecondPass();
+        }
 
-            if (this.errors.length > 0) {
-                throw new Error("Assembly failed due to errors on second pass.");
-            }
-
-            return {
-                success: true,
-                loadAddress: this.loadAddress,
-                instructionDetails: this.instructionDetails,
-            };
-        } catch (e) {
-            // This catches fatal errors or explicitly thrown ones.
-            // Individual line errors are already in this.errors.
-            if (this.errors.length === 0) {
-                this.errors.push({ line: -1, message: e.message });
-            }
+        if (this.errors.length > 0) {
             return {
                 success: false,
                 errors: this.errors,
             };
         }
+
+        return {
+            success: true,
+            loadAddress: this.loadAddress,
+            instructionDetails: this.instructionDetails,
+        };
     }
 
     /**
@@ -252,92 +210,101 @@ class Z80Assembler {
         
         for (let i = 0; i < this.sourceLines.length; i++) {
             const lineNum = i + 1;
-            const line = this.sourceLines[i];
 
             // Record the current address for this line (before processing)
             this.instructionDetails[i].startAddress = this.currentAddress;
 
-            const parsed = this._parseLine(line, lineNum);
-            if (!parsed) continue; // Skip empty/comment lines
-
-            // Process ORG directive first to set addresses before processing labels
-            if (parsed.mnemonic && parsed.mnemonic.toUpperCase() === 'ORG') {
-                this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
-                // Only set load address on the first ORG directive
-                if (!this.firstOrgFound) {
-                    this.loadAddress = this.currentAddress;
-                    this.firstOrgFound = true;
-                }
-                // Update the instruction details for this ORG line
-                this.instructionDetails[i].startAddress = this.currentAddress;
+            // Every error a line can raise (syntax, expression, unknown symbol) is thrown
+            // by the code that detects it and reported here exactly once, against the line
+            try {
+                const stopAssembly = this._firstPassLine(this.sourceLines[i], i, lineNum);
+                if (stopAssembly) return;
+            } catch (e) {
+                this._reportError(lineNum, e.message);
             }
+        }
+    }
 
-            this.parsedLines.push(parsed);
+    // Processes one line in pass 1. Returns true when the pass must stop: END, or an
+    // error that leaves the symbol table unusable.
+    _firstPassLine(line, lineIndex, lineNum) {
+        const parsed = this._parseLine(line, lineNum);
+        if (!parsed) return false; // Skip empty/comment lines
 
-            // If the line has a label, record its current address (unless it's an EQU)
-            if (parsed.label) {
-                const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
-                if (mnemonic !== 'EQU') {
-                    if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
-                        this._reportError(lineNum, `Duplicate label definition: '${parsed.label}'`);
-                        return; // Stop processing on duplicate label error
-                    } else {
-                        this.symbols[parsed.label.toUpperCase()] = this.currentAddress;
-                    }
-                }
+        // Process ORG directive first to set addresses before processing labels
+        if (parsed.mnemonic && parsed.mnemonic.toUpperCase() === 'ORG') {
+            this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
+            // Only set load address on the first ORG directive
+            if (!this.firstOrgFound) {
+                this.loadAddress = this.currentAddress;
+                this.firstOrgFound = true;
             }
+            // Update the instruction details for this ORG line
+            this.instructionDetails[lineIndex].startAddress = this.currentAddress;
+        }
 
-            // Process directives or calculate instruction size
-            if (parsed.mnemonic) {
-                const mnemonic = parsed.mnemonic.toUpperCase();
-                switch (mnemonic) {
-                    case 'ORG':
-                        // Already processed above
-                        break;
-                    case 'EQU':
-                        if (!parsed.label) {
-                            this._reportError(lineNum, `EQU directive requires a label.`);
-                        } else if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
-                            this._reportError(lineNum, `Duplicate symbol definition: '${parsed.label}'`);
-                            return; // Stop processing on duplicate symbol error
-                        } else {
-                            const value = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
-                            if (isNaN(value)) {
-                                return; // Error already reported, stop processing
-                            }
-                            this.symbols[parsed.label.toUpperCase()] = value;
-                        }
-                        break;
-                    case 'DB':
-                    case 'DEFB':
-                        // Store string length if this DB has a label and contains a string
-                        if (parsed.label && parsed.operands.length === 1) {
-                            const operand = parsed.operands[0];
-                            if (this._isStringLiteral(operand)) {
-                                this.dbLengths[parsed.label.toUpperCase()] = this._stringLiteralValue(operand).length;
-                            }
-                        }
-                        this.currentAddress += this._calculateDataSize(parsed);
-                        break;
-                    case 'DEFW':
-                    case 'DEFS':
-                        this.currentAddress += this._calculateDataSize(parsed);
-                        break;
-                    case 'END':
-                        // Stop processing further lines
-                        return;
-                    default:
-                        // It's an instruction, so find its definition and size.
-                        // The match is kept on the parsed line so pass 2 does not search again.
-                        const instruction = this._resolveInstruction(parsed, lineNum);
-                        if (instruction) {
-                            parsed.instruction = instruction;
-                            this.currentAddress += instruction.size;
-                        }
-                        break; // Error already reported by _resolveInstruction
+        this.parsedLines.push(parsed);
+
+        // If the line has a label, record its current address (unless it's an EQU)
+        if (parsed.label) {
+            const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
+            if (mnemonic !== 'EQU') {
+                if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
+                    this._reportError(lineNum, `Duplicate label definition: '${parsed.label}'`);
+                    return true; // Stop processing on duplicate label error
+                } else {
+                    this.symbols[parsed.label.toUpperCase()] = this.currentAddress;
                 }
             }
         }
+
+        // Process directives or calculate instruction size
+        if (parsed.mnemonic) {
+            const mnemonic = parsed.mnemonic.toUpperCase();
+            switch (mnemonic) {
+                case 'ORG':
+                    // Already processed above
+                    break;
+                case 'EQU':
+                    if (!parsed.label) {
+                        this._reportError(lineNum, `EQU directive requires a label.`);
+                    } else if (this.symbols.hasOwnProperty(parsed.label.toUpperCase())) {
+                        this._reportError(lineNum, `Duplicate symbol definition: '${parsed.label}'`);
+                        return true; // Stop processing on duplicate symbol error
+                    } else {
+                        this.symbols[parsed.label.toUpperCase()] = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
+                    }
+                    break;
+                case 'DB':
+                case 'DEFB':
+                    // Store string length if this DB has a label and contains a string
+                    if (parsed.label && parsed.operands.length === 1) {
+                        const operand = parsed.operands[0];
+                        if (this._isStringLiteral(operand)) {
+                            this.dbLengths[parsed.label.toUpperCase()] = this._stringLiteralValue(operand).length;
+                        }
+                    }
+                    this.currentAddress += this._calculateDataSize(parsed);
+                    break;
+                case 'DEFW':
+                case 'DEFS':
+                    this.currentAddress += this._calculateDataSize(parsed);
+                    break;
+                case 'END':
+                    // Stop processing further lines
+                    return true;
+                default:
+                    // It's an instruction, so find its definition and size.
+                    // The match is kept on the parsed line so pass 2 does not search again.
+                    const instruction = this._resolveInstruction(parsed, lineNum);
+                    if (instruction) {
+                        parsed.instruction = instruction;
+                        this.currentAddress += instruction.size;
+                    }
+                    break; // Error already reported by _resolveInstruction
+            }
+        }
+        return false;
     }
 
     /**
@@ -350,61 +317,51 @@ class Z80Assembler {
         this.currentAddress = this.loadAddress;
 
         for (const parsed of this.parsedLines) {
-            const lineNum = parsed.lineNum;
-            const sourceLineIndex = lineNum - 1; // Convert to 0-based index
-            const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
-            
-            // Skip directives that don't generate code
-            if (!mnemonic || ['ORG', 'EQU', 'END'].includes(mnemonic)) {
-                if (mnemonic === 'ORG') {
-                    const address = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
-                    if (isNaN(address)) {
-                        return; // Error already reported, stop assembly
-                    }
-                    this.currentAddress = address;
-                }
-                continue;
+            try {
+                this._secondPassLine(parsed);
+            } catch (e) {
+                this._reportError(parsed.lineNum, e.message);
             }
-
-            let bytes = [];
-            
-            switch (mnemonic) {
-                case 'DB':
-                case 'DEFB':
-                    bytes = this._generateDataBytes(parsed);
-                    break;
-                case 'DEFW':
-                    bytes = this._generateDataWords(parsed);
-                    break;
-                case 'DEFS':
-                    const size = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
-                    let fill = 0;
-                    if (parsed.operands.length > 1) {
-                        fill = this._evaluateExpression(parsed.operands[1], this.symbols, parsed.lineNum);
-                        if (isNaN(fill)) {
-                            bytes = []; // Error already reported by _evaluateExpression
-                            break;
-                        }
-                    }
-                    if (isNaN(size)) {
-                        bytes = []; // Error already reported by _evaluateExpression
-                        break;
-                    }
-                    bytes = Array(size).fill(fill & 0xFF);
-                    break;
-                default:
-                    // Pass 2 only runs when pass 1 resolved every instruction line
-                    bytes = this._generateInstructionBytes(parsed.instruction, parsed);
-                    break;
-            }
-            
-            // Store the opcodes in the instruction details for this source line
-            if (sourceLineIndex >= 0 && sourceLineIndex < this.instructionDetails.length) {
-                this.instructionDetails[sourceLineIndex].opcodes = bytes.slice(); // Copy the bytes array
-            }
-            
-            this.currentAddress += bytes.length;
         }
+    }
+
+    _secondPassLine(parsed) {
+        const mnemonic = parsed.mnemonic ? parsed.mnemonic.toUpperCase() : '';
+
+        // Skip directives that don't generate code
+        if (!mnemonic || ['ORG', 'EQU', 'END'].includes(mnemonic)) {
+            if (mnemonic === 'ORG') {
+                this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
+            }
+            return;
+        }
+
+        let bytes;
+        switch (mnemonic) {
+            case 'DB':
+            case 'DEFB':
+                bytes = this._generateDataBytes(parsed);
+                break;
+            case 'DEFW':
+                bytes = this._generateDataWords(parsed);
+                break;
+            case 'DEFS': {
+                const size = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
+                const fill = parsed.operands.length > 1
+                    ? this._evaluateExpression(parsed.operands[1], this.symbols, parsed.lineNum)
+                    : 0;
+                bytes = Array(size).fill(fill & 0xFF);
+                break;
+            }
+            default:
+                // Pass 2 only runs when pass 1 resolved every instruction line
+                bytes = this._generateInstructionBytes(parsed.instruction, parsed);
+                break;
+        }
+
+        // Store the opcodes in the instruction details for this source line
+        this.instructionDetails[parsed.lineNum - 1].opcodes = bytes;
+        this.currentAddress += bytes.length;
     }
 
 
@@ -477,81 +434,52 @@ class Z80Assembler {
     _generateInstructionBytes(instruction, parsedLine) {
         const bytes = [...instruction.opcodes];
         const symbols = this.symbols;
-        let failed = false;
 
         instruction.operands.forEach((pattern, i) => {
             const operandStr = parsedLine.operands[i];
-            
+
             switch (pattern) {
                 case Z80Assembler.OPERAND.IMM8: {
                     const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
-                    if (isNaN(value)) {
-                        this._reportError(parsedLine.lineNum, `Invalid 8-bit immediate: '${operandStr}'`);
-                        failed = true;
-                    } else if (value < -128 || value > 255) {
-                        this._reportError(parsedLine.lineNum, `8-bit immediate value out of range (-128 to 255): ${value}`);
-                        failed = true;
-                    } else {
-                        bytes.push(value & 0xFF);
+                    if (value < -128 || value > 255) {
+                        throw new Error(`8-bit immediate value out of range (-128 to 255): ${value}`);
                     }
+                    bytes.push(value & 0xFF);
                     break;
                 }
                 case Z80Assembler.OPERAND.IMM16: {
                     const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
-                    if (isNaN(value)) {
-                        this._reportError(parsedLine.lineNum, `Invalid 16-bit immediate: '${operandStr}'`);
-                        failed = true;
-                    } else if (value < -32768 || value > 65535) {
-                        this._reportError(parsedLine.lineNum, `16-bit immediate value out of range (-32768 to 65535): ${value}`);
-                        failed = true;
-                    } else {
-                        bytes.push(...this._wordToLittleEndianBytes(value));
+                    if (value < -32768 || value > 65535) {
+                        throw new Error(`16-bit immediate value out of range (-32768 to 65535): ${value}`);
                     }
+                    bytes.push(...this._wordToLittleEndianBytes(value));
                     break;
                 }
                 case Z80Assembler.OPERAND.MEM8: {
                     // Extract value from inside parentheses, e.g., "(255)" for I/O port
                     const portStr = operandStr.slice(1, -1);
                     const value = this._evaluateExpression(portStr, symbols, parsedLine.lineNum);
-                    if (isNaN(value)) {
-                        this._reportError(parsedLine.lineNum, `Invalid 8-bit port address: '${operandStr}'`);
-                        failed = true;
-                    } else if (value < 0 || value > 255) {
-                        this._reportError(parsedLine.lineNum, `8-bit port address out of range (0-255): ${value}`);
-                        failed = true;
-                    } else {
-                        bytes.push(value & 0xFF);
+                    if (value < 0 || value > 255) {
+                        throw new Error(`8-bit port address out of range (0-255): ${value}`);
                     }
+                    bytes.push(value & 0xFF);
                     break;
                 }
                 case Z80Assembler.OPERAND.MEM16: {
                     // Extract value from inside parentheses, e.g., "(1234)"
                     const addrStr = operandStr.slice(1, -1);
                     const value = this._evaluateExpression(addrStr, symbols, parsedLine.lineNum);
-                    if (isNaN(value)) {
-                        this._reportError(parsedLine.lineNum, `Invalid 16-bit address: '${operandStr}'`);
-                        failed = true;
-                    } else {
-                        bytes.push(...this._wordToLittleEndianBytes(value));
-                    }
+                    bytes.push(...this._wordToLittleEndianBytes(value));
                     break;
                 }
                 case Z80Assembler.OPERAND.RELATIVE: {
                     const targetAddr = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
-                    if (isNaN(targetAddr)) {
-                        // Parse failed (undefined symbol already reported)
-                        this._reportError(parsedLine.lineNum, `Invalid relative address: '${operandStr}'`);
-                        failed = true;
-                    } else {
-                        // Relative offset is from the address *after* the instruction
-                        const offset = targetAddr - (this.currentAddress + instruction.size);
-                        if (offset < -128 || offset > 127) {
-                            this._reportError(parsedLine.lineNum, `Relative jump target out of range. Offset is ${offset}.`);
-                            failed = true;
-                        } else {
-                            bytes.push(offset & 0xFF); // Two's complement representation
-                        }
+                    // Relative offset is from the address *after* the instruction
+                    const offset = targetAddr - (this.currentAddress + instruction.size);
+                    if (offset < -128 || offset > 127) {
+                        throw new Error(`Relative jump target out of range. Offset is ${offset}.`);
                     }
+                    bytes.push(offset & 0xFF); // Two's complement representation
                     break;
                 }
                 default:
@@ -560,12 +488,13 @@ class Z80Assembler {
             }
         });
 
-        return failed ? [] : bytes;
+        return bytes;
     }
 
 
     /**
      * Evaluates basic arithmetic expressions with parentheses, +, -, *, /.
+     * Throws an Error describing the problem when the expression cannot be evaluated.
      * @param {string} expr - The expression to evaluate.
      * @param {object} symbols - Symbol table for label/equate lookup.
      * @returns {number} The evaluated result.
@@ -608,9 +537,7 @@ class Z80Assembler {
     }
 
     _generateDataBytes(parsed) {
-        let bytes = [];
-        let failed = false;
-        const symbols = this.symbols;
+        const bytes = [];
         for (const op of parsed.operands) {
             if (this._isStringLiteral(op)) {
                 const processedStr = this._stringLiteralValue(op);
@@ -618,32 +545,19 @@ class Z80Assembler {
                     bytes.push(processedStr.charCodeAt(i));
                 }
             } else {
-                const val = this._evaluateExpression(op, symbols, parsed.lineNum);
-                if (isNaN(val)) {
-                    this._reportError(parsed.lineNum, `Invalid byte value: '${op}'`);
-                    failed = true;
-                } else {
-                    bytes.push(val & 0xFF);
-                }
+                bytes.push(this._evaluateExpression(op, this.symbols, parsed.lineNum) & 0xFF);
             }
         }
-        return failed ? [] : bytes;
+        return bytes;
     }
 
     _generateDataWords(parsed) {
-        let bytes = [];
-        let failed = false;
-        const symbols = this.symbols;
+        const bytes = [];
         for (const op of parsed.operands) {
-             const value = this._evaluateExpression(op, symbols, parsed.lineNum);
-             if (isNaN(value)) {
-                 this._reportError(parsed.lineNum, `Invalid word value: '${op}'`);
-                 failed = true;
-             } else {
-                 bytes.push(...this._wordToLittleEndianBytes(value));
-             }
+            const value = this._evaluateExpression(op, this.symbols, parsed.lineNum);
+            bytes.push(...this._wordToLittleEndianBytes(value));
         }
-        return failed ? [] : bytes;
+        return bytes;
     }
 
     /**
@@ -1298,19 +1212,13 @@ class ExpressionParser {
         }
     }
 
-    // Parse a complete expression
+    // Parse a complete expression; throws on any syntax or evaluation error
     parseExpression() {
-        try {
-            const result = this.parseAddSubtract();
-            if (this.pos < this.expr.length) {
-                this.error(`Unexpected character '${this.peek()}' at position ${this.pos}`);
-                return NaN;
-            }
-            return result;
-        } catch (e) {
-            this.error(e.message);
-            return NaN;
+        const result = this.parseAddSubtract();
+        if (this.pos < this.expr.length) {
+            throw new Error(`Unexpected character '${this.peek()}' at position ${this.pos}`);
         }
+        return result;
     }
 
     // Parse addition and subtraction (lowest precedence)
@@ -1323,11 +1231,7 @@ class ExpressionParser {
             const op = this.next();
             this.skipWhitespace();
             const right = this.parseMultiplyDivide();
-            
-            if (isNaN(left) || isNaN(right)) {
-                throw new Error(`Invalid operands in expression`);
-            }
-            
+
             if (op === '+') {
                 left = left + right;
             } else {
@@ -1348,11 +1252,7 @@ class ExpressionParser {
             const op = this.next();
             this.skipWhitespace();
             const right = this.parseFactor();
-            
-            if (isNaN(left) || isNaN(right)) {
-                throw new Error(`Invalid operands in expression`);
-            }
-            
+
             if (op === '*') {
                 left = left * right;
             } else {
@@ -1374,11 +1274,7 @@ class ExpressionParser {
         // Handle unary minus
         if (this.peek() === '-') {
             this.next();
-            const factor = this.parseFactor();
-            if (isNaN(factor)) {
-                throw new Error('Invalid operand after unary minus');
-            }
-            return -factor;
+            return -this.parseFactor();
         }
         
         // Handle parentheses
@@ -1520,10 +1416,6 @@ class ExpressionParser {
 
     // Handle chr() function
     handleChrFunction(charCode) {
-        if (isNaN(charCode)) {
-            throw new Error('chr() function requires a numeric argument');
-        }
-        
         // Ensure the character code is within valid ASCII range
         if (charCode < 0 || charCode > 255) {
             throw new Error(`chr() function argument out of range (0-255): ${charCode}`);
@@ -1630,11 +1522,6 @@ class ExpressionParser {
     
     isIdentifierChar(c) {
         return this.isAlphaNum(c) || c === '_' || c === "'";
-    }
-    
-    // Report error through assembler
-    error(message) {
-        this.assembler._reportError(this.lineNum, message);
     }
 
     // === LINE PARSING METHODS ===

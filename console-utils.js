@@ -44,9 +44,3 @@ console.log = function (...args) {
 function consoleLogApproved(...args) {
   originalConsoleLog(...args);
 }
-
-function consoleLogIfNode(message) {
-  if (typeof module !== 'undefined' && module.exports) {
-    consoleLogApproved(message);
-  }
-}

@@ -135,8 +135,17 @@ button {
     user-select: none;
 }
 
+/* Assemble and Run button special styling - darker monochrome. Same specificity as
+   the :hover/:active rules below and placed before them, so those states apply to
+   it without being repeated. */
+button.important-button {
+    background: var(--important-button-bgc);
+    color: var(--surface-text-c);
+}
+
 button:hover {
     background: var(--button-hover-bgc);
+    color: var(--button-text-c);
 }
 
 button:active {
@@ -148,23 +157,6 @@ button:active {
 button:focus-visible {
     outline: 3px solid var(--button-text-c);
     outline-offset: 2px;
-}
-
-/* Assemble and Run button special styling - darker monochrome */
-#assemble-run-btn {
-    background: var(--important-button-bgc);
-    color: var(--surface-text-c);
-}
-
-#assemble-run-btn:hover {
-    background: var(--button-hover-bgc);
-    color: var(--button-text-c);
-}
-
-#assemble-run-btn:active {
-    background: var(--button-active-bgc);
-    transform: translateY(1px);
-    box-shadow: var(--button-shadow-pressed);
 }
 
 /* Menu */

@@ -64,3 +64,6 @@ todo.md
 version.js
 eclecticsatyr.hostultra.com_speccs.txt
 z80_opcodes_list.txt
+
+# Playwright MCP browser snapshots from local verification runs
+.playwright-mcp/

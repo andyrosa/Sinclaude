@@ -45,7 +45,16 @@ jobs:
           
           echo "Generated version.js:"
           cat version.js
-      
+
+      # The HTML files reference their scripts and stylesheets with ?cb=__BUILD__ so that a
+      # deploy invalidates browser caches while an unchanged build stays cached
+      - name: Stamp build id into HTML cache-busting query strings
+        run: |
+          BUILD_ID=$(echo ${{ github.sha }} | cut -c1-7)
+          sed -i "s/__BUILD__/${BUILD_ID}/g" simulator.html index.html
+          echo "Stamped references:"
+          grep -n "cb=" simulator.html index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
       
