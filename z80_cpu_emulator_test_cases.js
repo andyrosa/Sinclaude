@@ -1310,6 +1310,10 @@ function runZ80CPUEmulatorTestClass(test, test_expect_error) {
 
   // Test that expects a specific error message - should pass when it gets the expected error
   test_expect_error("LD HL,0\nLD (HL),0", "Unexpected memory changes: [0x0000]: 0x21→0x00");
+
+  // Unknown prefixed opcodes must stop execution with an error, not run silently
+  test_expect_error("DB 0CBH, 30H", "Execution error: Unknown CB opcode: 0xCB 0x30 at address 0x0000");
+  test_expect_error("DB 0EDH, 00H", "Execution error: Unknown extended opcode: 0xED 0x00 at address 0x0000");
 }
 
 // Export for Node.js

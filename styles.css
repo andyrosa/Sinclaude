@@ -204,7 +204,7 @@ button:focus-visible {
     display: block;
     padding: 10px 15px;
     text-decoration: none;
-    transition: background-c .3s;
+    transition: background .3s;
 }
 
 .menu-item:last-child {
@@ -536,8 +536,8 @@ button:focus-visible {
 }
 
 /* Clickable headers for collapsible sections */
-.listing-section h2,
-.console-section h2 {
+.listing-section h3,
+.console-section h3 {
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;

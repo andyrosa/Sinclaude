@@ -1049,7 +1049,10 @@ class Z80CPU {
 
             case 0xCB: // CB prefix - shift and bit instructions
                 const cbOpcode = this.fetchByte();
-                this.executeCBInstruction(cbOpcode);
+                const cbError = this.executeCBInstruction(cbOpcode);
+                if (cbError !== null) {
+                    return cbError;
+                }
                 break;
 
             default:

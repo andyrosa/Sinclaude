@@ -1751,11 +1751,12 @@ class Simulator {
 
   // Clear animation timers but keep essential display/run timers
   clearNonEssentialTimers() {
-    // Keep display interval and run loop, clear animation timers
+    // Keep display interval, run loop and the version check (whose id the
+    // version checker owns), clear animation timers
     const essentialTimers = new Set([
       this.displayUpdateInterval,
       this.runLoopInterval,
-      this.versionCheckInterval,
+      window.versionChecker ? window.versionChecker.versionCheckInterval : null,
     ]);
     this.activeTimers.forEach((timerId) => {
       if (!essentialTimers.has(timerId)) {
