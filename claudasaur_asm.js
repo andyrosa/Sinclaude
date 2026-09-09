@@ -70,7 +70,7 @@ const CLAUDASAUR_ASM = (() => {
   text('intro_2', 19, ' W/S MOVE   A/D TURN   P PAUSE');
   text('intro_3', 21, '       SPACE TO ENTER MAZE');
   text('help', 23, 'W/S MOVE A/D TURN SPACE MAP P=II');
-  text('bearing', 22, ' FACING:   MAP: @ YOU * BEAST E');
+  text('bearing', 22, ' FACING:   MAP: ^ YOU * BEAST E');
   text('waiting', 1, '   CLAUDASAUR IS WAKING UP...');
   text('hunting', 1, '   CLAUDASAUR IS HUNTING YOU');
   text('nearby', 1, '   FOOTSTEPS ARE GETTING LOUDER');
@@ -101,7 +101,8 @@ const CLAUDASAUR_ASM = (() => {
 ; A Claude-logo-inspired starburst with very hungry dinosaur feet.
 ; W/S or up/down: move. A/D or left/right: turn.
 ; Space: start/retry, or toggle live map. P: pause/resume.
-; Map legend: @ you, * Claudasaur, E exit. North is up.
+; Map legend: an arrowhead (up arrow, >, v, <) is you and points the way you
+; face, * Claudasaur, E exit. North is up.
 ; The monster wakes after six seconds, then takes a step every 1.2s.
 ; Nearby: heartbeat pairs, faster in danger. Capture falls; escape rises.
 ; The title screen loops the broom theme from The Sorcerer's Apprentice.
@@ -135,6 +136,9 @@ seen: DB 255
 delta: DB 0
 deltas: DB 240,1,16,255
 compass: DB 'N','E','S','W'
+; Byte 94 is the Sinclair up arrow; the charset has no down arrow.
+map_glyphs: DB 94,'>','v','<'
+facing_glyph: DB 0
 
 title:
   LD SP,65535
@@ -626,6 +630,12 @@ render:
   ADD HL,DE
   LD A,(HL)
   LD (BUFFER+712),A
+  ; The map legend and the map itself both show the facing glyph.
+  LD HL,map_glyphs
+  ADD HL,DE
+  LD A,(HL)
+  LD (facing_glyph),A
+  LD (BUFFER+720),A
   LD HL,hunting
   LD A,(distance)
   CP 255
@@ -760,7 +770,8 @@ map_put:
   LD (HL),'*'
   LD A,(player)
   CALL map_address
-  LD (HL),'@'
+  LD A,(facing_glyph)
+  LD (HL),A
   JP present
 map_address:
   LD B,A

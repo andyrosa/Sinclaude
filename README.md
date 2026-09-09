@@ -35,7 +35,7 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 ### I/O Port Map:
 
 - **Port 0:** Frame counter: increments each display refresh (~60Hz), useful for timing
-- **Port 1:** Keyboard input: reads current key press
+- **Port 1:** Keyboard input: reads the current key as its Sinclair character code, 255 when no key is down. Keys without a character (Shift, Ctrl, Alt, function keys) press nothing. Run `node run_keyboard_tests_node.js` to check the mapping.
 - **Port 2:** Beep frequency port: in units of 10Hz
 - **Port 3:** Exponential beep duration: `milliseconds = 4000^((byte-1)/254)` for codes 1-255. Zero means no request; 1 gives 1 ms and 255 gives 4 seconds.
 - **Port 4:** Beep volume: 0 is silent, 255 is the former full level. Default 85 gives one-third of the former gain. Persists until changed; assembling a program or resetting restores 85.
@@ -60,7 +60,7 @@ Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over th
 - **Space**: toggle the live map; start again after escape or capture.
 - **P**: pause/resume. The existing on-screen W/S/A/D/Space buttons also work.
 
-The compass shows your facing direction. The map faces north: **@** is you, **\*** is Claudasaur, and **E** is the exit. The map does not pause the hunt. Claudasaur wakes after about six seconds and follows the shortest available path, moving more slowly than you. Each retry resets the same connected 16x16 maze so you can learn its routes.
+The compass shows your facing direction. The map faces north: an arrowhead (**↑**, **>**, **v**, or **<**) is you and points the way you face, **\*** is Claudasaur, and **E** is the exit. The map does not pause the hunt. Claudasaur wakes after about six seconds and follows the shortest available path, moving more slowly than you. Each retry resets the same connected 16x16 maze so you can learn its routes.
 
 The title screen waits 300ms after drawing, then plays a 5.4-second beep loop of the repeated broom theme from Paul Dukas's *The Sorcerer's Apprentice*. The arrangement uses the C-D-E pickup and eight bars from [the original bassoon part, rehearsal 7](https://s9.imslp.org/files/imglnks/usimg/b/b3/IMSLP35118-PMLP15848-Dukas-SorcerersAppr.Bassoons.pdf), raised one octave for clearer speaker playback. Short 120-150ms notes, written rests, and volume accents preserve the bouncy 3/8 march. Pressing **Space** starts the game immediately and cancels the remaining queued music notes. During play, a low double heartbeat starts when Claudasaur is within six maze steps and doubles its pace within three. Capture plays four descending notes; escape plays a three-note rising chime. Pause stops new heartbeat notes, and retry cancels any remaining queued melody notes. Sounds advance alongside gameplay and remain active on the live map.
 

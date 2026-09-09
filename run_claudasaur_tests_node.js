@@ -109,7 +109,8 @@ assert.equal(get('countdown'), beforePause, 'Pause freezes pursuit');
 press('P');
 press(' ');
 assert.equal(get('map_on'), 1);
-assert.equal(memory[60000 + 104 + 2 * 1 * 16 + 2], 64, 'Map shows player');
+assert.equal(memory[60000 + 104 + 2 * 1 * 16 + 2], 94, 'Map shows player as an up arrow when facing north');
+assert.equal(memory[60000 + 720], 94, 'Map legend shows the same facing glyph');
 press(' ');
 assert.equal(get('map_on'), 0);
 
@@ -177,6 +178,7 @@ for (const cell of paths.keys()) {
     assert.equal(memory[address('buffer') - 1], 91);
     assert.equal(memory[address('buffer') + 768], 92);
     assert.equal(memory[60000 + 712], 'NESW'.charCodeAt(facing));
+    assert.equal(memory[60000 + 720], [94, 62, 118, 60][facing], 'Legend glyph follows facing');
   }
 }
 

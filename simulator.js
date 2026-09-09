@@ -601,7 +601,14 @@ class Simulator {
     // Document-level keyboard capture - only process when capture is active
     document.addEventListener("keydown", (e) => {
       if (this.keyboardCaptureActive && !isTypingInFormField(e)) {
-        this.setKey(e.keyCode || e.which);
+        // e.keyCode is not ASCII outside digits and letters (Meta is 91 = "[",
+        // F1 is 112 = "p"), so derive the code from the key name the same way
+        // button captions do. Keys with no character (Alt, Shift, Ctrl, F-keys)
+        // return null and must not press anything.
+        const keyCodeOrNull = this.labelToKeyCodeOrNull(e.key);
+        if (keyCodeOrNull !== null) {
+          this.setKey(keyCodeOrNull);
+        }
         e.preventDefault(); // Prevent default browser behavior
       }
     });
@@ -757,8 +764,14 @@ class Simulator {
     } else if (this.keyCodeToSinclairCode.has(keyCode)) {
       this.OutPort(KEYBOARD_PORT, this.keyCodeToSinclairCode.get(keyCode));
     } else {
-      const sinclairCode = this.unicodeToSinclair(String.fromCharCode(keyCode));
-      this.OutPort(KEYBOARD_PORT, sinclairCode);
+      // Keys with no Sinclair character (Alt, Shift, Ctrl, F-keys, ...) must read as
+      // no-key. unicodeToSinclair's space fallback is for display text only; using
+      // it here made every unmapped key act as Space.
+      const sinclairCode = this.unicodeToSinclairMap.get(String.fromCharCode(keyCode));
+      this.OutPort(
+        KEYBOARD_PORT,
+        sinclairCode === undefined ? KBD_NO_KEY_PRESSED & 0xff : sinclairCode
+      );
     }
   }
 
