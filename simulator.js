@@ -1145,7 +1145,7 @@ class Simulator {
   updateCharacterAt(index, byte) {
     const element = this.screenElements[index];
     const code = byte & 0x7f;
-    const plot = this.useSinclairFont && sinclairPlotPatterns.has(code);
+    const plot = sinclairPlotPatterns.has(code);
 
     if (plot) {
       if (!element.plotElement) {
@@ -1343,6 +1343,9 @@ class Simulator {
   loadBasicsAssembly() {
     this.loadAssemblyCode(BASICS_ASM);
   }
+  loadPerformanceAssembly() {
+    this.loadAssemblyCode(DEFAULT_ASM);
+  }
   loadCharacterSetAssembly() {
     this.loadAssemblyCode(CHARACTER_SET_ASM);
   }
@@ -1356,9 +1359,9 @@ class Simulator {
   // The narrow-screen program select (simulator.html); option values name the loaders
   loadProgramFromSelect(select) {
     const loaders = {
-      default: () => this.loadDefaultAssembly(),
-      basics: () => this.loadBasicsAssembly(),
       characterSet: () => this.loadCharacterSetAssembly(),
+      basics: () => this.loadBasicsAssembly(),
+      performance: () => this.loadPerformanceAssembly(),
       spaceInvader: () => this.loadSpaceInvaderAssembly(),
       claudasaur: () => this.loadClaudasaurAssembly(),
     };

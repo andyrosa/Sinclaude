@@ -2,7 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const sources = ['constants_and_css_vars.js', 'z80_assembler.js', 'z80_cpu_emulator.js', 'character_set_asm.js', 'simulator.js']
+const sources = ['constants_and_css_vars.js', 'z80_assembler.js', 'z80_cpu_emulator.js',
+  'character_set_asm.js', 'basics_asm.js', 'default_asm.js', 'space_invader_asm.js', 'claudasaur_asm.js', 'simulator.js']
   .map(file => fs.readFileSync(require.resolve('./' + file), 'utf8')).join('\n');
 
 // Stub browser services and presentation only. Assembly, CPU execution, URL loading,
@@ -104,6 +105,15 @@ async function main() {
   const card = fixture();
   card.sim.loadDefaultAssembly();
   assert.equal(card.sim.getAssemblyCode(), require('./character_set_asm.js'), 'Default program is the character-set test');
+  const choices = fixture();
+  const programs = [['characterSet','character_set_asm.js'], ['basics','basics_asm.js'],
+    ['performance','default_asm.js'], ['spaceInvader','space_invader_asm.js'], ['claudasaur','claudasaur_asm.js']];
+  for (const [value, file] of programs) {
+    const option = { value };
+    choices.sim.loadProgramFromSelect(option);
+    assert.equal(choices.sim.getAssemblyCode(), require('./' + file).trimStart(), `Program list loads ${file}`);
+    assert.equal(option.value, '', 'Program can be selected again');
+  }
   const select = { value: 'characterSet' };
   card.sim.loadProgramFromSelect(select);
   assert.equal(select.value, '', 'The character-set program is selectable again after Clear');
@@ -165,15 +175,17 @@ async function main() {
   graphics.screenElements = [{
     classList: { toggle(name, enabled) { classes.set(name, enabled); } },
   }];
-  graphics.useSinclairFont = true;
-  for (const byte of [6, 7, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22, 32,
-    134, 135, 136, 137, 141, 142, 144, 145, 146, 147, 148, 149, 150, 160]) {
-    graphics.updateCharacterAt(0, byte);
-    assert.equal(classes.get('sinclair-font'), false, 'Retro PLOT cells never receive font stretching');
-    assert.equal(classes.get('plot-graphics'), true);
-    assert.equal(graphics.screenElements[0].textContent, '', 'Graphics contain no antialiased font glyph');
-    assert.ok(graphic.includes('<rect width="8" height="8"'));
-    assert.equal(classes.get('inverted'), byte >= 128);
+  for (const retro of [false, true]) {
+    graphics.useSinclairFont = retro;
+    for (const byte of [6, 7, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22, 32,
+      134, 135, 136, 137, 141, 142, 144, 145, 146, 147, 148, 149, 150, 160]) {
+      graphics.updateCharacterAt(0, byte);
+      assert.equal(classes.get('sinclair-font'), false, 'Graphics never receive font stretching in either mode');
+      assert.equal(classes.get('plot-graphics'), true);
+      assert.equal(graphics.screenElements[0].textContent, '', 'Graphics contain no antialiased font glyph');
+      assert.ok(graphic.includes('<rect width="8" height="8"'));
+      assert.equal(classes.get('inverted'), byte >= 128);
+    }
   }
   assert.ok(graphic.includes('d=""'), 'Inverse space fills the whole cell by inverting blank paper');
   graphics.updateCharacterAt(0, 147);
@@ -196,9 +208,13 @@ async function main() {
   graphics.updateCharacterAt(0, 7);
   graphics.useSinclairFont = false;
   graphics.updateCharacterAt(0, 7);
-  assert.equal(classes.get('plot-graphics'), false, 'Font-off rendering remains unchanged');
-  assert.equal(graphics.screenElements[0].plotCode, undefined);
-  assert.equal(graphics.screenElements[0].textContent, '\u2592');
+  assert.equal(classes.get('plot-graphics'), true, 'Turning retro fonts off keeps the graphics renderer');
+  assert.equal(graphics.screenElements[0].plotCode, 7);
+  assert.equal(graphics.screenElements[0].textContent, '');
+  graphics.updateCharacterAt(0, 65);
+  assert.equal(classes.get('sinclair-font'), false, 'Non-retro text uses the normal font');
+  assert.equal(classes.get('plot-graphics'), false);
+  assert.equal(graphics.screenElements[0].textContent, 'A');
   const source = 'LD A,42\nHALT ; £';
   const url = new URL('https://example.test/simulator.html?assemble=1&other=value');
   url.searchParams.set('asm', btoa(encodeURIComponent(source)));

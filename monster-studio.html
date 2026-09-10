@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claudasaur — Monster Studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { padding: clamp(16px, 3vw, 40px); font-size: 15px; }
+    main { width: 100%; max-width: 1504px; margin: 0 auto; }
+    header { margin-bottom: 28px; }
+    h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.2; margin: 12px 0; }
+    h2 { font-size: 19px; }
+    a { color: inherit; text-underline-offset: 4px; }
+    .intro { max-width: 80ch; }
+    .controls { display: flex; flex-wrap: wrap; gap: 16px 28px; margin-bottom: 24px; }
+    .controls label { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    select {
+      color: var(--editable-text-fgc);
+      background: var(--editable-text-bgc);
+      border: 1px solid var(--border-c);
+      border-radius: 0;
+      padding: 8px 12px;
+      max-width: 100%;
+    }
+    :focus-visible { outline: 3px solid var(--surface-text-c); outline-offset: 4px; }
+    .palette { display: flex; flex-wrap: wrap; gap: 16px 28px; margin: 24px 0 32px; }
+    .palette span { display: flex; align-items: center; gap: 10px; }
+    .previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+    figure { min-width: 0; }
+    .caption { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .swatch { width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid var(--border-c); }
+    .screen {
+      display: block;
+      width: 100%;
+      aspect-ratio: 8 / 5;
+      border: 1px solid var(--border-c);
+      background: var(--editable-text-bgc);
+    }
+    .description { margin-top: 10px; }
+    #error { margin-bottom: 20px; border: 1px solid var(--border-c); padding: 16px; }
+    @media (max-width: 900px) {
+      .previews { grid-template-columns: 1fr; max-width: 480px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <a href="simulator.html">Back to simulator</a>
+      <h1>Monster Studio</h1>
+      <p class="intro">Compare the monster at three distances against the same maze views. Choose a solid color or XOR to see how it blends with the walls. The maze backgrounds stay fixed for comparison.</p>
+    </header>
+    <div id="error" role="alert" hidden></div>
+    <div class="palette" aria-label="Maze patterns">
+      <span><svg class="swatch" data-byte="32" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>White</span>
+      <span><svg class="swatch" data-byte="160" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Solid black</span>
+      <span><svg class="swatch" data-byte="7" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Stippled grey</span>
+    </div>
+    <div class="controls">
+      <label for="distance">Monster distance
+        <select id="distance">
+          <option value="0" selected>0 spaces (closest)</option>
+          <option value="1">1 space</option>
+          <option value="2">2 spaces</option>
+        </select>
+      </label>
+      <label for="drawing">Monster drawing
+        <select id="drawing">
+          <option value="black">Solid black</option>
+          <option value="grey" selected>Solid grey (inverse stipple)</option>
+          <option value="xor">XOR</option>
+        </select>
+      </label>
+    </div>
+    <div class="previews">
+      <figure data-player="19" data-direction="1">
+        <figcaption class="caption">
+          <h2>Long corridor</h2>
+        </figcaption>
+        <svg class="screen" viewBox="0 0 256 160" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="Maze corridor with solid black side walls receding toward a stippled wall"></svg>
+        <p class="description">Solid side walls converge in the distance. Block patterns form the sloping edges.</p>
+      </figure>
+      <figure data-player="22" data-direction="1">
+        <figcaption class="caption">
+          <h2>Facing a wall</h2>
+        </figcaption>
+        <svg class="screen" viewBox="0 0 256 160" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="Maze dead end with a large stippled wall directly ahead and black walls on both sides"></svg>
+        <p class="description">The wall directly ahead uses the grey stipple, bordered by black side walls.</p>
+      </figure>
+      <figure data-player="87" data-direction="2">
+        <figcaption class="caption">
+          <h2>Junction</h2>
+        </figcaption>
+        <svg class="screen" viewBox="0 0 256 160" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="Maze junction with stippled walls visible through passages on both sides"></svg>
+        <p class="description">Side passages reveal stippled walls beyond the openings.</p>
+      </figure>
+    </div>
+    <noscript><p>Enable JavaScript to display the maze views.</p></noscript>
+  </main>
+  <script src="constants_and_css_vars.js"></script>
+  <script src="z80_assembler.js"></script>
+  <script src="z80_cpu_emulator.js"></script>
+  <script src="simulator.js"></script>
+  <script src="claudasaur_asm.js"></script>
+  <script>
+    (() => {
+      try {
+        // Execute the actual maze renderer so perspective and stippling stay
+        // identical to the game as its drawing packets change.
+        const assembler = new Z80Assembler();
+        const assembled = assembler.assemble(CLAUDASAUR_ASM);
+        if (!assembled.success) throw new Error(JSON.stringify(assembled.errors));
+        const symbols = assembler.symbols;
+        const memory = new Uint8Array(65536);
+        for (const line of assembled.instructionDetails) {
+          if (line.opcodes.length) memory.set(line.opcodes, line.startAddress);
+        }
+        const cpu = new Z80CPU();
+        const ports = new Uint8Array(256);
+        const distance = document.getElementById('distance');
+        const drawing = document.getElementById('drawing');
+        function cellMarkup(byte, index = 0) {
+          const pattern = sinclairPlotPatterns.get(byte & 127);
+          if (pattern === undefined) throw new Error('Unexpected preview character: ' + byte);
+          return `<g class="plot-cell${byte >= 128 ? ' inverted' : ''}" transform="translate(${index % 32 * 8} ${Math.floor(index / 32) * 8})">${pattern}</g>`;
+        }
+        function runRoutine(name, packet = 0) {
+          cpu.reset();
+          cpu.PC = symbols[name];
+          cpu.setHL(packet);
+          // Return to HALT after one frame; input and pursuit stay idle.
+          cpu.SP = 65532;
+          memory[65532] = 254;
+          memory[65533] = 255;
+          memory[65534] = 118;
+          const result = cpu.executeSteps(memory, ports, 100000);
+          if (result.error || !result.halted) throw new Error(result.error || name + ' did not return');
+        }
+        function renderMaze(player, direction) {
+          memory[symbols.PLAYER] = player;
+          memory[symbols.DIRECTION] = direction;
+          // Cell zero is a sealed border wall, outside every visible corridor.
+          memory[symbols.MONSTER] = 0;
+          memory[symbols.MAP_ON] = 0;
+          runRoutine('RENDER');
+          return memory.slice(symbols.BUFFER, symbols.BUFFER + 768);
+        }
+        function renderMonster(background, depth, mode) {
+          // Restore the clean maze before changing size or color to avoid
+          // leaving sprite pixels behind or XORing the previous preview.
+          memory.set(background, symbols.BUFFER);
+          const packet = symbols['MONSTER_' + depth];
+          runRoutine(mode === 'xor' ? 'PAINT_XOR' : 'PAINT', packet);
+          if (mode === 'black') {
+            for (let ptr = packet; ; ptr += 3) {
+              const destination = memory[ptr] | memory[ptr + 1] << 8;
+              if (!destination) break;
+              memory[destination] = 160;
+            }
+          }
+          // Rows 2–21 are the maze viewport; omit the surrounding game text.
+          return memory.slice(symbols.BUFFER + 2 * 32, symbols.BUFFER + 22 * 32);
+        }
+        const previews = Array.from(document.querySelectorAll('figure[data-player]'), figure => ({
+          screen: figure.querySelector('.screen'),
+          name: figure.querySelector('h2').textContent,
+          background: renderMaze(Number(figure.dataset.player), Number(figure.dataset.direction))
+        }));
+        function render() {
+          const depth = Number(distance.value);
+          const style = drawing.options[drawing.selectedIndex].text;
+          for (const preview of previews) {
+            const frame = renderMonster(preview.background, depth, drawing.value);
+            preview.screen.innerHTML = Array.from(frame, cellMarkup).join('');
+            preview.screen.setAttribute('aria-label', `${preview.name}: ${style} monster, ${depth} ${depth === 1 ? 'space' : 'spaces'} away`);
+          }
+        }
+        for (const swatch of document.querySelectorAll('.swatch')) {
+          swatch.innerHTML = cellMarkup(Number(swatch.dataset.byte));
+        }
+        distance.addEventListener('change', render);
+        drawing.addEventListener('change', render);
+        render();
+      } catch (error) {
+        console.error('Maze preview failed:', error);
+        document.getElementById('error').textContent = 'The maze views could not load. Reload the page with its companion game files available.';
+        document.getElementById('error').hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

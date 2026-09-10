@@ -49,14 +49,14 @@ const CLAUDASAUR_ASM = (() => {
     '   ##     ##    ',
     '  ###     ###   ',
   ];
-  const spritePixels = (scale, centerY) => {
+  const spritePixels = (scale, centerY, color = 160) => {
     const pixels = new Map();
     sprite.forEach((line, y) => Array.from(line).forEach((char, x) => {
-      if (char === '#') pixels.set((Math.round(centerY + (y - 6) * scale)) * 32 + Math.round(15 + (x - 7) * scale), 128 + 32);
+      if (char === '#') pixels.set((Math.round(centerY + (y - 6) * scale)) * 32 + Math.round(15 + (x - 7) * scale), color);
     }));
     return [...pixels];
   };
-  packet('mascot', spritePixels(1, 9));
+  packet('mascot', spritePixels(1, 9, 7 ^ 128));
   const x = [0, 7, 11, 14, 15];
   // All depth bands share one projected edge so an uninterrupted wall cannot
   // change slope at a packet boundary.
@@ -64,7 +64,8 @@ const CLAUDASAUR_ASM = (() => {
   const top = x.map(col => Math.floor(wallTop(col * 2) / 2));
   const bottom = top.map(row => 23 - row);
   for (let depth = 0; depth < 4; depth++) {
-    packet(`monster_${depth}`, spritePixels([1, 0.65, 0.4, 0.23][depth], 12));
+    // Use the opposite stipple phase to the facing walls (character 7).
+    packet(`monster_${depth}`, spritePixels([1, 0.65, 0.4, 0.23][depth], 12, 7 ^ 128));
     for (const side of ['left', 'right']) {
       for (const wall of [0, 1]) {
         const name = `${side}_${wall}_${depth}`;
@@ -631,8 +632,26 @@ paint:
   INC HL
   LD (DE),A
   JR paint
-; A selects a word entry in a packet pointer table at HL.
+; Monster pixels fill a character cell. Toggling the inverse bit XORs
+; those pixels with the existing wall glyph, including shaded faces.
+paint_xor:
+  LD E,(HL)
+  INC HL
+  LD D,(HL)
+  INC HL
+  LD A,D
+  OR E
+  RET Z
+  LD A,(DE)
+  XOR 128
+  LD (DE),A
+  INC HL
+  JR paint_xor
 paint_index:
+  CALL packet_index
+  JP paint
+; A selects a word entry in a packet pointer table at HL.
+packet_index:
   ADD A,A
   LD E,A
   LD D,0
@@ -641,7 +660,7 @@ paint_index:
   INC HL
   LD D,(HL)
   EX DE,HL
-  JP paint
+  RET
 
 render:
   CALL clear

@@ -20,7 +20,7 @@ function showAbout() {
   const versionInfo = getFormattedVersionInfo();
 
   let aboutText =
-    "Sinclaude\n\nA vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs entirely in the browser, co-written with Claude";
+    "Sinclaude\n\nA vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs entirely in the browser, co-written with Claude Opus 4.1 on 8/5/2025 and updated with Fable";
 
   if (versionInfo) {
     aboutText += `\n\nBuild Date: ${versionInfo.localBuildDate}\nCommit: ${versionInfo.shortCommit}`;

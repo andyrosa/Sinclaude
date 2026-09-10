@@ -38,17 +38,17 @@
                 <div class="section-controls">
                     <div class="controls">
                         <button type="button" class="clear-btn" onclick="sinclaude.clearAssembly()" title="Clear the assembly editor">Clear</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()" title="Load the character-set and graphics test">Load Default Program</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Load a test program that demonstrates basic Z80 instructions - starts halted for single-stepping">Load Basics Test</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadCharacterSetAssembly()" title="Display all 256 character codes and numbered graphics fill patterns">Load Character Set Test</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Test single-stepping, registers, flags and the stack - starts halted">Load Debugger Test</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadPerformanceAssembly()" title="Increment a hexadecimal counter approximately every four million Z80 T-states">Load Performance Test</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()" title="Load a playable Space Invader micro-game">Load 'Space Invader'</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadClaudasaurAssembly()" title="Find the exit in a first-person maze before the spiky Claudasaur catches you. W/S move, A/D turn, Space starts or shows the map, P pauses.">Load 'Claudasaur'</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadCharacterSetAssembly()" title="Display all 256 character codes and numbered graphics fill patterns">Load Character Set Test</button>
                         <!-- Narrow screens show this select instead of the load buttons above -->
                         <select class="load-select" aria-label="Load a program" onchange="sinclaude.loadProgramFromSelect(this)">
                             <option value="" disabled selected hidden>Load a program...</option>
-                            <option value="default">Default Program</option>
-                            <option value="basics">Basics Test</option>
                             <option value="characterSet">Character Set Test</option>
+                            <option value="basics">Debugger Test</option>
+                            <option value="performance">Performance Test</option>
                             <option value="spaceInvader">'Space Invader'</option>
                             <option value="claudasaur">'Claudasaur'</option>
                         </select>
