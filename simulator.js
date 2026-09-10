@@ -1692,6 +1692,15 @@ class Simulator {
       }
       this.updateAudioState();
     });
+
+    // URL autostart can leave audio blocked until a real click, tap, or keypress.
+    const unlockAudio = () => {
+      if (!document.hidden && this.audioContext?.state === "suspended") {
+        this.updateAudioState();
+      }
+    };
+    document.addEventListener("click", unlockAudio, true);
+    document.addEventListener("keydown", unlockAudio, true);
   }
 
   cleanupObservers() {

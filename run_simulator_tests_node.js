@@ -288,6 +288,41 @@ async function main() {
   assert.equal(unknownProgram.sim.state, unknownProgram.STATE.NOT_READY,
     'An unknown program must not automatically start the default program');
 
+  for (const gesture of ['click', 'keydown']) {
+    const autoplay = fixture(gameUrl);
+    autoplay.documentStub.emit(gesture);
+    assert.equal(autoplay.contexts.length, 0, 'Input before audio initialization creates no context');
+    autoplay.sim.initializeAudio();
+    const blockedAudio = autoplay.sim.audioContext;
+    blockedAudio.state = 'suspended';
+    let activated = false;
+    blockedAudio.resume = async () => {
+      blockedAudio.calls.push('resume');
+      if (activated) blockedAudio.state = 'running';
+    };
+    autoplay.initialize();
+    assert.equal(autoplay.sim.state, autoplay.STATE.FREE_RUNNING);
+    assert.equal(blockedAudio.state, 'suspended', 'Browser can block sound during URL autostart');
+    autoplay.sim.playBeep(440, 100);
+    assert.equal(blockedAudio.notes, 0);
+    const executed = autoplay.sim.instructionCount;
+    activated = true;
+    autoplay.documentStub.emit(gesture);
+    await Promise.resolve();
+    assert.equal(blockedAudio.state, 'running', `${gesture} unlocks autostart audio`);
+    assert.equal(autoplay.sim.audioContext, blockedAudio, 'Unlock reuses the existing audio context');
+    assert.equal(autoplay.sim.instructionCount, executed, 'Unlock does not restart the game');
+    autoplay.sim.playBeep(440, 100);
+    assert.equal(blockedAudio.notes, 1, 'New notes play after the interaction');
+    const resumeCount = blockedAudio.calls.length;
+    autoplay.documentStub.emit(gesture);
+    assert.equal(blockedAudio.calls.length, resumeCount, 'Running audio is not resumed on every input');
+    autoplay.documentStub.hidden = true;
+    autoplay.documentStub.emit('visibilitychange');
+    autoplay.documentStub.emit(gesture);
+    assert.equal(blockedAudio.state, 'suspended', 'Input cannot resume audio in a hidden tab');
+  }
+
   const f = fixture();
   const { sim, STATE } = f;
   sim.stageConfig = [

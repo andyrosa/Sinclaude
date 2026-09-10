@@ -57,6 +57,8 @@ Open [Claudasaur directly](https://andyrosa.github.io/Sinclaude/simulator.html?r
 
 `run=claudasaur` selects and runs the game. Saved `asm` code takes precedence if both are provided. **Clear** removes the game selection from the URL.
 
+Browsers may keep sound muted on automatic startup until you interact with the page. Click, tap, or press a key to enable sound without restarting the game.
+
 Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over the execution screen (or tap it) to activate keyboard capture, then press **Space** to start. Find the exit before the Claude-logo-inspired, spiky Claudasaur catches you.
 
 - **W/S** or **Up/Down**: walk forward/backward. Hold to keep moving.
