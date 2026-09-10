@@ -1352,8 +1352,8 @@ class Simulator {
   loadSpaceInvaderAssembly() {
     this.loadAssemblyCode(SPACE_INVADER_ASM);
   }
-  loadClaudasaurAssembly() {
-    this.loadAssemblyCode(CLAUDASAUR_ASM);
+  loadClaudasaurAssembly(options) {
+    this.loadAssemblyCode(CLAUDASAUR_ASM, options);
   }
 
   // The narrow-screen program select (simulator.html); option values name the loaders
@@ -1462,10 +1462,17 @@ class Simulator {
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentEncoded = urlParams.get("asm");
+    const program = urlParams.get("run");
+
+    // Keep the short game link instead of trying to encode its large source.
+    if (program === "claudasaur" && !currentEncoded &&
+        sourceCode.trim() === CLAUDASAUR_ASM.trim()) {
+      return;
+    }
     const desiredEncoded = !sourceCode ? null : btoa(encodeURIComponent(sourceCode));
 
     // If no change would occur, do nothing silently
-    if (currentEncoded === desiredEncoded) {
+    if (currentEncoded === desiredEncoded && !urlParams.has("run")) {
       return;
     }
 
@@ -1478,6 +1485,7 @@ class Simulator {
     }
 
     const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("run");
 
     if (desiredEncoded === null) {
       // Remove asm parameter when clearing
@@ -1493,10 +1501,12 @@ class Simulator {
         userMessage(
           `Source code was not encoded on URL because it's too large (${totalLength} bytes, ${overage} over ${MAX_URL_LENGTH} limit). See Docs.`
         );
-        return;
+        if (!urlParams.has("run")) return;
+        // An edited game that cannot be shared must not retain a stale game link.
+        newUrl.searchParams.delete("asm");
+      } else {
+        newUrl.searchParams.set("asm", desiredEncoded);
       }
-
-      newUrl.searchParams.set("asm", desiredEncoded);
     }
 
     // History update (supported on non-file protocols)
@@ -1512,18 +1522,23 @@ class Simulator {
 
   loadFromURL() {
     try {
-      if (this.isUrlUpdateDisabled()) {
-        return false;
-      }
-
       // Can read URL parameters even from file system, just can't modify them
       const urlParams = new URLSearchParams(window.location.search);
       const encoded = urlParams.get("asm");
 
-      if (encoded) {
+      if (encoded && encoded !== "dont") {
         let sourceCode = decodeURIComponent(atob(encoded));
         this.loadAssemblyCode(sourceCode, { preserveURL: true });
         return true;
+      }
+
+      const program = urlParams.get("run");
+      if (program === "claudasaur") {
+        this.loadClaudasaurAssembly({ preserveURL: true });
+        return true;
+      }
+      if (program !== null) {
+        userMessage(`Unknown URL program '${program}'. Use run=claudasaur.`);
       }
     } catch (e) {
       userMessageAboutBug(

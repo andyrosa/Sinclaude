@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const sources = ['constants_and_css_vars.js', 'z80_assembler.js', 'z80_cpu_emulator.js',
   'character_set_asm.js', 'basics_asm.js', 'default_asm.js', 'space_invader_asm.js', 'claudasaur_asm.js', 'simulator.js']
   .map(file => fs.readFileSync(require.resolve('./' + file), 'utf8')).join('\n');
+const initialization = fs.readFileSync(require.resolve('./initialization.js'), 'utf8');
 
 // Stub browser services and presentation only. Assembly, CPU execution, URL loading,
 // state transitions, button rendering, audio lifecycle and timers are the real code.
@@ -83,6 +84,14 @@ function fixture(url = 'https://example.test/simulator.html') {
   sim.setupCleanupHandlers();
   return {
     sim, STATE, timers, windowStub, documentStub, contexts, controls, messages, bugs,
+    initialize() {
+      sim.setupAssemblyContentObserver = () => {};
+      vm.runInNewContext(initialization, {
+        window: windowStub, Simulator: function() { return sim; },
+        updateRetroFontsToggle() {}, URLSearchParams,
+      });
+      windowStub.emit('load');
+    },
     fire(id) {
       const timer = timers.get(id);
       assert.ok(timer, 'Timer must still be scheduled');
@@ -216,7 +225,7 @@ async function main() {
   assert.equal(classes.get('plot-graphics'), false);
   assert.equal(graphics.screenElements[0].textContent, 'A');
   const source = 'LD A,42\nHALT ; £';
-  const url = new URL('https://example.test/simulator.html?assemble=1&other=value');
+  const url = new URL('https://example.test/simulator.html?other=value');
   url.searchParams.set('asm', btoa(encodeURIComponent(source)));
   const saved = fixture(url.href);
   assert.equal(saved.sim.loadFromURL(), true);
@@ -232,6 +241,52 @@ async function main() {
   disabled.sim.clearAssembly();
   assert.equal(disabled.sim.loadFromURL(), false);
   assert.equal(disabled.windowStub.location.searchParams.get('asm'), 'dont');
+
+  const gameUrl = 'https://example.test/simulator.html?run=claudasaur&other=value';
+  const game = fixture(gameUrl);
+  game.initialize();
+  assert.equal(game.sim.getAssemblyCode(), require('./claudasaur_asm.js').trimStart());
+  assert.equal(game.sim.state, game.STATE.FREE_RUNNING, 'The game link starts CPU execution');
+  assert.ok(game.sim.instructionCount > 0);
+  assert.equal(game.sim.isBootSequenceRunning, false, 'Autostart ends the boot sequence');
+  assert.equal(game.windowStub.location.href, gameUrl, 'The running game keeps its short link');
+  assert.deepEqual(game.bugs, []);
+  assert.equal(game.messages.some(message => message.includes('too large')), false);
+  const gameRefresh = fixture(game.windowStub.location.href);
+  gameRefresh.initialize();
+  assert.equal(gameRefresh.sim.state, gameRefresh.STATE.FREE_RUNNING, 'Refresh restarts the game');
+  gameRefresh.sim.clearAssembly();
+  assert.equal(gameRefresh.windowStub.location.searchParams.has('run'), false);
+  assert.equal(gameRefresh.windowStub.location.searchParams.get('other'), 'value');
+
+  const savedLoad = fixture(url.href);
+  savedLoad.initialize();
+  assert.equal(savedLoad.sim.getAssemblyCode(), source);
+  assert.equal(savedLoad.sim.state, savedLoad.STATE.NOT_READY, 'Saved assembly loads without autostart');
+  const plain = fixture();
+  plain.initialize();
+  assert.equal(plain.sim.state, plain.STATE.NOT_READY, 'An ordinary visit still waits for Run');
+  const gameDisabled = fixture(gameUrl + '&asm=dont');
+  gameDisabled.initialize();
+  assert.equal(gameDisabled.sim.state, gameDisabled.STATE.FREE_RUNNING);
+  assert.equal(gameDisabled.windowStub.location.searchParams.get('asm'), 'dont');
+  const customGameUrl = new URL(gameUrl);
+  customGameUrl.searchParams.set('asm', btoa(encodeURIComponent(source)));
+  const customGame = fixture(customGameUrl.href);
+  customGame.initialize();
+  assert.equal(customGame.sim.cpu.registers.A, 42, 'Saved assembly takes precedence over a named game');
+  assert.equal(customGame.sim.state, customGame.STATE.STEPPING);
+  assert.equal(customGame.windowStub.location.searchParams.has('run'), false);
+
+  game.sim.updateURL(game.sim.getAssemblyCode() + '\n; edited');
+  assert.equal(game.windowStub.location.searchParams.has('run'), false,
+    'An oversized edited game cannot retain a link that reloads the unedited game');
+  const unknownProgram = fixture('https://example.test/simulator.html?run=missing');
+  assert.equal(unknownProgram.sim.loadFromURL(), false);
+  assert.ok(unknownProgram.messages.some(message => message.includes('Unknown URL program')));
+  unknownProgram.initialize();
+  assert.equal(unknownProgram.sim.state, unknownProgram.STATE.NOT_READY,
+    'An unknown program must not automatically start the default program');
 
   const f = fixture();
   const { sim, STATE } = f;
@@ -353,6 +408,6 @@ async function main() {
   assert.equal(invalid.sim.listing.isError, true);
   assert.match(invalid.sim.listing.text, /ORG address out of range/);
   assert.equal(invalid.sim.runLoopInterval, null);
-  console.log('Simulator passed: shared URLs, screen data, boot cancellation, audio lifecycle, CPU faults, timer cleanup, execution deadlines, and assembly rejection.');
+  console.log('Simulator passed: shared URLs, game autostart and refresh, screen data, boot cancellation, audio lifecycle, CPU faults, timer cleanup, execution deadlines, and assembly rejection.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

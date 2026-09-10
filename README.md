@@ -53,6 +53,10 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 
 ### Playing Claudasaur
 
+Open [Claudasaur directly](https://andyrosa.github.io/Sinclaude/simulator.html?run=claudasaur) to load and run the game automatically. Press **Space** on its title screen to start playing. The short link survives refreshes.
+
+`run=claudasaur` selects and runs the game. Saved `asm` code takes precedence if both are provided. **Clear** removes the game selection from the URL.
+
 Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over the execution screen (or tap it) to activate keyboard capture, then press **Space** to start. Find the exit before the Claude-logo-inspired, spiky Claudasaur catches you.
 
 - **W/S** or **Up/Down**: walk forward/backward. Hold to keep moving.

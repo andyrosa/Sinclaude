@@ -7,15 +7,16 @@ window.addEventListener('load', () => {
     updateRetroFontsToggle();
 
     // Load assembly: from URL if present, otherwise default
-    if (!window.sinclaude.loadFromURL()) {
+    const loadedFromURL = window.sinclaude.loadFromURL();
+    if (!loadedFromURL) {
         window.sinclaude.loadDefaultAssembly();
     }
 
     window.sinclaude.setupAssemblyContentObserver();
 
-    // Auto-assemble if assemble parameter is truthy
+    // A named game link launches directly.
     const urlParams = new URLSearchParams(window.location.search);
-    if (isTruthy(urlParams.get('assemble'))) {
+    if (loadedFromURL && urlParams.get('run') === 'claudasaur') {
         window.sinclaude.assembleAndRun();
     }
 });
