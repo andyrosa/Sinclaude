@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sinclaude · Icon studies</title>
+  <link id="tab-icon" rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    :root { color-scheme: dark; font-family: 'Courier New', monospace; background: #111; color: #f4f2eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 44px 28px; }
+    main { max-width: 1080px; margin: auto; }
+    header { border-top: 8px solid #f4f2eb; padding: 24px 0 28px; }
+    .eyebrow, .number, .sizes, footer { font-size: 12px; letter-spacing: .08em; }
+    .eyebrow { color: #aaa; margin: 0 0 16px; }
+    h1 { font-size: clamp(30px, 5vw, 52px); line-height: 1; letter-spacing: -.06em; margin: 0 0 16px; }
+    header p:last-child { color: #bbb; margin: 0; line-height: 1.6; max-width: 660px; }
+    .status { min-height: 45px; padding: 12px 0; border-top: 1px solid #555; color: #e6ca66; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    article { background: #191919; border: 1px solid #555; padding: 16px; }
+    article.selected { border-color: #e6ca66; box-shadow: inset 0 0 0 1px #e6ca66; }
+    .card-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .number { color: #aaa; }
+    .badge { font-size: 11px; color: #e6ca66; visibility: hidden; }
+    .selected .badge { visibility: visible; }
+    .choose { display: grid; place-items: center; width: 100%; height: 156px; border: 0; background: #edece6; cursor: pointer; }
+    .choose:hover { background: white; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #e6ca66; outline-offset: 4px; }
+    .choose img { width: 96px; height: 96px; }
+    img { image-rendering: pixelated; display: block; flex: none; }
+    h2 { font-size: 18px; margin: 18px 0 8px; letter-spacing: -.03em; }
+    .description { font-size: 13px; color: #bbb; line-height: 1.5; min-height: 40px; margin: 0 0 16px; }
+    .sizes { display: flex; align-items: center; gap: 12px; color: #aaa; border-top: 1px solid #3a3a3a; padding-top: 12px; }
+    .swatch { width: 32px; height: 32px; display: grid; place-items: center; background: #edece6; }
+    .swatch.dark { background: #303030; }
+    .sizes a { margin-left: auto; color: #eee; font-size: 11px; text-underline-offset: 4px; }
+    footer { margin-top: 28px; border-top: 1px solid #555; padding-top: 18px; color: #999; line-height: 1.7; }
+    @media (max-width: 780px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 510px) { body { padding: 24px 16px; } .grid { grid-template-columns: 1fr; } .description { min-height: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">SINCLAUDE / 09 FAVICON STUDIES</p>
+      <h1>Sinclair meets Claude.</h1>
+      <p>Nine ways to combine ZX-era pixels with Claude and AI. Choose an icon to preview it in this browser tab. The small samples show its actual size.</p>
+    </header>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <div id="icons" class="grid"></div>
+    <noscript>Enable JavaScript to view the nine icon proposals.</noscript>
+    <footer>16 × 16 pixel designs · enlarged 6× above · small samples: 16px on light / dark, then 32px<br>SVG downloads are self-contained. Selecting a preview only changes this page’s tab icon.</footer>
+  </main>
+  <script>
+    const rect = (x, y, w, h, fill = 'white') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
+    const path = (d, fill = 'white') => `<path d="${d}" fill="${fill}"/>`;
+    // Integer coordinates keep every proposal legible at the native favicon size.
+    const pixels = (rows, x, y, fill = 'white') => rows.flatMap((row, dy) => [...row].map((cell, dx) => cell === '#' ? rect(x + dx, y + dy, 1, 1, fill) : '')).join('');
+    const letters = {
+      S: ['#####','#....','#....','#####','....#','....#','#####'],
+      C: ['.####','#....','#....','#....','#....','#....','.####'],
+      Z: ['#####','....#','...#.','..#..','.#...','#....','#####']
+    };
+    const letter = (name, x, y, fill = 'white') => pixels(letters[name], x, y, fill);
+    const spark = (x, y) => pixels(['..#..','#.#.#','.###.','#####','.###.','#.#.#','..#..'], x, y);
+    const chip = () => rect(3, 3, 10, 10) + rect(4, 4, 8, 8, 'black') + [4, 7, 10].map(n => rect(n, 1, 2, 2) + rect(n, 13, 2, 2) + rect(1, n, 2, 2) + rect(13, n, 2, 2)).join('');
+    const designs = [
+      { name: 'SC monogram', description: 'Sinclair and Claude, side by side in a compact ZX-style character cell.', art: letter('S', 2, 4) + letter('C', 9, 4) },
+      { name: 'ZX spark', description: 'A pixel Z beside a Claude-inspired asterisk. Old silicon, new intelligence.', art: letter('Z', 2, 4) + spark(9, 4) },
+      { name: 'Sinclair spark', description: 'The Sinclair S paired with the radiating shape of Claude’s mark.', art: letter('S', 2, 4) + spark(9, 4) },
+      { name: 'Claude cursor', description: 'A C in an inverse character cell, followed by the waiting terminal cursor.', paper: 'white', art: rect(1, 2, 9, 12, 'black') + letter('C', 3, 4) + rect(11, 11, 4, 3, 'black') },
+      { name: 'ZX / AI', description: 'ZX above AI. The two halves of Sinclaude, spelled out in tiny block letters.', art: pixels(['#####.#...#','...#...#.#.','..#.....#..','.#.....#.#.','#####.#...#'], 2, 2) + pixels(['.###..#####','#...#...#..','#####...#..','#...#...#..','#...#.#####'], 2, 9) },
+      { name: 'Claude on a chip', description: 'A C inside a vintage processor package: Claude meets the Z80.', art: chip() + pixels(['.####','#....','#....','#....','.####'], 5, 5) },
+      { name: 'Sinclair conversation', description: 'A pixel S inside a speech bubble, joining the computer and the AI conversation.', art: path('M1 1h14v12H7l-4 3v-3H1z') + rect(2, 2, 12, 10, 'black') + letter('S', 5, 3) },
+      { name: 'Claude, plotted', description: 'A Claude-inspired burst redrawn as Sinclair graphics, inside a screen border.', art: rect(1, 1, 14, 14) + rect(2, 2, 12, 12, 'black') + pixels(['.....#.....','..#..#..#..','...#.#.#...','#...###...#','.#########.','###########','.#########.','#...###...#','...#.#.#...','..#..#..#..','.....#.....'], 3, 3) },
+      { name: 'SC inverse pair', description: 'Sinclair’s inverse-video trick turns S and C into one shared black-and-white mark.', art: rect(8, 0, 8, 16) + letter('S', 1, 4) + letter('C', 10, 4, 'black') }
+    ];
+    const gallery = document.querySelector('#icons');
+    function selectIcon(index) {
+      document.querySelector('#tab-icon').href = designs[index].uri;
+      gallery.querySelectorAll('article').forEach((card, i) => {
+        card.classList.toggle('selected', i === index);
+        card.querySelector('button').setAttribute('aria-pressed', String(i === index));
+      });
+      document.querySelector('#status').textContent = `IN THIS TAB: ${String(index + 1).padStart(2, '0')} / ${designs[index].name}`;
+    }
+    designs.forEach((design, index) => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">${rect(0, 0, 16, 16, design.paper || 'black')}${design.art}</svg>`;
+      design.uri = 'data:image/svg+xml,' + encodeURIComponent(svg);
+      const card = document.createElement('article');
+      card.innerHTML = `<div class="card-heading"><span class="number">${String(index + 1).padStart(2, '0')}</span><span class="badge">IN THIS TAB</span></div>
+        <button class="choose" type="button" aria-label="Preview ${design.name}" aria-pressed="false"><img src="${design.uri}" alt="${design.name} icon" width="96" height="96"></button>
+        <h2>${design.name}</h2><p class="description">${design.description}</p>
+        <div class="sizes"><span class="swatch"><img src="${design.uri}" alt="16 pixel preview on light" width="16" height="16"></span><span class="swatch dark"><img src="${design.uri}" alt="16 pixel preview on dark" width="16" height="16"></span><img src="${design.uri}" alt="32 pixel preview" width="32" height="32"><a href="${design.uri}" download="sinclaude-${String(index + 1).padStart(2, '0')}.svg" aria-label="Download ${design.name} SVG">SVG ↓</a></div>`;
+      card.querySelector('button').addEventListener('click', () => selectIcon(index));
+      gallery.appendChild(card);
+    });
+    selectIcon(1);
+  </script>
+</body>
+</html>

@@ -98,6 +98,29 @@
  */
 
 class Z80Assembler {
+    static MEMORY_SIZE = 65536;
+    static DIRECTIVE_OPERANDS = {
+        ORG: [1, 1], EQU: [1, 1], DB: [1, Infinity], DEFB: [1, Infinity],
+        DEFW: [1, Infinity], DEFS: [1, 2], END: [0, 1],
+    };
+
+    static _requireRange(value, min, max, description) {
+        if (!Number.isSafeInteger(value) || value < min || value > max) {
+            throw new Error(`${description} out of range (${min} to ${max}): ${value}`);
+        }
+        return value;
+    }
+
+    static _validateMemoryRange(address, size) {
+        Z80Assembler._requireRange(address, 0, Z80Assembler.MEMORY_SIZE, 'Memory address');
+        Z80Assembler._requireRange(size, 0, Z80Assembler.MEMORY_SIZE - address, 'Memory allocation size');
+    }
+
+    _advanceAddress(size) {
+        Z80Assembler._validateMemoryRange(this.currentAddress, size);
+        this.currentAddress += size;
+    }
+
     // --- Constants for operand patterns ---
     static OPERAND = {
         // Immediate values
@@ -231,9 +254,18 @@ class Z80Assembler {
         const parsed = this._parseLine(line, lineNum);
         if (!parsed) return false; // Skip empty/comment lines
 
+        const operandLimits = Z80Assembler.DIRECTIVE_OPERANDS[parsed.mnemonic?.toUpperCase()];
+        if (operandLimits) {
+            const [min, max] = operandLimits;
+            if (parsed.operands.length < min || parsed.operands.length > max) {
+                throw new Error(`Invalid operand count for ${parsed.mnemonic}`);
+            }
+        }
+
         // Process ORG directive first to set addresses before processing labels
         if (parsed.mnemonic && parsed.mnemonic.toUpperCase() === 'ORG') {
-            this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
+            const origin = this._evaluateExpression(parsed.operands[0], this.symbols, lineNum);
+            this.currentAddress = Z80Assembler._requireRange(origin, 0, 65535, 'ORG address');
             // Only set load address on the first ORG directive
             if (!this.firstOrgFound) {
                 this.loadAddress = this.currentAddress;
@@ -284,11 +316,11 @@ class Z80Assembler {
                             this.dbLengths[parsed.label.toUpperCase()] = this._stringLiteralValue(operand).length;
                         }
                     }
-                    this.currentAddress += this._calculateDataSize(parsed);
+                    this._advanceAddress(this._calculateDataSize(parsed));
                     break;
                 case 'DEFW':
                 case 'DEFS':
-                    this.currentAddress += this._calculateDataSize(parsed);
+                    this._advanceAddress(this._calculateDataSize(parsed));
                     break;
                 case 'END':
                     // Stop processing further lines
@@ -299,7 +331,7 @@ class Z80Assembler {
                     const instruction = this._resolveInstruction(parsed, lineNum);
                     if (instruction) {
                         parsed.instruction = instruction;
-                        this.currentAddress += instruction.size;
+                        this._advanceAddress(instruction.size);
                     }
                     break; // Error already reported by _resolveInstruction
             }
@@ -314,7 +346,7 @@ class Z80Assembler {
      * - Reports errors related to undefined labels or out-of-range values.
      */
     _performSecondPass() {
-        this.currentAddress = this.loadAddress;
+        this.currentAddress = 0;
 
         for (const parsed of this.parsedLines) {
             try {
@@ -332,6 +364,10 @@ class Z80Assembler {
         if (!mnemonic || ['ORG', 'EQU', 'END'].includes(mnemonic)) {
             if (mnemonic === 'ORG') {
                 this.currentAddress = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
+            } else if (mnemonic === 'END' && parsed.operands.length === 1) {
+                // Accept the optional END address used by existing sample sources.
+                const address = this._evaluateExpression(parsed.operands[0], this.symbols, parsed.lineNum);
+                Z80Assembler._requireRange(address, 0, 65535, 'END address');
             }
             return;
         }
@@ -350,6 +386,7 @@ class Z80Assembler {
                 const fill = parsed.operands.length > 1
                     ? this._evaluateExpression(parsed.operands[1], this.symbols, parsed.lineNum)
                     : 0;
+                Z80Assembler._requireRange(fill, -128, 255, 'DEFS fill byte');
                 bytes = Array(size).fill(fill & 0xFF);
                 break;
             }
@@ -441,17 +478,13 @@ class Z80Assembler {
             switch (pattern) {
                 case Z80Assembler.OPERAND.IMM8: {
                     const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
-                    if (value < -128 || value > 255) {
-                        throw new Error(`8-bit immediate value out of range (-128 to 255): ${value}`);
-                    }
+                    Z80Assembler._requireRange(value, -128, 255, '8-bit immediate value');
                     bytes.push(value & 0xFF);
                     break;
                 }
                 case Z80Assembler.OPERAND.IMM16: {
                     const value = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
-                    if (value < -32768 || value > 65535) {
-                        throw new Error(`16-bit immediate value out of range (-32768 to 65535): ${value}`);
-                    }
+                    Z80Assembler._requireRange(value, -32768, 65535, '16-bit immediate value');
                     bytes.push(...this._wordToLittleEndianBytes(value));
                     break;
                 }
@@ -459,9 +492,7 @@ class Z80Assembler {
                     // Extract value from inside parentheses, e.g., "(255)" for I/O port
                     const portStr = operandStr.slice(1, -1);
                     const value = this._evaluateExpression(portStr, symbols, parsedLine.lineNum);
-                    if (value < 0 || value > 255) {
-                        throw new Error(`8-bit port address out of range (0-255): ${value}`);
-                    }
+                    Z80Assembler._requireRange(value, 0, 255, '8-bit port address');
                     bytes.push(value & 0xFF);
                     break;
                 }
@@ -469,11 +500,13 @@ class Z80Assembler {
                     // Extract value from inside parentheses, e.g., "(1234)"
                     const addrStr = operandStr.slice(1, -1);
                     const value = this._evaluateExpression(addrStr, symbols, parsedLine.lineNum);
+                    Z80Assembler._requireRange(value, 0, 65535, '16-bit memory address');
                     bytes.push(...this._wordToLittleEndianBytes(value));
                     break;
                 }
                 case Z80Assembler.OPERAND.RELATIVE: {
                     const targetAddr = this._evaluateExpression(operandStr, symbols, parsedLine.lineNum);
+                    Z80Assembler._requireRange(targetAddr, 0, 65535, 'Relative jump address');
                     // Relative offset is from the address *after* the instruction
                     const offset = targetAddr - (this.currentAddress + instruction.size);
                     if (offset < -128 || offset > 127) {
@@ -542,10 +575,11 @@ class Z80Assembler {
             if (this._isStringLiteral(op)) {
                 const processedStr = this._stringLiteralValue(op);
                 for (let i = 0; i < processedStr.length; i++) {
-                    bytes.push(processedStr.charCodeAt(i));
+                    bytes.push(Z80Assembler._requireRange(processedStr.charCodeAt(i), 0, 255, 'DB character byte'));
                 }
             } else {
-                bytes.push(this._evaluateExpression(op, this.symbols, parsed.lineNum) & 0xFF);
+                const value = this._evaluateExpression(op, this.symbols, parsed.lineNum);
+                bytes.push(Z80Assembler._requireRange(value, -128, 255, 'DB byte') & 0xFF);
             }
         }
         return bytes;
@@ -555,6 +589,7 @@ class Z80Assembler {
         const bytes = [];
         for (const op of parsed.operands) {
             const value = this._evaluateExpression(op, this.symbols, parsed.lineNum);
+            Z80Assembler._requireRange(value, -32768, 65535, 'DEFW word');
             bytes.push(...this._wordToLittleEndianBytes(value));
         }
         return bytes;
@@ -1218,6 +1253,9 @@ class ExpressionParser {
         if (this.pos < this.expr.length) {
             throw new Error(`Unexpected character '${this.peek()}' at position ${this.pos}`);
         }
+        if (!Number.isSafeInteger(result)) {
+            throw new Error(`Expression must resolve to a safe integer: ${this.expr}`);
+        }
         return result;
     }
 
@@ -1477,6 +1515,9 @@ class ExpressionParser {
             if (hexValue !== null) {
                 return hexValue;
             }
+            if (!/^\d+$/.test(numStr)) {
+                throw new Error(`Invalid number: ${numStr}`);
+            }
         }
 
         if (numStr === '') {
@@ -1484,7 +1525,7 @@ class ExpressionParser {
         }
 
         const result = parseInt(numStr, base);
-        if (isNaN(result)) {
+        if (!Number.isSafeInteger(result)) {
             throw new Error(`Invalid number: ${numStr}`);
         }
 
@@ -1496,7 +1537,9 @@ class ExpressionParser {
         if (!/^[0-9A-Fa-f]+[Hh]$/.test(token)) {
             return null;
         }
-        return parseInt(token.slice(0, -1), 16);
+        const value = parseInt(token.slice(0, -1), 16);
+        if (!Number.isSafeInteger(value)) throw new Error(`Invalid number: ${token}`);
+        return value;
     }
 
     // Helper functions
@@ -1542,7 +1585,12 @@ class ExpressionParser {
         }
         
         // Parse statement up to comment
-        return this.parseStatement();
+        const statement = this.parseStatement();
+        this.skipWhitespace();
+        if (this.pos < this.expr.length && this.peek() !== ';') {
+            throw new Error(`Unexpected character '${this.peek()}' after statement`);
+        }
+        return statement;
     }
 
     /**
@@ -1638,14 +1686,16 @@ class ExpressionParser {
             if (this.pos >= this.expr.length || this.peek() === ';') break;
             
             const operand = this.parseOperand();
-            if (operand !== null) {
-                operands.push(operand);
-            }
+            if (operand === null || operand === '') throw new Error('Missing operand');
+            operands.push(operand);
             
             this.skipWhitespace();
             if (this.peek() === ',') {
                 this.next(); // consume comma
                 this.skipWhitespace();
+                if (this.pos >= this.expr.length || this.peek() === ';') {
+                    throw new Error('Missing operand after comma');
+                }
             } else {
                 break; // No more operands
             }
@@ -1694,7 +1744,7 @@ class ExpressionParser {
         
         if (this.peek() === quote) {
             content += this.next(); // consume closing quote
-        }
+        } else throw new Error('Unterminated string literal');
         
         return content;
     }
@@ -1710,6 +1760,17 @@ class ExpressionParser {
 
         while (this.pos < this.expr.length) {
             const char = this.peek();
+
+            if (inString && char === '\\') {
+                content += this.next();
+                if (this.pos < this.expr.length) content += this.next();
+                continue;
+            }
+            // AF' uses an apostrophe as part of its register name, not a quote.
+            if (!inString && char === "'" && /[A-Za-z0-9_]$/.test(content)) {
+                content += this.next();
+                continue;
+            }
 
             // Handle string boundaries
             if (!inString && (char === '"' || char === "'")) {
@@ -1754,6 +1815,14 @@ class ExpressionParser {
 
 // Static utility method for loading opcodes into memory
 Z80Assembler.loadOpcodesIntoMemory = function(memory, instructionDetails) {
+    // Validate all blocks first so invalid input cannot leave a partially loaded program.
+    for (const detail of instructionDetails) {
+        if (detail.opcodes.length === 0) continue;
+        Z80Assembler._validateMemoryRange(detail.startAddress, detail.opcodes.length);
+        if (typeof memory.length === 'number' && detail.startAddress + detail.opcodes.length > memory.length) {
+            throw new Error('Program does not fit in destination memory');
+        }
+    }
     instructionDetails.forEach(detail => {
         if (detail.startAddress !== null && detail.opcodes.length > 0) {
             for (let i = 0; i < detail.opcodes.length; i++) {

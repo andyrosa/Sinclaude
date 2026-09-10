@@ -359,6 +359,7 @@ button:focus-visible {
 
 /* Screen */
 #screen {
+    position: relative;
     background: var(--editable-text-bgc);
     border: 2px solid var(--border-c);
     color: var(--editable-text-fgc);
@@ -405,6 +406,36 @@ button:focus-visible {
 
 .screen-char.sinclair-font:not(.inverted) {
     transform: scaleX(2);
+}
+
+/* PLOT cells must meet at their edges; stretched font glyphs leave seams and
+   produce colored text-antialiasing fringes, especially in stippled faces. */
+.screen-char.plot-graphics {
+    min-width: 0;
+    min-height: 0;
+    font-size: 0;
+    transform: none;
+    background: transparent;
+}
+
+.plot-screen {
+    position: absolute;
+    inset: 5px;
+    width: calc(100% - 10px);
+    height: calc(100% - 10px);
+    overflow: visible;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.plot-cell {
+    --plot-ink: var(--editable-text-fgc);
+    --plot-paper: var(--editable-text-bgc);
+}
+
+.plot-cell.inverted {
+    --plot-ink: var(--editable-text-bgc);
+    --plot-paper: var(--editable-text-fgc);
 }
 
 
@@ -545,15 +576,23 @@ button:focus-visible {
     border-radius: 3px;
 }
 
-/* Expand hint for collapsed listing section */
-.listing-section.collapsed h3::after,
-.console-section.collapsed h3::after {
-    content: "▼ Expand";
-    position: absolute;
-    right: 0;
-    top: 0;
+/* Keep the disclosure cue in the header's layout, away from its action buttons.
+   CSS borders avoid depending on a font or encoding for the arrow glyph. */
+.listing-section h3::before,
+.console-section h3::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid currentColor;
     color: var(--surface-muted-text-c);
-    white-space: nowrap;
+}
+
+.listing-section.collapsed h3::before,
+.console-section.collapsed h3::before {
+    transform: rotate(-90deg);
 }
 
 .console-section {
@@ -822,11 +861,7 @@ h3 .header-item {
     gap: 8px;
 }
 
-.console-section h3 {
-    /* Single expand button should sit at the far right */
-    justify-content: space-between;
-}
-
+.console-section h3 .header-item:first-of-type,
 .listing-section h3 .header-item:first-of-type {
     /* push the first header-item to the right so the group stays together */
     margin-left: auto;

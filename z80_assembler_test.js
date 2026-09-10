@@ -98,8 +98,58 @@ class Z80AssemblerTestClass extends TestFramework {
     this.testLineAddresses();
     this.testBranchRange();
     this.testMultipleOrg();
+    this.testMemoryBoundsAndCompleteParsing();
 
     return this.completeTests();
+  }
+
+  testMemoryBoundsAndCompleteParsing() {
+    for (const code of [
+      'ORG -1\nDB 42', 'ORG 65536\nLD A,42', 'ORG 65535\nLD A,42',
+      'ORG 65535\nDEFW 1', 'ORG 65535\nDEFS 2', 'DEFS -1', 'DEFS 65537',
+      'DEFS 1000000000', 'ORG 65535\nDB 1\nDB 2', 'LD A,(65536)', 'LD (-1),A',
+      'LD HL,(65536)', 'DB 256', 'DB -129', 'DEFW 65536', 'DEFW -32769', 'DEFS 2,256',
+    ]) this.assertAssemblyError(code, 'out of range');
+
+    this.assertAssemblyError('ORG ' + '9'.repeat(310) + '\nNOP', 'Invalid number');
+    this.assertAssemblyError('ORG 9007199254740991*9007199254740991\nNOP', 'safe integer');
+    for (const code of ['LD A,12garbage', 'LD A,123abc', 'LD A,0b101', 'DB 12Hgarbage']) {
+      this.assertAssemblyError(code, 'Invalid number');
+    }
+    for (const code of ['DB "ABC" junk', 'DB "A" "B"', 'label: 123']) {
+      this.assertAssemblyError(code, 'Unexpected character');
+    }
+    for (const code of ['DB 1,', 'DB ,1', 'DB 1,,2', 'DB 1, ; comment']) {
+      this.assertAssemblyError(code, 'Missing operand');
+    }
+    for (const code of ['ORG', 'ORG 0,100', 'DB', 'DEFW', 'DEFS', 'DEFS 1,2,3', 'END 0,1']) {
+      this.assertAssemblyError(code, 'Invalid operand count');
+    }
+    this.assertAssemblyError('END 12garbage', 'Invalid number');
+    this.assertAssemblyError('DB "unterminated', 'Unterminated string literal');
+    this.assertAssemblySuccess("LD A,'\\'' ; apostrophe", [0x3e, 39]);
+    this.assertAssemblySuccess("DB '\\'',2 ; apostrophe then comma", [39, 2]);
+    this.assertAssemblySuccess("EX AF,AF' ; shadow register", [0x08]);
+    this.assertAssemblySuccess('DB "a; b, \\"quoted\\"",42 ; comment', [...'a; b, "quoted"'].map(c => c.charCodeAt(0)).concat(42));
+    this.assertAssemblySuccess('DB -128,255\nDEFW -32768,65535\nDEFS 1,-1', [128,255,0,128,255,255,255]);
+    this.assertAssemblySuccess('start: NOP\nEND start\nINVALID', [0]);
+    this.assertAssemblySuccess('start: JR start\nORG 100\nHALT', [0x18,0xfe,0x76]);
+
+    for (const source of ['ORG 65535\nDB 42', 'ORG 65534\nDEFW 10794', 'DEFS 65536,42\nEND']) {
+      const result = this.assertAssembles(source, 'Last RAM byte can be populated: ' + source);
+      if (!result.success) continue;
+      const memory = new Uint8Array(65536);
+      Z80Assembler.loadOpcodesIntoMemory(memory, result.instructionDetails);
+      this.assert(memory[65535] === 42, 'Last RAM byte is actually loaded');
+    }
+    const memory = new Uint8Array(65536);
+    let rejected = false;
+    try {
+      Z80Assembler.loadOpcodesIntoMemory(memory, [
+        { startAddress: 0, opcodes: [42] }, { startAddress: 65535, opcodes: [1,2] },
+      ]);
+    } catch (error) { rejected = error.message.includes('out of range'); }
+    this.assert(rejected && memory[0] === 0, 'Invalid loading fails before any RAM is changed');
   }
 
   // Test 13: Line addresses functionality

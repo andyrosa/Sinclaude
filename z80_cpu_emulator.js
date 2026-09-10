@@ -84,13 +84,14 @@ class Z80CPU {
      * @param {Uint8Array} memory - System memory array (64KB for Z80)
      * @param {Uint8Array} iomap - I/O port map for IN/OUT instructions (256 ports)
      * @param {number} steps - Maximum number of instructions to execute
+     * @param {number} deadline - Optional performance.now() deadline for interactive execution
      * @returns {Object} Execution result
      * @returns {number} returns.instructionsExecuted - Actual instructions completed
      * @returns {boolean} returns.halted - Whether CPU halted (HLT instruction)
      * @returns {Object} returns.registers - Final CPU register state
      * @returns {string|null} returns.error - Error message if execution failed
      */
-    executeSteps(memory, iomap, steps) {
+    executeSteps(memory, iomap, steps, deadline = Infinity) {
         let instructionsExecuted = 0;
         let error = null;
 
@@ -102,13 +103,19 @@ class Z80CPU {
         this.iomap = iomap;
 
         for (let i = 0; i < steps && !this.halted && !error; i++) {
+            // Amortize clock reads over small groups; a large LDIR batch must still
+            // yield to the UI. Unbudgeted tests and benchmarks retain their step count.
+            if (deadline !== Infinity && (i & 31) === 0 && performance.now() >= deadline) break;
+            const instructionAddress = this.PC;
             try {
                 error = this.executeInstruction();
                 if (error !== null) {
+                    this.PC = instructionAddress;
                     break;
                 }
                 instructionsExecuted++;
             } catch (e) {
+                this.PC = instructionAddress;
                 error = `CPU Exception: ${e.message}`;
                 break;
             }

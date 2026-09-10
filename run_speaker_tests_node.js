@@ -15,6 +15,7 @@ const simulator = Object.create(Simulator.prototype);
 simulator.ioMap = new Uint8Array(256);
 const oscillators = [], gains = [];
 simulator.audioContext = {
+  state: 'running',
   destination: {},
   createOscillator() {
     const node = {

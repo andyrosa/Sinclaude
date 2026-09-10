@@ -14,20 +14,43 @@ const MAX_URL_LENGTH = 2000; // supposed to be 32K but erring at a lot less
 const BEEP_GAIN = 0.1;
 const BUTTON_EDIT_FOCUS_DELAY_MS = 10;
 
-// Sinclair block characters that should not use retro font
-const sinclairBlockChars = [6, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22];
+// Retro graphics fill the cell without depending on a font's bearings or
+// antialiasing. Bits describe top-left, top-right, bottom-left, bottom-right.
+const sinclairPlotMasks = new Map([
+  [32, 0], [6, 5], [8, 12], [9, 4], [13, 8], [14, 2], [16, 10],
+  [17, 6], [18, 9], [19, 14], [20, 13], [21, 3], [22, 7],
+]);
+// Crisp SVG edges snap the monochrome pixels together even when browser zoom
+// and display scaling put cell boundaries between device pixels.
+function plotMarkup(size, inkSquares) {
+  const unit = 8 / size;
+  const path = inkSquares.map(([x, y]) => `M${x * unit} ${y * unit}h${unit}v${unit}h-${unit}z`).join('');
+  return `<rect width="8" height="8" fill="var(--plot-paper)"/><path d="${path}" fill="var(--plot-ink)"/>`;
+}
 
-// Keys a game button can be named after. sinclairCode is the keyboard-port value for
-// keys without a printable character; null means the key goes through unicodeToSinclair.
+function plotBlockMarkup(mask) {
+  const squares = [];
+  for (let bit = 0; bit < 4; bit++) {
+    if (mask & (1 << bit)) squares.push([bit % 2, bit >> 1]);
+  }
+  return plotMarkup(2, squares);
+}
+
+const sinclairPlotPatterns = new Map([...sinclairPlotMasks].map(([code, mask]) => [code, plotBlockMarkup(mask)]));
+sinclairPlotPatterns.set(7, plotMarkup(8, Array.from({ length: 32 }, (_, i) => {
+  const y = i >> 2;
+  return [2 * (i % 4) + (y % 2), y];
+})));
+
+// Named keys use explicit port values, separate from printable character codes.
 const SPECIAL_KEYS = [
-  { keyCode: 32, name: "Space", sinclairCode: null },
-  { keyCode: 27, name: "Escape", sinclairCode: 12 },
-  { keyCode: 38, name: "ArrowUp", sinclairCode: 145 },
-  { keyCode: 40, name: "ArrowDown", sinclairCode: 147 },
-  { keyCode: 37, name: "ArrowLeft", sinclairCode: 144 },
-  { keyCode: 39, name: "ArrowRight", sinclairCode: 146 },
-  { keyCode: 13, name: "Enter", sinclairCode: 13 },
-  { keyCode: 9, name: "Tab", sinclairCode: null },
+  { name: "Space", sinclairCode: 32 },
+  { name: "Escape", sinclairCode: 12 },
+  { name: "ArrowUp", sinclairCode: 145 },
+  { name: "ArrowDown", sinclairCode: 147 },
+  { name: "ArrowLeft", sinclairCode: 144 },
+  { name: "ArrowRight", sinclairCode: 146 },
+  { name: "Enter", sinclairCode: 13 },
 ];
 
 class Simulator {
@@ -96,7 +119,7 @@ class Simulator {
       "⸮",
       "⸮",
       "▌",
-      "⸮",
+      "▒",
       "▄",
       "▖",
       "⸮",
@@ -436,25 +459,27 @@ class Simulator {
 
       // Add event listeners for both game functionality and edit mode
       button.addEventListener("pointerdown", (e) => {
-        this.handleButtonClick(button);
+        this.handleButtonClick(button, `pointer:${e.pointerId}`);
+        if (!this.buttonEditMode) button.setPointerCapture(e.pointerId);
         e.preventDefault();
       });
-      button.addEventListener("pointerup", (e) => {
-        if (!this.buttonEditMode) {
-          this.releaseKey();
-        }
+      const releasePointer = (e) => {
+        this.releaseKey(`pointer:${e.pointerId}`);
         e.preventDefault();
-      });
+      };
+      button.addEventListener("pointerup", releasePointer);
+      button.addEventListener("pointercancel", releasePointer);
+      button.addEventListener("lostpointercapture", releasePointer);
 
       gameButtonsDiv.appendChild(button);
     });
   }
 
-  handleButtonClick(button) {
+  handleButtonClick(button, keyId = button) {
     if (this.buttonEditMode) {
       this.editButtonText(button);
     } else {
-      this.buttonClick(button);
+      this.buttonClick(button, keyId);
     }
   }
 
@@ -464,10 +489,7 @@ class Simulator {
     input.className = "edit-input";
     input.type = "text";
     input.value = text;
-    // Set maxLength to the longest key name in keyCodeToKeyName
-    input.maxLength = Math.max(
-      ...Array.from(this.keyCodeToKeyName.values()).map((name) => name.length)
-    );
+    input.maxLength = Math.max(...SPECIAL_KEYS.map((key) => key.name.length));
     button.innerHTML = "";
     button.appendChild(input);
 
@@ -497,39 +519,13 @@ class Simulator {
         finalText = text;
       }
 
-      button.innerHTML = finalText;
+      button.textContent = finalText;
     };
 
     input.addEventListener("blur", finishEdit);
   }
 
   setupKeyboard() {
-    /*
-            ### Keyboard Processing Pipeline (Example: Escape Key)
-    
-            **Direct Keyboard Input:**
-            1. **Key Press** to `keydown` event handler calls `setKey(27)` directly.
-            2. **Special Handling** → `setKey(27)` maps 27 → 12 (Sinclair ESC code).
-            3. **Memory Poke** → `OutPort()` writes 12 to address KEYBOARD_PORT.
-    
-            **Programmable Button Input:**
-            1. **User Configuration** → User types "Escape" in a button's textbox.
-            2. **Button Click** → `buttonClick()` reads "Escape" from the button's caption.
-            3. **Code Conversion** → `labelToKeyCodeOrNull("Escape")` returns 27.
-            4. **Special Handling** → `setKey(27)` maps 27 → 12 (Sinclair ESC code).
-            5. **Memory Poke** → `OutPort()` writes 12 to address KEYBOARD_PORT.
-    
-            **Keyboard Capture Activation:**
-            - **Hover**: Activated when the `.execution-section` is hovered.
-            - **Focus**: Activated when the `.execution-section` gains focus (e.g., via tabbing).
-            - **Touch**: Activated when the `.execution-section` is touched on mobile devices.
-    
-            **Keyboard Capture Deactivation:**
-            - **Mouse Leave**: Deactivated when the `.execution-section` is no longer hovered.
-            - **Blur**: Deactivated when the `.execution-section` loses focus.
-            - **Outside Touch**: Deactivated when a touch occurs outside the `.execution-section`.
-            */
-
     const executionSection = document.querySelector(".execution-section");
     if (!executionSection) {
       userMessageAboutBug(
@@ -572,7 +568,7 @@ class Simulator {
     const deactivateCapture = () => {
       this.keyboardCaptureActive = false;
       renderKeyboardStatus();
-      this.setKey(KBD_NO_KEY_PRESSED);
+      this.releaseAllKeys();
     };
 
     // Set initial state
@@ -583,6 +579,10 @@ class Simulator {
     executionSection.addEventListener("mouseleave", deactivateCapture);
     executionSection.addEventListener("focus", activateCapture);
     executionSection.addEventListener("blur", deactivateCapture);
+    window.addEventListener("blur", () => this.releaseAllKeys());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.releaseAllKeys();
+    });
 
     // Mobile: Touch-based keyboard capture
     executionSection.addEventListener("pointerdown", activateCapture);
@@ -594,101 +594,67 @@ class Simulator {
       }
     });
 
-    // Don't capture keyboard input when user is typing in input boxes or textareas
+    // Hover capture must not steal input from the assembly editor either.
     const isTypingInFormField = (e) =>
-      e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+      e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable;
+    // e.code identifies the physical key even if Shift changes e.key before keyup.
+    const keyId = (e) => `keyboard:${e.code || e.key}`;
 
     // Document-level keyboard capture - only process when capture is active
     document.addEventListener("keydown", (e) => {
       if (this.keyboardCaptureActive && !isTypingInFormField(e)) {
-        // e.keyCode is not ASCII outside digits and letters (Meta is 91 = "[",
-        // F1 is 112 = "p"), so derive the code from the key name the same way
-        // button captions do. Keys with no character (Alt, Shift, Ctrl, F-keys)
-        // return null and must not press anything.
-        const keyCodeOrNull = this.labelToKeyCodeOrNull(e.key);
-        if (keyCodeOrNull !== null) {
-          this.setKey(keyCodeOrNull);
-        }
+        this.pressKey(keyId(e), e.key);
         e.preventDefault(); // Prevent default browser behavior
       }
     });
 
     document.addEventListener("keyup", (e) => {
+      // Release a tracked key even if focus moved to an input after keydown.
+      this.releaseKey(keyId(e));
       if (this.keyboardCaptureActive && !isTypingInFormField(e)) {
-        this.setKey(KBD_NO_KEY_PRESSED);
         e.preventDefault();
       }
     });
   }
 
   initializeKeyMappings() {
-    // Pre-populate bidirectional mapping for special keys only
-    this.keyCodeToKeyName = new Map(
-      SPECIAL_KEYS.map((key) => [key.keyCode, key.name])
-    );
-    // lowercase for easier find
-    this.lcKeyNameToKeyCode = new Map(
-      SPECIAL_KEYS.map((key) => [key.name.toLowerCase(), key.keyCode])
-    );
-    this.keyCodeToSinclairCode = new Map(
-      SPECIAL_KEYS.filter((key) => key.sinclairCode !== null).map((key) => [
-        key.keyCode,
-        key.sinclairCode,
-      ])
-    );
+    this.specialKeysByName = new Map(SPECIAL_KEYS.map((key) => [key.name.toLowerCase(), key]));
+    this.heldKeys = new Map();
+    this.releaseAllKeys();
   }
 
   toReadableKeyLabel(typedCaption) {
     if (!typedCaption || typeof typedCaption !== "string") {
       return null;
     }
-    // Normalize input to lowercase
-    const lcTypedCaption = typedCaption.toLowerCase();
-
-    if (this.lcKeyNameToKeyCode.has(lcTypedCaption)) {
-      const code = this.lcKeyNameToKeyCode.get(lcTypedCaption);
-      return this.keyCodeToKeyName.get(code);
-    }
-
-    // If single character and printable ASCII (32-136), keep as is
-    if (lcTypedCaption.length === 1) {
-      const keyCode = lcTypedCaption.charCodeAt(0);
-      if (keyCode >= 32 && keyCode <= 136) {
-        return typedCaption;
-      }
-    }
-
-    return null; // Invalid input
+    const special = this.specialKeysByName.get(typedCaption.toLowerCase());
+    if (special) return special.name;
+    return this.labelToSinclairCodeOrNull(typedCaption) === null ? null : typedCaption;
   }
 
-  labelToKeyCodeOrNull(label) {
+  labelToSinclairCodeOrNull(label) {
     if (!label || typeof label !== "string") {
       return null;
     }
 
-    // Try to get keyCode from mapping
-    const keyCode = this.lcKeyNameToKeyCode.get(label.toLowerCase());
-    if (keyCode) {
-      return keyCode;
-    }
+    const special = this.specialKeysByName.get(label.toLowerCase());
+    if (special) return special.sinclairCode;
 
-    // For single characters, get charCode
+    // Character codes must never pass through a legacy browser keyCode lookup:
+    // '%' and ArrowLeft both used 37, despite being different Sinclair inputs.
     if (label.length === 1) {
-      return label.toUpperCase().charCodeAt(0);
+      const code = this.unicodeToSinclairMap.get(label.toUpperCase());
+      if (code !== undefined) return code;
     }
 
     return null;
   }
 
-  buttonClick(button) {
+  buttonClick(button, keyId = button) {
     // The button caption names the key to press
     const value = button.textContent.trim();
 
-    const keyCodeOrNull = this.labelToKeyCodeOrNull(value);
-
-    if (keyCodeOrNull !== null) {
-      this.setKey(keyCodeOrNull);
-    } else {
+    if (!this.pressKey(keyId, value)) {
       userMessageAboutBug(
         "Cannot press key",
         `Invalid configuration "${value}"`
@@ -696,8 +662,28 @@ class Simulator {
     }
   }
 
-  releaseKey() {
-    // Release key (send no-key value)
+  pressKey(keyId, label) {
+    const code = this.labelToSinclairCodeOrNull(label);
+    if (code === null) return false;
+    // Repeats must not make an older held key take precedence over a newer press.
+    if (!this.heldKeys.has(keyId)) {
+      this.heldKeys.set(keyId, code);
+      this.updateHeldKey();
+    }
+    return true;
+  }
+
+  releaseKey(keyId) {
+    if (this.heldKeys.delete(keyId)) this.updateHeldKey();
+  }
+
+  updateHeldKey() {
+    this.setKey(this.heldKeys.size === 0
+      ? KBD_NO_KEY_PRESSED : Array.from(this.heldKeys.values()).at(-1));
+  }
+
+  releaseAllKeys() {
+    this.heldKeys.clear();
     this.setKey(KBD_NO_KEY_PRESSED);
   }
 
@@ -727,7 +713,7 @@ class Simulator {
 
   playBeep(frequency, duration, volume = BEEP_DEFAULT_VOLUME) {
     // A muted request needs no oscillator, but the caller still clears it.
-    if (duration === 0 || volume === 0 || !this.audioContext) {
+    if (duration === 0 || volume === 0 || !this.audioContext || this.audioContext.state !== "running") {
       return;
     }
 
@@ -759,27 +745,13 @@ class Simulator {
       this.keyCodeCurrent = keyCode;
     }
 
-    if (keyCode === KBD_NO_KEY_PRESSED) {
-      this.OutPort(KEYBOARD_PORT, KBD_NO_KEY_PRESSED & 0xff); // no-key
-    } else if (this.keyCodeToSinclairCode.has(keyCode)) {
-      this.OutPort(KEYBOARD_PORT, this.keyCodeToSinclairCode.get(keyCode));
-    } else {
-      // Keys with no Sinclair character (Alt, Shift, Ctrl, F-keys, ...) must read as
-      // no-key. unicodeToSinclair's space fallback is for display text only; using
-      // it here made every unmapped key act as Space.
-      const sinclairCode = this.unicodeToSinclairMap.get(String.fromCharCode(keyCode));
-      this.OutPort(
-        KEYBOARD_PORT,
-        sinclairCode === undefined ? KBD_NO_KEY_PRESSED & 0xff : sinclairCode
-      );
-    }
+    this.OutPort(KEYBOARD_PORT, keyCode & 0xff);
   }
 
   bootShow() {
     // Define stage configuration (stage function, duration in ms before start the next one)
     // duration -1 means last one
     this.stageConfig = [
-      { run: () => this.displayCharacterGrid(), duration: 1000 },
       { run: () => this.benchmarkCPU(), duration: 1000 },
       { run: () => this.showSinclairCopyright(), duration: 1 },
       { run: () => this.reportInstructionSetAnalysis(), duration: 1 },
@@ -843,6 +815,8 @@ class Simulator {
   // Setting isBootSequenceRunning false also stops startStage from continuing.
   finishBootSequence() {
     this.isBootSequenceRunning = false;
+    this.clearTimer(this.currentStageTimer);
+    this.currentStageTimer = null;
     this.setScreenPointerHandler(null);
   }
 
@@ -952,61 +926,6 @@ class Simulator {
     );
   }
 
-  displayCharacterGrid() {
-    // Display characters 0-255 with format: "00:XXXX 04:XXXX 08:XXXX 0C:XXXX"
-
-    this.clearScreen();
-    this.displayTextCentered("CHARACTER SET TEST", 0);
-    this.displayTextCentered("-".repeat(SCREEN_WIDTH), 1);
-    // Start character display from line 2 (index 1)
-    let currentLine = 2;
-
-    // Display all 256 characters across remaining lines (22 lines available)
-    // We can fit 16 characters per line with format "00:XXXX 04:XXXX 08:XXXX 0C:XXXX"
-    // This gives us exactly 16 lines for 256 characters (256/16 = 16)
-    for (
-      let charCode = 0;
-      charCode < 256 && currentLine < SCREEN_HEIGHT;
-      charCode += 16
-    ) {
-      let screenCol = 0;
-
-      // 4 groups of 4 characters each
-      for (let group = 0; group < 4 && screenCol < SCREEN_WIDTH - 6; group++) {
-        const groupStartCode = charCode + group * 4;
-        if (groupStartCode >= 256) break;
-
-        const screenAddr = this.screenAddress(currentLine, screenCol);
-
-        // Write starting hex code (2 chars)
-        const startCodeStr = formatHex2(groupStartCode);
-        this.memory[screenAddr] = this.unicodeToSinclair(startCodeStr[0]);
-        this.memory[screenAddr + 1] = this.unicodeToSinclair(startCodeStr[1]);
-
-        // Write colon
-        this.memory[screenAddr + 2] = this.unicodeToSinclair(":");
-
-        // Write 4 characters
-        for (let i = 0; i < 4; i++) {
-          const code = groupStartCode + i;
-          if (code < 256) {
-            this.memory[screenAddr + 3 + i] = code;
-          }
-        }
-        screenCol += 7; // 2 hex + colon + 4 chars = 7
-        this.memory[this.screenAddress(currentLine, screenCol)] =
-          this.unicodeToSinclair(" ");
-        screenCol++;
-      }
-      currentLine++;
-    }
-
-    // Fill remaining lines with Line n up to 23
-    for (; currentLine < SCREEN_HEIGHT; currentLine++) {
-      this.displayTextAtPosition(`Line ${currentLine}`, currentLine, 0);
-    }
-  }
-
   showSinclairCopyright() {
     this.clearScreen();
 
@@ -1103,9 +1022,13 @@ class Simulator {
   }
   // Timer management methods
   createTimer(callback, interval, isInterval) {
+    const onTimeout = () => {
+      this.activeTimers.delete(timerId);
+      callback();
+    };
     const timerId = isInterval
       ? setInterval(callback, interval)
-      : setTimeout(callback, interval);
+      : setTimeout(onTimeout, interval);
     this.activeTimers.add(timerId);
     return timerId;
   }
@@ -1192,6 +1115,14 @@ class Simulator {
     // Clear existing content
     this.screen.innerHTML = "";
     this.screenElements = [];
+    // One rasterization surface keeps adjacent cells on the same device-pixel
+    // grid. Separate SVG viewports can round their edges differently at zoom.
+    this.plotScreen = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    this.plotScreen.setAttribute("class", "plot-screen");
+    this.plotScreen.setAttribute("viewBox", "0 0 256 192");
+    this.plotScreen.setAttribute("preserveAspectRatio", "none");
+    this.plotScreen.setAttribute("shape-rendering", "crispEdges");
+    this.screen.appendChild(this.plotScreen);
 
     // Create individual character divs for precise grid positioning
     for (let line = 0; line < SCREEN_HEIGHT; line++) {
@@ -1213,12 +1144,33 @@ class Simulator {
 
   updateCharacterAt(index, byte) {
     const element = this.screenElements[index];
+    const code = byte & 0x7f;
+    const plot = this.useSinclairFont && sinclairPlotPatterns.has(code);
 
-    element.textContent = this.sinclairToUnicode(byte);
+    if (plot) {
+      if (!element.plotElement) {
+        element.textContent = "";
+        element.plotElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        element.plotElement.setAttribute("transform", `translate(${index % SCREEN_WIDTH * 8} ${Math.floor(index / SCREEN_WIDTH) * 8})`);
+        this.plotScreen.appendChild(element.plotElement);
+      }
+      // Inversion changes the inherited colors, not the shape or its DOM.
+      if (element.plotCode !== code) element.plotElement.innerHTML = sinclairPlotPatterns.get(code);
+      element.plotElement.setAttribute("class", byte >= 128 ? "plot-cell inverted" : "plot-cell");
+      element.plotCode = code;
+    } else {
+      if (element.plotElement) {
+        element.plotElement.remove();
+        delete element.plotElement;
+      }
+      element.textContent = this.sinclairToUnicode(byte);
+      delete element.plotCode;
+    }
     element.classList.toggle("inverted", byte >= 128);
+    element.classList.toggle("plot-graphics", plot);
     element.classList.toggle(
       "sinclair-font",
-      this.useSinclairFont && !sinclairBlockChars.includes(byte)
+      this.useSinclairFont && !plot
     );
   }
 
@@ -1343,13 +1295,13 @@ class Simulator {
     machineCodeDiv.classList.toggle("error", isError);
   }
 
-  clearAssembly() {
+  clearAssembly({ preserveURL = false } = {}) {
     this.setAssemblyCode("");
     this.clearAddressAndOpcodesColumns();
     this.setMagazineListing("", false);
     this.instructionDetails = [];
     this.setState(STATE.NOT_READY);
-    this.updateURL("");
+    if (!preserveURL) this.updateURL("");
   }
 
   updateButtonVisibility() {
@@ -1374,22 +1326,25 @@ class Simulator {
     }
   }
 
-  loadAssemblyCode(code) {
+  loadAssemblyCode(code, options) {
     // Remove first line feed if it's followed by non-blank content
     if (code.startsWith("\n") && code.length > 1 && code[1].trim() !== "") {
       code = code.substring(1);
     }
 
     // Clear everything first, then load new code
-    this.clearAssembly();
+    this.clearAssembly(options);
     this.setAssemblyCode(code);
   }
 
   loadDefaultAssembly() {
-    this.loadAssemblyCode(DEFAULT_ASM);
+    this.loadCharacterSetAssembly();
   }
   loadBasicsAssembly() {
     this.loadAssemblyCode(BASICS_ASM);
+  }
+  loadCharacterSetAssembly() {
+    this.loadAssemblyCode(CHARACTER_SET_ASM);
   }
   loadSpaceInvaderAssembly() {
     this.loadAssemblyCode(SPACE_INVADER_ASM);
@@ -1403,6 +1358,7 @@ class Simulator {
     const loaders = {
       default: () => this.loadDefaultAssembly(),
       basics: () => this.loadBasicsAssembly(),
+      characterSet: () => this.loadCharacterSetAssembly(),
       spaceInvader: () => this.loadSpaceInvaderAssembly(),
       claudasaur: () => this.loadClaudasaurAssembly(),
     };
@@ -1420,6 +1376,8 @@ class Simulator {
   }
 
   assembleAndRun() {
+    // Boot screens and benchmarks must not overwrite or interrupt a user program.
+    this.finishBootSequence();
     const sourceCode = this.getAssemblyCode();
     const assembler = new Z80Assembler();
     const result = assembler.assemble(sourceCode);
@@ -1448,26 +1406,15 @@ class Simulator {
 
     this.loadAddress = result.loadAddress;
     this.resetBeepPorts();
-    // Initialize audio context for beep functionality
-    if (!this.audioContext) {
-      try {
-        this.audioContext = new AudioContext();
-      } catch (e) {
-        userMessage(
-          "Audio context initialization failed - beep functionality disabled"
-        );
-      }
-    }
+    this.initializeAudio();
 
     // Store instruction details for opcode display and line mapping
     this.instructionDetails = result.instructionDetails;
     this.renderAssemblyLines();
 
-    // Load machine code into memory using shared memory loading function
-    Z80Assembler.loadOpcodesIntoMemory(this.memory, this.instructionDetails);
-
-    // Clear the screen when assembling and running
+    // Clear stale screen contents before loading any explicit screen data or code.
     this.clearScreen();
+    Z80Assembler.loadOpcodesIntoMemory(this.memory, this.instructionDetails);
 
     if (this.state === STATE.FREE_RUNNING) {
       // Hot-reload case: preserve CPU state, just inform user
@@ -1572,7 +1519,7 @@ class Simulator {
 
       if (encoded) {
         let sourceCode = decodeURIComponent(atob(encoded));
-        this.loadAssemblyCode(sourceCode);
+        this.loadAssemblyCode(sourceCode, { preserveURL: true });
         return true;
       }
     } catch (e) {
@@ -1724,8 +1671,8 @@ class Simulator {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.clearNonEssentialTimers();
-        this.cleanupAudio();
       }
+      this.updateAudioState();
     });
   }
 
@@ -1737,14 +1684,39 @@ class Simulator {
     }
   }
 
-  cleanupAudio() {
-    // Close audio context (individual oscillators will clean themselves up)
-    if (this.audioContext && this.audioContext.state !== "closed") {
-      try {
-        this.audioContext.close();
-      } catch (e) {
-        // Context might already be closed
+  initializeAudio() {
+    try {
+      if (!this.audioContext || this.audioContext.state === "closed") {
+        this.audioContext = new AudioContext();
       }
+      this.updateAudioState();
+    } catch (error) {
+      userMessage(`Audio initialization failed: ${error.message}`);
+    }
+  }
+
+  async updateAudioState() {
+    const context = this.audioContext;
+    if (!context || context.state === "closed") return;
+    const hidden = document.hidden;
+    try {
+      // Queue every transition so a quick hide/show cannot lose a resume while
+      // the preceding suspend is still pending.
+      if (hidden) await context.suspend();
+      else await context.resume();
+    } catch (error) {
+      userMessage(`Audio playback could not ${hidden ? "pause" : "resume"}: ${error.message}`);
+    }
+  }
+
+  async cleanupAudio() {
+    const context = this.audioContext;
+    this.audioContext = null;
+    if (!context || context.state === "closed") return;
+    try {
+      await context.close();
+    } catch (error) {
+      userMessage(`Audio cleanup failed: ${error.message}`);
     }
   }
 
@@ -1794,7 +1766,8 @@ class Simulator {
       const result = this.cpu.executeSteps(
         this.memory,
         this.ioMap,
-        RUN_BATCH_INSTRUCTIONS
+        RUN_BATCH_INSTRUCTIONS,
+        endTime
       );
       this.instructionCount += result.instructionsExecuted;
 
@@ -1802,6 +1775,9 @@ class Simulator {
       this.handleBeepPortChange();
 
       if (result.error) {
+        this.setState(STATE.STEPPING);
+        this.lastPC = null;
+        this.updateHardwareDisplay();
         userMessageAboutBug("CPU error during run", `${result.error}`);
         return;
       }
@@ -1814,7 +1790,10 @@ class Simulator {
     }
     // Schedule next execution cycle
     this.runLoopInterval = this.createTimer(
-      () => this.runLoop(),
+      () => {
+        this.runLoopInterval = null;
+        this.runLoop();
+      },
       RUN_LOOP_INTERVAL_MS,
       false
     );

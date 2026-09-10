@@ -15,7 +15,7 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - Single-step and continuous execution modes
 - Register, stack, and performance counter display
 - ZX81-style screen buffer (32x24)
-- Block characters and (Spectrum) lowercase characters
+- Block characters and (Spectrum) lowercase characters; character 7 is the stippled shade used for Claudasaur's wall faces.
 - Characters 128–255 render in inverted monochrome
 - Configurable retro and traditional font styles
 - Configurable mapping from on-screen buttons to keyboard keys
@@ -35,7 +35,7 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 ### I/O Port Map:
 
 - **Port 0:** Frame counter: increments each display refresh (~60Hz), useful for timing
-- **Port 1:** Keyboard input: reads the current key as its Sinclair character code, 255 when no key is down. Keys without a character (Shift, Ctrl, Alt, function keys) press nothing. Run `node run_keyboard_tests_node.js` to check the mapping.
+- **Port 1:** Keyboard input: reads the current key as its Sinclair character code, 255 when no key is down. Printable characters and named special keys are mapped separately. The most recently pressed key wins; releasing it restores any older key still held. Modifiers and function keys press nothing. The debug **Key** field shows the mapped Sinclair code. Run `node run_keyboard_tests_node.js` to check keyboard and on-screen button input.
 - **Port 2:** Beep frequency port: in units of 10Hz
 - **Port 3:** Exponential beep duration: `milliseconds = 4000^((byte-1)/254)` for codes 1-255. Zero means no request; 1 gives 1 ms and 255 gives 4 seconds.
 - **Port 4:** Beep volume: 0 is silent, 255 is the former full level. Default 85 gives one-third of the former gain. Persists until changed; assembling a program or resetting restores 85.
@@ -81,6 +81,8 @@ OUT (3), A        ; Request beep with encoded duration
 
 The simulator starts a new sound after a CPU execution batch and clears ports 2 and 3. Port 4 retains its value. A new sound does not cancel other sounds being played; volume is captured independently for each note. Existing programs that only write ports 2 and 3 use the quieter default.
 
+Switching away from the tab suspends audio; returning resumes it. Sound requests made while hidden are consumed without queuing notes for later playback.
+
 For nonzero codes, port 3 uses `t = k * a^byte`, with `a = 4000^(1/254)` and `k = 1/a` milliseconds. Each increment lengthens the note by about 3.32%, giving smooth proportional growth across the range. To encode 1-4000 ms, use `byte = 1 + round(254 * log(milliseconds) / log(4000))`. Code 0 is reserved for no request. For example:
 
 | Duration byte | Requested duration |
@@ -116,6 +118,7 @@ This feature is useful for slowing down game loops.
 When you assemble a small program, the URL automatically updates to include the encoded program. With this URL you can:
 - Bookmark URLs to save your programs
 - Share the URL with others to share your program
+- Opening or refreshing a shared URL preserves its saved program. Clicking **Clear** removes the program from the URL.
 - If the assembly program exceeds about 1K of text, it will not generate a URL because of limitations on URL size. A 16K RAM pack won’t fix this browser limitation.
 
 ### Assembler features
@@ -133,6 +136,7 @@ When you assemble a small program, the URL automatically updates to include the 
 - Multiple number formats (decimal, hex, binary)
 - String literals in data directives
 - Error reporting with line numbers
+- Addresses must be within 0–65535, and emitted bytes must fit within the 64K memory. Oversized allocations, malformed numbers, and trailing garbage are rejected before loading. `DB`/`DEFS` byte values accept -128–255; `DEFW` values accept -32768–65535.
 - Machine code output with line numbers, decimal data, and checksums — perfect for magazine listings in 'Sinclair User' and 'Your Computer' before GitHub existed
 
 ## Emulator States
@@ -155,6 +159,10 @@ When you assemble a small program, the URL automatically updates to include the 
   - "Run": switches the state to "state_free_running"
 
 ## Project Files
+
+Run `npm test` to execute the assembler, CPU, keyboard, speaker, Claudasaur, and simulator integration suites. The tests use Node.js built-ins and require no browser. Pull requests and pushes to `main` run this same command in GitHub Actions; publishing to Pages requires the tests to pass.
+
+Interactive execution checks its deadline every 32 instructions, including within CPU batches. CPU errors stop in stepping mode with the program counter on the failing instruction. Assemble and Run cancels remaining boot stages, clears stale screen contents, then loads the program's explicit memory data.
 
 ### Core Interface:
 - `simulator.html`: Main web interface with HTML structure and script loading
@@ -255,7 +263,7 @@ test("CCF", "carry=flip");
 
 Since you got this far, might as well spoil the Easter eggs:
 
-- **Character Set Verification:** Clicking the boot screen while the character set is rendering pauses the output.
+- **Character Set Test:** Select **Load Character Set Test**, then **Assemble and Run**. It shows all 256 codes plus numbered rows 18–23 containing solid fill, stippling, and joined quarter-block tiles. Use Retro Fonts to inspect graphics alignment. This test is no longer part of boot.
 - **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs
 
 ## About This Project

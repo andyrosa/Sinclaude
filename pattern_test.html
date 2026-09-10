@@ -1,0 +1,52 @@
+<!doctype html>
+<title>Pattern test 16</title>
+<p>Test 8 — fills/stripes · quadrants/stipple/joins · X/wedges</p>
+<svg width="466" height="86.5" viewBox="0 0 256 48" preserveAspectRatio="none"
+     shape-rendering="crispEdges" style="--plot-ink:black;--plot-paper:white;background:white"></svg>
+<script src="simulator.js"></script>
+<script src="character_set_asm.js"></script>
+<script>
+const screen = document.querySelector('svg');
+const diagonal = (x, y) => {
+  if (x < 12) return x === y || x === 11 - y;
+  x -= 12;
+  return y < 6 ? y >= Math.floor(x / 2)
+    : y - 6 >= 2 * Math.min(x, 13 - x);
+};
+for (let row = 0; row < 6; row++) {
+  screen.innerHTML += `<text x="0" y="${row * 8 + 6}" font-family="monospace" font-size="6">${18 + row}:</text>`;
+  for (let col = 3; col < 32; col++) {
+    let mask, shade = false;
+    if (col < 11) mask = row < 2 ? 15 : row < 4 ? 3 : 5;
+    else if (col < 19) {
+      if (row < 4) mask = row * 4 + Math.floor((col - 11) / 2);
+      else if (col < 15) shade = true;
+      else mask = (row % 2 ? [11, 7] : [14, 13])[(col - 15) % 2];
+    } else {
+      mask = 0;
+      for (let bit = 0; bit < 4; bit++) {
+        if (diagonal((col - 19) * 2 + bit % 2, row * 2 + (bit >> 1))) mask |= 1 << bit;
+      }
+    }
+    screen.innerHTML += `<g data-row="${18 + row}" data-col="${col}" data-mask="${shade ? 'shade' : mask}"
+      transform="translate(${col * 8} ${row * 8})">${shade ? sinclairPlotPatterns.get(7) : plotBlockMarkup(mask)}</g>`;
+  }
+}
+</script>
+<svg id="tiles" width="466" height="86.5" viewBox="0 0 256 48" preserveAspectRatio="none"
+     shape-rendering="crispEdges" style="display:block;margin-top:16px;--plot-ink:black;--plot-paper:white;background:white"></svg>
+<script>
+const tiles = document.querySelector('#tiles');
+for (let row = 0; row < 6; row++) {
+  tiles.innerHTML += `<text x="0" y="${row * 8 + 6}" font-family="monospace" font-size="6">ROW${18 + row}</text>`;
+}
+for (let tile = 0; tile < CHARACTER_TEST_PATTERNS.length; tile++) {
+  const left = (5 + tile * 3) * 8;
+  for (let row = 0; row < 6; row++) for (let col = 0; col < 3; col++) {
+    const byte = CHARACTER_TEST_PATTERNS[tile][row % 3 * 3 + col] ^ (row >= 3 ? 128 : 0);
+    tiles.innerHTML += `<g data-tile="${tile}" data-row="${row}" data-col="${col}"
+      style="${byte >= 128 ? '--plot-ink:white;--plot-paper:black' : ''}"
+      transform="translate(${left + col * 8} ${row * 8})">${sinclairPlotPatterns.get(byte & 127)}</g>`;
+  }
+}
+</script>

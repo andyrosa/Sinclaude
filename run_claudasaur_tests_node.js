@@ -15,6 +15,14 @@ const memory = new Uint8Array(65536);
 for (const line of result.instructionDetails) {
   if (line.opcodes.length) memory.set(line.opcodes, line.startAddress);
 }
+const occupied = new Set();
+for (const line of result.instructionDetails) {
+  for (let i = 0; i < line.opcodes.length; i++) {
+    const location = line.startAddress + i;
+    assert.ok(!occupied.has(location), 'Expanded wall graphics must not overlap game code or maze data');
+    occupied.add(location);
+  }
+}
 const ports = new Uint8Array(256);
 ports[1] = 255;
 const cpu = new Z80CPU();
@@ -179,8 +187,23 @@ for (const cell of paths.keys()) {
     assert.equal(memory[address('buffer') + 768], 92);
     assert.equal(memory[60000 + 712], 'NESW'.charCodeAt(facing));
     assert.equal(memory[60000 + 720], [94, 62, 118, 60][facing], 'Legend glyph follows facing');
+    const view = memory.slice(60000 + 2 * 32, 60000 + 22 * 32);
+    assert.ok(!view.some(byte => [45, 47, 92, 124].includes(byte)),
+      'Corridor walls use PLOT graphics instead of punctuation');
+    assert.ok(view.some(byte => [6, 7, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22, 137, 147, 160].includes(byte)),
+      'Every maze viewpoint contains block-graphics walls');
   }
 }
+
+set('player', 17);
+set('direction', 1);
+set('monster', 225);
+call('render');
+assert.equal(memory[60000 + 11 * 32], 160, 'Receding walls have solid black interiors');
+assert.equal(memory[60000 + 11 * 32 + 31], 7, 'Side passages show stippled facing walls');
+set('direction', 3);
+call('render');
+assert.equal(memory[60000 + 11 * 32 + 16], 7, 'Dead ends are filled stippled faces');
 
 function prepareSoundTest(distance) {
   call('sound_reset');

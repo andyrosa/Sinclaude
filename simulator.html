@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sinclaude Sinclair Simulator</title>
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" sizes="any">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -36,15 +38,17 @@
                 <div class="section-controls">
                     <div class="controls">
                         <button type="button" class="clear-btn" onclick="sinclaude.clearAssembly()" title="Clear the assembly editor">Clear</button>
-                        <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()" title="Load a performance test that increments a counter and displays it in hexadecimal">Load Default Program</button>
+                        <button type="button" class="load-btn" onclick="sinclaude.loadDefaultAssembly()" title="Load the character-set and graphics test">Load Default Program</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadBasicsAssembly()" title="Load a test program that demonstrates basic Z80 instructions - starts halted for single-stepping">Load Basics Test</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadSpaceInvaderAssembly()" title="Load a playable Space Invader micro-game">Load 'Space Invader'</button>
                         <button type="button" class="load-btn" onclick="sinclaude.loadClaudasaurAssembly()" title="Find the exit in a first-person maze before the spiky Claudasaur catches you. W/S move, A/D turn, Space starts or shows the map, P pauses.">Load 'Claudasaur'</button>
-                        <!-- Narrow screens show this select instead of the four load buttons above -->
+                        <button type="button" class="load-btn" onclick="sinclaude.loadCharacterSetAssembly()" title="Display all 256 character codes and numbered graphics fill patterns">Load Character Set Test</button>
+                        <!-- Narrow screens show this select instead of the load buttons above -->
                         <select class="load-select" aria-label="Load a program" onchange="sinclaude.loadProgramFromSelect(this)">
                             <option value="" disabled selected hidden>Load a program...</option>
                             <option value="default">Default Program</option>
                             <option value="basics">Basics Test</option>
+                            <option value="characterSet">Character Set Test</option>
                             <option value="spaceInvader">'Space Invader'</option>
                             <option value="claudasaur">'Claudasaur'</option>
                         </select>

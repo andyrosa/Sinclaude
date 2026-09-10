@@ -2,55 +2,115 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-// Exercise the real key mapping methods without initializing the simulator UI.
-const context = vm.createContext({});
+function eventTarget() {
+  const listeners = new Map();
+  return {
+    classList: { toggle() {} },
+    addEventListener(type, handler) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(handler);
+    },
+    emit(type, data = {}) {
+      const event = { target: { tagName: 'DIV' }, preventDefault() {}, ...data };
+      for (const handler of listeners.get(type) || []) handler(event);
+    },
+  };
+}
+const section = eventTarget();
+section.contains = target => target === section;
+const buttons = [];
+const gameButtons = { appendChild: button => buttons.push(button) };
+const documentStub = Object.assign(eventTarget(), {
+  querySelector: () => section,
+  getElementById: id => id === 'gameButtons' ? gameButtons : { classList: { toggle() {} } },
+  createElement: () => Object.assign(eventTarget(), { setPointerCapture(id) { this.capturedPointer = id; } }),
+});
+const windowStub = eventTarget();
+const context = vm.createContext({ document: documentStub, window: windowStub });
 const Simulator = vm.runInContext(
   fs.readFileSync(require.resolve('./simulator.js'), 'utf8') + '\nSimulator;', context);
 const simulator = Object.create(Simulator.prototype);
 simulator.ioMap = new Uint8Array(256);
 simulator.initializeCharacterMappings();
 simulator.initializeKeyMappings();
+simulator.setupKeyboard();
+simulator.createGameButtons();
+const port = () => simulator.InPort(1);
+const key = (type, name, code = name, extra = {}) =>
+  documentStub.emit(type, { key: name, code, ...extra });
+section.emit('mouseenter');
+assert.equal(port(), 255, 'No key is held on initialization');
 
-const KEYBOARD_PORT = 1;
-const NO_KEY = 255;
-const SPACE = 32;
-const RELEASE = -1;
-
-// The keydown handler converts e.key with labelToKeyCodeOrNull and skips null.
-// Keys with no character must return null so they never reach setKey.
-for (const keyName of ['Shift', 'Control', 'Alt', 'AltGraph', 'CapsLock', 'Meta', 'F1', 'F12', 'Dead', 'Unidentified']) {
-  assert.equal(simulator.labelToKeyCodeOrNull(keyName), null, `${keyName} must not press any key`);
+for (const [name, expected] of [
+  [' ', 32], ['w', 87], ['W', 87], ['+', 43], ['%', 37], ['&', 38], ["'", 39], ['(', 40],
+  ['Escape', 12], ['ArrowLeft', 144], ['ArrowUp', 145], ['ArrowRight', 146], ['ArrowDown', 147], ['Enter', 13],
+]) {
+  key('keydown', name);
+  assert.equal(port(), expected, 'Physical ' + name + ' maps directly to its Sinclair code');
+  key('keyup', name);
+  assert.equal(port(), 255);
+  simulator.buttonClick({ textContent: name === ' ' ? 'Space' : name }, 'button');
+  assert.equal(port(), expected, 'Button caption ' + name + ' matches physical input');
+  simulator.releaseKey('button');
 }
-assert.equal(simulator.labelToKeyCodeOrNull(' '), SPACE, 'e.key for Space is a single space');
-assert.equal(simulator.labelToKeyCodeOrNull('w'), 'W'.charCodeAt(0), 'Lowercase letters map to uppercase');
-assert.equal(simulator.labelToKeyCodeOrNull('W'), 'W'.charCodeAt(0));
-assert.equal(simulator.labelToKeyCodeOrNull('+'), '+'.charCodeAt(0), 'Punctuation keeps its own code');
-assert.equal(simulator.labelToKeyCodeOrNull('Escape'), 27);
-assert.equal(simulator.labelToKeyCodeOrNull('ArrowUp'), 38);
 
-// setKey writes the keyboard port. Codes with no Sinclair character read as no-key,
-// never as Space (the display fallback), which used to toggle the Claudasaur map.
-const portAfter = (keyCode) => {
-  simulator.setKey(keyCode);
-  return simulator.InPort(KEYBOARD_PORT);
-};
-for (const keyCode of [0, 16, 17, 18, 20]) {
-  assert.equal(portAfter(keyCode), NO_KEY, `Code ${keyCode} has no character and must read as no-key`);
+key('keydown', 'w', 'KeyW');
+for (const name of ['Shift', 'Control', 'Alt', 'AltGraph', 'CapsLock', 'Meta', 'F1', 'F12', 'Dead', 'Unidentified', 'Tab', 'é']) {
+  key('keydown', name);
+  assert.equal(port(), 87, name + ' does not replace held W');
+  key('keyup', name);
+  assert.equal(port(), 87, name + ' release does not release W');
 }
-assert.equal(portAfter(SPACE), SPACE, 'Space');
-assert.equal(portAfter('W'.charCodeAt(0)), 'W'.charCodeAt(0), 'W');
-assert.equal(portAfter('A'.charCodeAt(0)), 'A'.charCodeAt(0), 'A');
-assert.equal(portAfter('+'.charCodeAt(0)), '+'.charCodeAt(0), 'Punctuation button captions still work');
-assert.equal(portAfter(27), 12, 'Escape maps to Sinclair 12');
-assert.equal(portAfter(38), 145, 'ArrowUp');
-assert.equal(portAfter(40), 147, 'ArrowDown');
-assert.equal(portAfter(37), 144, 'ArrowLeft');
-assert.equal(portAfter(39), 146, 'ArrowRight');
-assert.equal(portAfter(13), 13, 'Enter');
-assert.equal(portAfter(RELEASE), NO_KEY, 'Release');
-assert.equal(simulator.keyCodeCurrentReleased, true);
+key('keydown', 'a', 'KeyA');
+assert.equal(port(), 65, 'Most recently pressed key wins');
+key('keydown', 'w', 'KeyW', { repeat: true });
+assert.equal(port(), 65, 'Repeats do not reorder held keys');
+key('keyup', 'a', 'KeyA');
+assert.equal(port(), 87, 'Releasing A restores held W');
+key('keydown', 'a', 'KeyA');
+key('keyup', 'w', 'KeyW');
+assert.equal(port(), 65, 'Releasing an older key preserves the current key');
+key('keyup', 'a', 'KeyA');
+key('keydown', '%', 'Digit5');
+key('keyup', '5', 'Digit5');
+assert.equal(port(), 255, 'Releasing Shift first does not strand shifted punctuation');
 
-// Display text conversion keeps its space fallback for unknown characters
-assert.equal(simulator.unicodeToSinclair(String.fromCharCode(18)), SPACE, 'Display fallback');
+key('keydown', 'w', 'KeyW');
+buttons[2].emit('pointerdown', { pointerId: 3 });
+assert.equal(port(), 32);
+assert.equal(buttons[2].capturedPointer, 3, 'Pointer release remains routed to the button after dragging away');
+buttons[2].emit('pointercancel', { pointerId: 3 });
+assert.equal(port(), 87, 'Cancelling a pointer preserves the held keyboard key');
+buttons[0].emit('pointerdown', { pointerId: 4 });
+buttons[1].emit('pointerdown', { pointerId: 5 });
+buttons[0].emit('pointerup', { pointerId: 4 });
+assert.equal(port(), 83, 'One pointer release does not release another');
+buttons[1].emit('lostpointercapture', { pointerId: 5 });
+assert.equal(port(), 87);
 
-console.log('Keyboard passed: modifier and function keys press nothing, mapped keys and punctuation unchanged, display fallback intact.');
+for (const target of [{ tagName: 'INPUT' }, { tagName: 'TEXTAREA' }, { tagName: 'SPAN', isContentEditable: true }]) {
+  key('keydown', 'a', 'KeyA', { target });
+  assert.equal(port(), 87, 'Editing does not press emulator keys');
+}
+key('keyup', 'w', 'KeyW', { target: { tagName: 'INPUT' } });
+assert.equal(port(), 255, 'A key released after focus moves to an input is still released');
+for (const release of [
+  () => section.emit('mouseleave'),
+  () => windowStub.emit('blur'),
+  () => { documentStub.hidden = true; documentStub.emit('visibilitychange'); },
+]) {
+  section.emit('mouseenter');
+  key('keydown', 'w', 'KeyW');
+  release();
+  assert.equal(port(), 255, 'Leaving capture releases all keys');
+  assert.equal(simulator.heldKeys.size, 0);
+}
+documentStub.hidden = false;
+documentStub.emit('visibilitychange');
+key('keydown', 'w', 'KeyW');
+assert.equal(port(), 87, 'Returning to the tab preserves capture but not stale held keys');
+key('keyup', 'w', 'KeyW');
+assert.equal(simulator.unicodeToSinclair(String.fromCharCode(18)), 32, 'Display fallback remains unchanged');
+assert.equal(simulator.toReadableKeyLabel('arrowup'), 'ArrowUp');
+assert.equal(simulator.toReadableKeyLabel('F1'), null);
+console.log('Keyboard passed: punctuation, special keys, modifiers, simultaneous keys, repeats, pointers, editing, and capture cleanup.');

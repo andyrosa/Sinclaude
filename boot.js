@@ -52,6 +52,7 @@ function loadScripts() {
     "z80_cpu_emulator_test_runner.js",
     "default_asm.js",
     "basics_asm.js",
+    "character_set_asm.js",
     "space_invader_asm.js",
     "claudasaur_asm.js",
     "simulator.js",

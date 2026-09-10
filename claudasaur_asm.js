@@ -15,6 +15,25 @@ const CLAUDASAUR_ASM = (() => {
     if (message.length > 32) throw new Error(`Claudasaur text exceeds screen width: ${name}`);
     packet(name, Array.from(message, (char, col) => [row * 32 + col, char.charCodeAt(0)]));
   };
+  // Each character holds four PLOT pixels: top-left, top-right, bottom-left,
+  // bottom-right. Inverse graphics supply the two missing quadrant patterns.
+  const plotChars = [32, 147, 14, 21, 9, 6, 17, 22, 13, 18, 16, 137, 8, 20, 19, 160];
+  const graphics = (name, draw) => {
+    const cells = new Map();
+    const plot = (x, y) => {
+      const offset = (y >> 1) * 32 + (x >> 1);
+      cells.set(offset, (cells.get(offset) || 0) | (1 << ((y % 2) * 2 + x % 2)));
+    };
+    draw(plot);
+    packet(name, [...cells].map(([offset, mask]) => [offset, plotChars[mask]]));
+  };
+  const shadedFace = (name, left, right, top, bottom) => {
+    const cells = [];
+    for (let row = top; row <= bottom; row++) {
+      for (let col = left; col <= right; col++) cells.push([row * 32 + col, 7]);
+    }
+    packet(name, cells);
+  };
   const sprite = [
     '   #   #   #    ',
     '    #  #  #  #  ',
@@ -38,31 +57,40 @@ const CLAUDASAUR_ASM = (() => {
     return [...pixels];
   };
   packet('mascot', spritePixels(1, 9));
+  const x = [0, 7, 11, 14, 15];
+  // All depth bands share one projected edge so an uninterrupted wall cannot
+  // change slope at a packet boundary.
+  const wallTop = col => Math.round(4 + col * 20 / 32);
+  const top = x.map(col => Math.floor(wallTop(col * 2) / 2));
+  const bottom = top.map(row => 23 - row);
   for (let depth = 0; depth < 4; depth++) {
     packet(`monster_${depth}`, spritePixels([1, 0.65, 0.4, 0.23][depth], 12));
-    const x = [0, 5, 9, 12, 14], top = [2, 5, 7, 8, 9], bottom = [21, 18, 16, 15, 14];
     for (const side of ['left', 'right']) {
       for (const wall of [0, 1]) {
-        const pixels = new Map();
-        const put = (col, row, char) => pixels.set(row * 32 + (side === 'left' ? col : 31 - col), char.charCodeAt(0));
-        for (let col = x[depth]; col <= x[depth + 1]; col++) {
-          const ratio = (col - x[depth]) / (x[depth + 1] - x[depth]);
-          const upper = wall ? Math.round(top[depth] + ratio * (top[depth + 1] - top[depth])) : top[depth + 1];
-          const lower = wall ? Math.round(bottom[depth] + ratio * (bottom[depth + 1] - bottom[depth])) : bottom[depth + 1];
-          put(col, upper, wall ? (side === 'left' ? '\\' : '/') : '-');
-          put(col, lower, wall ? (side === 'left' ? '/' : '\\') : '-');
-          if (col === x[depth + 1]) for (let row = upper; row <= lower; row++) put(col, row, '|');
+        const name = `${side}_${wall}_${depth}`;
+        if (!wall) {
+          // The wall beyond a side passage faces the viewer, so its stippling
+          // distinguishes the opening from the solid receding corridor walls.
+          shadedFace(name,
+            side === 'left' ? x[depth] : 32 - x[depth + 1],
+            side === 'left' ? x[depth + 1] - 1 : 31 - x[depth],
+            top[depth + 1], bottom[depth + 1]);
+          continue;
         }
-        packet(`${side}_${wall}_${depth}`, [...pixels]);
+        graphics(name, plot => {
+          const mirror = col => side === 'left' ? col : 63 - col;
+          const near = x[depth] * 2, far = x[depth + 1] * 2;
+          // Half-open depth bands keep adjacent packets from erasing each
+          // other's pixels when the Z80 paints them into character cells.
+          for (let col = near; col < far; col++) {
+            const upper = wallTop(col);
+            const lower = 47 - upper;
+            for (let row = upper; row <= lower; row++) plot(mirror(col), row);
+          }
+        });
       }
     }
-    const front = [];
-    for (let row = top[depth + 1]; row <= bottom[depth + 1]; row++) {
-      for (let col = x[depth + 1]; col <= 31 - x[depth + 1]; col++) {
-        front.push([row * 32 + col, (row === top[depth + 1] || row === bottom[depth + 1] ? '-' : col === x[depth + 1] || col === 31 - x[depth + 1] ? '|' : (row % 3 === 0 ? '-' : ' ')).charCodeAt(0)]);
-      }
-    }
-    packet(`front_${depth}`, front);
+    shadedFace(`front_${depth}`, x[depth + 1], 31 - x[depth + 1], top[depth + 1], bottom[depth + 1]);
     text(`exit_${depth}`, 11, ' '.repeat(13) + 'EXIT');
   }
   text('heading', 0, '       C L A U D A S A U R');
