@@ -14,22 +14,40 @@ function fixture(url = 'https://example.test/simulator.html') {
     const listeners = new Map();
     return {
       classList: { toggle() {}, add() {} },
-      addEventListener(type, callback) {
+      focus() {}, scrollIntoView() {},
+      addEventListener(type, callback, options = false) {
         if (!listeners.has(type)) listeners.set(type, new Set());
-        listeners.get(type).add(callback);
+        listeners.get(type).add({ callback, capture: options === true || options.capture === true });
       },
-      removeEventListener(type, callback) { listeners.get(type)?.delete(callback); },
-      emit(type) { for (const callback of listeners.get(type) || []) callback(); },
+      removeEventListener(type, callback) {
+        for (const entry of listeners.get(type) || []) {
+          if (entry.callback === callback) listeners.get(type).delete(entry);
+        }
+      },
+      emit(type, details = {}) {
+        const event = { type, target: this, defaultPrevented: false, propagationStopped: false,
+          preventDefault() { this.defaultPrevented = true; },
+          stopImmediatePropagation() { this.propagationStopped = true; }, ...details };
+        const entries = [...(listeners.get(type) || [])].sort((a, b) => b.capture - a.capture);
+        for (const entry of entries) {
+          if (listeners.get(type).has(entry)) entry.callback(event);
+          if (event.propagationStopped) break;
+        }
+        return event;
+      },
     };
   }
   const controls = { innerHTML: '' };
   const section = { focus() {}, scrollIntoView() {} };
   const execution = { querySelector: () => null, appendChild() {} };
+  const audioUI = Object.fromEntries(['audioStartPrompt', 'audioStartMessage', 'startWithSound', 'startMuted']
+    .map(id => [id, eventTarget()]));
+  audioUI.audioStartPrompt.hidden = true;
   const documentStub = Object.assign(eventTarget(), {
     hidden: false,
     body: eventTarget(),
     documentElement: { style: { setProperty() {} } },
-    getElementById: () => controls,
+    getElementById: id => audioUI[id] || controls,
     querySelector: selector => selector === '.execution-section' ? section : execution,
     createElement: eventTarget,
   });
@@ -44,13 +62,14 @@ function fixture(url = 'https://example.test/simulator.html') {
   };
   class AudioStub {
     constructor() {
+      Object.assign(this, eventTarget());
       this.state = 'suspended';
       this.calls = [];
       this.notes = 0;
       contexts.push(this);
     }
-    async suspend() { this.calls.push('suspend'); this.state = 'suspended'; }
-    async resume() { this.calls.push('resume'); this.state = 'running'; }
+    async suspend() { this.calls.push('suspend'); this.state = 'suspended'; this.emit('statechange'); }
+    async resume() { this.calls.push('resume'); this.state = 'running'; this.emit('statechange'); }
     async close() { this.calls.push('close'); this.state = 'closed'; }
     createOscillator() {
       this.notes++;
@@ -83,7 +102,7 @@ function fixture(url = 'https://example.test/simulator.html') {
   sim.initializeKeyMappings();
   sim.setupCleanupHandlers();
   return {
-    sim, STATE, timers, windowStub, documentStub, contexts, controls, messages, bugs,
+    sim, STATE, timers, windowStub, documentStub, contexts, controls, messages, bugs, audioUI,
     initialize() {
       sim.setupAssemblyContentObserver = () => {};
       vm.runInNewContext(initialization, {
@@ -288,40 +307,89 @@ async function main() {
   assert.equal(unknownProgram.sim.state, unknownProgram.STATE.NOT_READY,
     'An unknown program must not automatically start the default program');
 
-  for (const gesture of ['click', 'keydown']) {
-    const autoplay = fixture(gameUrl);
-    autoplay.documentStub.emit(gesture);
-    assert.equal(autoplay.contexts.length, 0, 'Input before audio initialization creates no context');
+  function blockedAutostart() {
+    const autoplay = fixture();
     autoplay.sim.initializeAudio();
     const blockedAudio = autoplay.sim.audioContext;
     blockedAudio.state = 'suspended';
     let activated = false;
     blockedAudio.resume = async () => {
       blockedAudio.calls.push('resume');
-      if (activated) blockedAudio.state = 'running';
+      if (activated) { blockedAudio.state = 'running'; blockedAudio.emit('statechange'); }
     };
-    autoplay.initialize();
-    assert.equal(autoplay.sim.state, autoplay.STATE.FREE_RUNNING);
-    assert.equal(blockedAudio.state, 'suspended', 'Browser can block sound during URL autostart');
-    autoplay.sim.playBeep(440, 100);
-    assert.equal(blockedAudio.notes, 0);
-    const executed = autoplay.sim.instructionCount;
-    activated = true;
-    autoplay.documentStub.emit(gesture);
-    await Promise.resolve();
-    assert.equal(blockedAudio.state, 'running', `${gesture} unlocks autostart audio`);
-    assert.equal(autoplay.sim.audioContext, blockedAudio, 'Unlock reuses the existing audio context');
-    assert.equal(autoplay.sim.instructionCount, executed, 'Unlock does not restart the game');
-    autoplay.sim.playBeep(440, 100);
-    assert.equal(blockedAudio.notes, 1, 'New notes play after the interaction');
-    const resumeCount = blockedAudio.calls.length;
-    autoplay.documentStub.emit(gesture);
-    assert.equal(blockedAudio.calls.length, resumeCount, 'Running audio is not resumed on every input');
-    autoplay.documentStub.hidden = true;
-    autoplay.documentStub.emit('visibilitychange');
-    autoplay.documentStub.emit(gesture);
-    assert.equal(blockedAudio.state, 'suspended', 'Input cannot resume audio in a hidden tab');
+    autoplay.allowAudio = () => { activated = true; };
+    // Any program's first note must survive the gate, without game-specific code.
+    autoplay.sim.loadAssemblyCode('LD A,44\nOUT (2),A\nLD A,142\nOUT (3),A\nHALT');
+    autoplay.sim.autostart();
+    assert.equal(autoplay.sim.instructionCount, 0, 'CPU stays stopped before the first instruction');
+    assert.equal(autoplay.sim.runLoopInterval, null);
+    assert.equal(blockedAudio.notes, 0, 'Opening notes are not consumed while sound is blocked');
+    assert.equal(autoplay.audioUI.audioStartPrompt.hidden, false);
+    return autoplay;
   }
+
+  for (const gesture of ['click', 'keydown']) {
+    const autoplay = blockedAutostart();
+    const blockedAudio = autoplay.sim.audioContext;
+    autoplay.allowAudio();
+    const input = { target: autoplay.audioUI.startWithSound, key: ' ', code: 'Space' };
+    const event = autoplay.audioUI.audioStartPrompt.emit(gesture, input);
+    await Promise.resolve();
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true, 'The startup interaction is consumed');
+    assert.equal(blockedAudio.state, 'running', `${gesture} enables audio before execution`);
+    assert.equal(autoplay.sim.audioContext, blockedAudio, 'Unlock reuses the existing audio context');
+    assert.equal(blockedAudio.notes, 1, 'The program plays its first note after sound starts');
+    assert.equal(autoplay.sim.state, autoplay.STATE.STEPPING, 'The test program reaches HALT');
+    assert.equal(autoplay.audioUI.audioStartPrompt.hidden, true);
+    const executed = autoplay.sim.instructionCount;
+    blockedAudio.emit('statechange');
+    assert.equal(autoplay.sim.instructionCount, executed, 'Audio state changes cannot start the program twice');
+    if (gesture === 'keydown') {
+      autoplay.documentStub.addEventListener('keydown', e => autoplay.sim.pressKey(e.code, e.key));
+      autoplay.documentStub.emit('keydown', { ...input, repeat: true });
+      assert.equal(autoplay.sim.ioMap[1], 255, 'Holding Space cannot enter the program after dismissing the prompt');
+      autoplay.documentStub.emit('keyup', input);
+      autoplay.documentStub.emit('keydown', input);
+      assert.equal(autoplay.sim.ioMap[1], 32, 'A fresh Space press reaches the program');
+    }
+  }
+
+  const muted = blockedAutostart();
+  const tabKey = muted.audioUI.audioStartPrompt.emit('keydown', { key: 'Tab' });
+  assert.equal(tabKey.defaultPrevented, false, 'Tab can move between the sound choices');
+  assert.equal(tabKey.propagationStopped, true, 'The simulator keyboard cannot intercept Tab navigation');
+  assert.equal(muted.sim.instructionCount, 0);
+  muted.audioUI.audioStartPrompt.emit('click', { target: muted.audioUI.startMuted });
+  assert.equal(muted.sim.state, muted.STATE.STEPPING, 'Start muted executes without audio permission');
+  assert.equal(muted.sim.audioContext.notes, 0);
+  muted.allowAudio();
+  muted.documentStub.emit('click');
+  muted.documentStub.hidden = true;
+  muted.documentStub.emit('visibilitychange');
+  muted.documentStub.hidden = false;
+  muted.documentStub.emit('visibilitychange');
+  muted.sim.playBeep(440, 100);
+  assert.equal(muted.sim.audioContext.notes, 0, 'Muted choice survives input and tab visibility changes');
+  const cancelled = blockedAutostart();
+  cancelled.sim.clearAssembly();
+  cancelled.allowAudio();
+  await cancelled.sim.audioContext.resume();
+  assert.equal(cancelled.sim.instructionCount, 0, 'Clear cancels a pending launch');
+  assert.equal(cancelled.audioUI.audioStartPrompt.hidden, true);
+  const rejected = blockedAutostart();
+  rejected.sim.audioContext.resume = async () => { throw new Error('permission denied'); };
+  rejected.audioUI.audioStartPrompt.emit('click', { target: rejected.audioUI.startWithSound });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(rejected.audioUI.audioStartMessage.textContent, /Try again or start muted/);
+  assert.equal(rejected.sim.instructionCount, 0, 'Failed permission leaves the CPU stopped');
+  rejected.audioUI.audioStartPrompt.emit('click', { target: rejected.audioUI.startMuted });
+  assert.equal(rejected.sim.state, rejected.STATE.STEPPING);
+  const delayedPermission = blockedAutostart();
+  delayedPermission.allowAudio();
+  await delayedPermission.sim.audioContext.resume();
+  assert.equal(delayedPermission.audioUI.audioStartPrompt.hidden, true,
+    'An allowed but asynchronous audio start dismisses the prompt automatically');
 
   const f = fixture();
   const { sim, STATE } = f;

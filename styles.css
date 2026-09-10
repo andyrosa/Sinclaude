@@ -358,6 +358,49 @@ button:focus-visible {
 }
 
 /* Screen */
+.screen-container {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.audio-start-prompt {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: clamp(12px, 4cqw, 24px);
+    border: 2px solid var(--border-c);
+    background: var(--editable-text-bgc);
+    color: var(--editable-text-fgc);
+    text-align: center;
+}
+
+.audio-start-prompt[hidden] {
+    display: none;
+}
+
+.audio-start-prompt p {
+    margin: 0 0 8px;
+    font-size: clamp(16px, 3cqw, 22px);
+}
+
+.audio-start-prompt button {
+    flex: 0 0 auto;
+    width: min(100%, 260px);
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 14px;
+}
+
+.execution-section:has(.audio-start-prompt:not([hidden])) .not-ready-message,
+.execution-section:has(.audio-start-prompt:not([hidden])) .keyboard-status {
+    visibility: hidden;
+}
+
 #screen {
     position: relative;
     background: var(--editable-text-bgc);

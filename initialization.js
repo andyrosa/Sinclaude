@@ -17,6 +17,6 @@ window.addEventListener('load', () => {
     // A named game link launches directly.
     const urlParams = new URLSearchParams(window.location.search);
     if (loadedFromURL && urlParams.get('run') === 'claudasaur') {
-        window.sinclaude.assembleAndRun();
+        window.sinclaude.autostart();
     }
 });

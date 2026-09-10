@@ -713,7 +713,7 @@ class Simulator {
 
   playBeep(frequency, duration, volume = BEEP_DEFAULT_VOLUME) {
     // A muted request needs no oscillator, but the caller still clears it.
-    if (duration === 0 || volume === 0 || !this.audioContext || this.audioContext.state !== "running") {
+    if (this.audioMuted || duration === 0 || volume === 0 || !this.audioContext || this.audioContext.state !== "running") {
       return;
     }
 
@@ -1296,6 +1296,7 @@ class Simulator {
   }
 
   clearAssembly({ preserveURL = false } = {}) {
+    this.cancelAudioStart();
     this.setAssemblyCode("");
     this.clearAddressAndOpcodesColumns();
     this.setMagazineListing("", false);
@@ -1378,7 +1379,9 @@ class Simulator {
     select.value = "";
   }
 
-  assembleAndRun() {
+  assembleAndRun({ muted = false } = {}) {
+    this.cancelAudioStart();
+    this.audioMuted = muted;
     // Boot screens and benchmarks must not overwrite or interrupt a user program.
     this.finishBootSequence();
     const sourceCode = this.getAssemblyCode();
@@ -1680,6 +1683,8 @@ class Simulator {
   setupCleanupHandlers() {
     // Ensure all timers are cleared when page unloads
     window.addEventListener("beforeunload", () => {
+      this.cancelAudioStart();
+      this.releaseAudioStartKey?.();
       this.clearAllTimers();
       this.cleanupAudio();
       this.cleanupObservers();
@@ -1695,7 +1700,7 @@ class Simulator {
 
     // URL autostart can leave audio blocked until a real click, tap, or keypress.
     const unlockAudio = () => {
-      if (!document.hidden && this.audioContext?.state === "suspended") {
+      if (!this.audioStartPrompt && !this.audioMuted && !document.hidden && this.audioContext?.state === "suspended") {
         this.updateAudioState();
       }
     };
@@ -1722,10 +1727,111 @@ class Simulator {
     }
   }
 
+  autostart() {
+    this.cancelAudioStart();
+    this.finishBootSequence();
+    this.stopContinuousExecution();
+    this.audioMuted = false;
+    this.initializeAudio();
+    const context = this.audioContext;
+    if (!context || context.state === "running") {
+      this.assembleAndRun();
+      return;
+    }
+
+    const element = document.getElementById("audioStartPrompt");
+    const message = document.getElementById("audioStartMessage");
+    const soundButton = document.getElementById("startWithSound");
+    const mutedButton = document.getElementById("startMuted");
+    const prompt = { element };
+    const begin = (muted = false) => {
+      if (this.audioStartPrompt !== prompt) return;
+      this.releaseAllKeys();
+      this.assembleAndRun({ muted });
+    };
+    const onAudioState = () => {
+      if (!document.hidden && context.state === "running") begin();
+    };
+    const startSound = async () => {
+      try {
+        await context.resume();
+        onAudioState();
+      } catch (error) {
+        if (this.audioStartPrompt !== prompt) return;
+        message.textContent = "Sound could not start. Try again or start muted.";
+        userMessage(`Audio playback could not resume: ${error.message}`);
+      }
+    };
+    const onClick = (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.target === mutedButton) begin(true);
+      else startSound();
+    };
+    const onKey = (event) => {
+      // Keep tab navigation and browser shortcuts available.
+      if (event.key === "Tab" || event.ctrlKey || event.altKey || event.metaKey ||
+          ["Shift", "Control", "Alt", "Meta", "Escape"].includes(event.key) || /^F\d+$/.test(event.key)) {
+        event.stopImmediatePropagation();
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.repeat) return;
+      this.consumeAudioStartKey(event.code || event.key);
+      if (event.target === mutedButton && [" ", "Enter"].includes(event.key)) begin(true);
+      else startSound();
+    };
+    prompt.cleanup = () => {
+      element.removeEventListener("click", onClick);
+      element.removeEventListener("keydown", onKey, true);
+      context.removeEventListener("statechange", onAudioState);
+    };
+    this.audioStartPrompt = prompt;
+    message.textContent = "Click or press a key to start with sound";
+    element.hidden = false;
+    element.addEventListener("click", onClick);
+    element.addEventListener("keydown", onKey, true);
+    context.addEventListener("statechange", onAudioState);
+    this.clearScreen();
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    soundButton.focus({ preventScroll: true });
+    onAudioState();
+  }
+
+  cancelAudioStart() {
+    const prompt = this.audioStartPrompt;
+    if (!prompt) return;
+    this.audioStartPrompt = null;
+    prompt.cleanup();
+    prompt.element.hidden = true;
+  }
+
+  consumeAudioStartKey(key) {
+    this.releaseAudioStartKey?.();
+    // The initiating key can keep repeating after the prompt is dismissed.
+    const swallow = (event) => {
+      if ((event.code || event.key) !== key) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.type === "keyup") this.releaseAudioStartKey();
+    };
+    const release = () => {
+      document.removeEventListener("keydown", swallow, true);
+      document.removeEventListener("keyup", swallow, true);
+      window.removeEventListener("blur", release);
+      this.releaseAudioStartKey = null;
+    };
+    this.releaseAudioStartKey = release;
+    document.addEventListener("keydown", swallow, true);
+    document.addEventListener("keyup", swallow, true);
+    window.addEventListener("blur", release);
+  }
+
   async updateAudioState() {
     const context = this.audioContext;
     if (!context || context.state === "closed") return;
-    const hidden = document.hidden;
+    const hidden = document.hidden || this.audioMuted;
     try {
       // Queue every transition so a quick hide/show cannot lose a resume while
       // the preceding suspend is still pending.
