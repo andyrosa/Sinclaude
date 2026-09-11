@@ -9,7 +9,7 @@ function verifyChess(createCPU = () => new Z80CPU()) {
   const image = new Uint8Array(65536);
   Z80Assembler.loadOpcodesIntoMemory(image, assembled.instructionDetails);
   assert.equal(assembled.instructionDetails.reduce((n, line) => n + line.opcodes.length, 0), s.END_CODE, 'Payload is contiguous, with no hidden address gaps');
-  assert.ok(s.END_CODE <= 1226, 'Keep the complete game within the measured byte budget');
+  assert.ok(s.END_CODE <= 1234, 'Keep the complete game within the measured byte budget');
   for (const name of ['FROM', 'TO', 'TARGET']) assert.equal(s[name] >> 8, s.BOARD >> 8, name + ': state and board share a page');
   for (const name of ['GLYPHS','VALUES']) assert.equal(s[name] >> 8, (s[name] + 6) >> 8, name + ': lookup stays within one page');
   const squares = Array.from({length: 64}, (_, i) => (i >> 3) * 16 + i % 8);
@@ -135,11 +135,14 @@ function verifyChess(createCPU = () => new Z80CPU()) {
   function humanMove(m, uci) {
     const keys = ZX81.encode(uci.slice(0,4));
     if (uci[4]) keys.push(...ZX81.encode('05X'), 34 - promotion[uci[4]]);
+    m.cpu.PC = s.DRIVER;
+    return humanKeys(m, keys);
+  }
+  function humanKeys(m, keys) {
     m.cpu.InPort = port => {
       assert.equal(port, 5, 'Queued keystrokes survive fast taps');
       return keys.length ? keys.shift() : 255;
     };
-    m.cpu.PC = s.DRIVER;
     do {m.step();} while (m.cpu.PC !== s.MAIN && !(m.cpu.PC === s.KEY && !keys.length));
     assert.equal(keys.length, 0, 'Move and promotion keys consumed');
     return m.cpu.PC === s.MAIN;
@@ -168,6 +171,26 @@ function verifyChess(createCPU = () => new Z80CPU()) {
     assert.equal(humanMove(m, uci), false, name + ': rejects illegal input');
     assert.deepEqual(m.state(), before, name + ': rejection preserves position and rights');
     assert.equal(m.memory[60324], 15, 'Invalid move leaves a visible question mark');
+  }
+  const initial = fixtures.find(test => test.name === 'initial');
+  const promotionTest = fixtures.find(test => test.name.endsWith('quiet promotion'));
+  for (const [test, prefix, move] of [
+    ...['', 'e', 'e2', 'e2e', 'e2e5'].map(prefix => [initial, prefix, initial.moves.find(move => move.uci === 'e2e4')]),
+    [promotionTest, promotionTest.moves[0].uci.slice(0, 4), promotionTest.moves[0]],
+  ]) {
+    const m = machine(test.fen), before = m.state();
+    m.cpu.PC = s.INPUT_RESET;
+    for (let repeat = 0; repeat < 3; repeat++) {
+      assert.equal(humanKeys(m, [...ZX81.encode(prefix), ZX81.keys.Escape]), false, 'Escape waits for a fresh move');
+      assert.deepEqual(m.state(), before, 'Escape preserves board, turn, castling and en passant');
+      assert.equal(ZX81.decode(m.memory.slice(60320, 60325)), '---- ', 'Escape clears move and status');
+      assert.equal(m.cpu.SP, 65530, 'Repeated Escape unwinds nested input calls without leaking stack');
+    }
+    const keys = ZX81.encode(move.uci.slice(0, 4));
+    if (move.uci[4]) keys.push(34 - promotion[move.uci[4]]);
+    assert.ok(humanKeys(m, keys), 'A fresh move succeeds after Escape');
+    assert.deepEqual(m.board(), boardOnly(fenBoard(move.after)), 'Move after Escape has the expected result');
+    assert.equal(m.cpu.SP, 65534, 'Completed move restores the stack after cancellation');
   }
   for (const sequence of [['h1h2','h8h7','h2h1','h7h8'],['e1e2','e8e7','e2e1','e7e8']]) {
     const m = machine(fixtures.find(test => test.name === 'both white castles').fen);

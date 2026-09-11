@@ -1,4 +1,4 @@
-const CHESS_ASM = `; 1.3K Chess: 1226 bytes of code and data.
+const CHESS_ASM = `; 1.3K Chess: 1234 bytes of code and data.
 ; Inspired by "Full ZX-81 Chess in 1K", Your Computer, February 1983.
 ; A 0x88 board makes every edge test a single AND. Bit 3 is Black;
 ; bit 4 records movement, so castling needs no separate rights table.
@@ -77,6 +77,8 @@ MAIN:
     call BEST_MOVE
     jr MAIN
 INPUT_RESET:
+    ; Escape abandons nested square reads, including any saved file character.
+    ld sp, 65534
     xor a
     ld (60324), a
 DRIVER:
@@ -162,6 +164,8 @@ KEY:
     ; Original ZX81: SLOW mode updates two-byte LAST_K ($4025). For a valid
     ; key, load LAST_K into BC, call ROM $07BD, then read the character at (HL).
     in a, (5)
+    cp 227 ; Escape
+    jp z, INPUT_RESET
     sub c
     cp b
     jr nc, KEY
