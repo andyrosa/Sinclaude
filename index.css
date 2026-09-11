@@ -64,17 +64,17 @@ p {
 }
 
 /* Links */
-a {
+a:not(.launch-button) {
     color: var(--attention-c);
     text-decoration: underline;
 }
 
-a:hover {
+a:not(.launch-button):hover {
     color: var(--surface-text-c);
     text-decoration: underline;
 }
 
-a:visited {
+a:not(.launch-button):visited {
     color: var(--surface-muted-text-c);
 }
 

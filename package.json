@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "Z80 emulator and assembler project",
   "private": true,
+  "license": "Unlicense",
   "scripts": {
-    "test": "node run_asm_tests_node.js && node run_cpu_tests_node.js && node run_keyboard_tests_node.js && node run_speaker_tests_node.js && node run_claudasaur_tests_node.js && node run_simulator_tests_node.js"
+    "test": "node run_asm_tests_node.js && node run_cpu_tests_node.js && node run_keyboard_tests_node.js && node run_speaker_tests_node.js && node run_claudasaur_tests_node.js && node run_chess_tests_node.js && node run_simulator_tests_node.js"
   },
   "browserslist": [
     "defaults",

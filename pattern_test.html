@@ -1,8 +1,10 @@
 <!doctype html>
+<meta charset="utf-8">
 <title>Pattern test 16</title>
 <p>Test 8 — fills/stripes · quadrants/stipple/joins · X/wedges</p>
 <svg width="466" height="86.5" viewBox="0 0 256 48" preserveAspectRatio="none"
      shape-rendering="crispEdges" style="--plot-ink:black;--plot-paper:white;background:white"></svg>
+<script src="zx81_charset.js"></script>
 <script src="simulator.js"></script>
 <script src="character_set_asm.js"></script>
 <script>
@@ -29,7 +31,7 @@ for (let row = 0; row < 6; row++) {
       }
     }
     screen.innerHTML += `<g data-row="${18 + row}" data-col="${col}" data-mask="${shade ? 'shade' : mask}"
-      transform="translate(${col * 8} ${row * 8})">${shade ? sinclairPlotPatterns.get(7) : plotBlockMarkup(mask)}</g>`;
+      transform="translate(${col * 8} ${row * 8})">${shade ? sinclairPlotPatterns.get(8) : plotBlockMarkup(mask)}</g>`;
   }
 }
 </script>

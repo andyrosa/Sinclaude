@@ -127,10 +127,10 @@ class Z80AssemblerTestClass extends TestFramework {
     }
     this.assertAssemblyError('END 12garbage', 'Invalid number');
     this.assertAssemblyError('DB "unterminated', 'Unterminated string literal');
-    this.assertAssemblySuccess("LD A,'\\'' ; apostrophe", [0x3e, 39]);
-    this.assertAssemblySuccess("DB '\\'',2 ; apostrophe then comma", [39, 2]);
+    this.assertAssemblyError("LD A,'\\'' ; apostrophe", "not in the ZX81 character set");
+    this.assertAssemblyError("DB '\\'',2 ; apostrophe then comma", "not in the ZX81 character set");
     this.assertAssemblySuccess("EX AF,AF' ; shadow register", [0x08]);
-    this.assertAssemblySuccess('DB "a; b, \\"quoted\\"",42 ; comment', [...'a; b, "quoted"'].map(c => c.charCodeAt(0)).concat(42));
+    this.assertAssemblySuccess('DB "a; b, \\"quoted\\"",42 ; comment', ZX81.encode('a; b, "quoted"').concat(42));
     this.assertAssemblySuccess('DB -128,255\nDEFW -32768,65535\nDEFS 1,-1', [128,255,0,128,255,255,255]);
     this.assertAssemblySuccess('start: NOP\nEND start\nINVALID', [0]);
     this.assertAssemblySuccess('start: JR start\nORG 100\nHALT', [0x18,0xfe,0x76]);
@@ -391,8 +391,8 @@ class Z80AssemblerTestClass extends TestFramework {
 
     // DB (Define Bytes) directive
     this.assertAssemblySuccess("DB 1, 2, 3", [1, 2, 3]);
-    this.assertAssemblySuccess('DB "Hello"', [72, 101, 108, 108, 111]); // ASCII values
-    this.assertAssemblySuccess('DB 65, "BC", 68', [65, 66, 67, 68]);
+    this.assertAssemblySuccess('DB "Hello"', [45, 42, 49, 49, 52]); // ZX81 codes
+    this.assertAssemblySuccess('DB 65, "BC", 68', [65, 39, 40, 68]);
 
     // DEFB (alias for DB)
     this.assertAssemblySuccess("DEFB 10, 20, 30", [10, 20, 30]);
@@ -571,36 +571,44 @@ class Z80AssemblerTestClass extends TestFramework {
     this.sinks.log("\nTesting String and Character Literals");
 
     // String literals in DB
-    this.assertAssemblySuccess('DB "Hello"', [72, 101, 108, 108, 111]);
-    this.assertAssemblySuccess('DB "A"', [65]);
+    this.assertAssemblySuccess('DB "Hello"', [45, 42, 49, 49, 52]);
+    this.assertAssemblySuccess('DB "A"', [38]);
     this.assertAssemblySuccess('DB ""', []);
+    this.assertAssemblySuccess('DB " £$:?()><=+-*/;,.09AZaz"',
+      [0, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 37, 38, 63, 38, 63]);
+    this.assertAssemblySuccess('DB "▘▞▒█▗", 32, 65, 255', [1, 6, 8, 128, 135, 32, 65, 255]);
+    this.assertAssemblySuccess('DB "A\\nB\\rC\\0"', [38, 118, 39, 118, 40, 0]);
+    this.assertAssemblySuccess("LD A, '\\n'", [0x3e, 118]);
+    for (const char of ['!', '%', '&', '[', ']', '_', '^', '|', 'é']) {
+      this.assertAssemblyError(`DB "${char}"`, 'not in the ZX81 character set');
+    }
 
     // String with special characters
     this.assertAssemblySuccess(
       'DB "Line 1", 10, "Line 2"',
-      [76, 105, 110, 101, 32, 49, 10, 76, 105, 110, 101, 32, 50]
+      [49, 46, 51, 42, 0, 29, 10, 49, 46, 51, 42, 0, 30]
     );
 
     // Non-printable characters via chr()
     this.assertAssemblySuccess(
       "DB chr(9), chr(10), chr(13), chr(0)",
       [9, 10, 13, 0]
-    ); // tab, newline, CR, null
+    ); // Numeric bytes keep their values regardless of their display glyphs.
 
     // Character literals
-    this.assertAssemblySuccess("LD A, 'A'", [0x3e, 65]);
-    this.assertAssemblySuccess("LD A, '0'", [0x3e, 48]);
-    this.assertAssemblySuccess("LD A, ' '", [0x3e, 32]);
-    this.assertAssemblySuccess("LD A, '['", [0x3e, 91]);
+    this.assertAssemblySuccess("LD A, 'A'", [0x3e, 38]);
+    this.assertAssemblySuccess("LD A, '0'", [0x3e, 28]);
+    this.assertAssemblySuccess("LD A, ' '", [0x3e, 0]);
+    this.assertAssemblyError("LD A, '['", "not in the ZX81 character set");
 
     // Character literals in expressions
-    this.assertAssemblySuccess("LD A, 'A' + 1", [0x3e, 66]);
+    this.assertAssemblySuccess("LD A, 'A' + 1", [0x3e, 39]);
 
     // Test DB strings with trailing spaces for address tracking
-    this.assertAssemblySuccess('DB "Hello "', [72, 101, 108, 108, 111, 32]); // String with one trailing space
-    this.assertAssemblySuccess('DB "Test  "', [84, 101, 115, 116, 32, 32]); // String with two trailing spaces
-    this.assertAssemblySuccess('DB " Start"', [32, 83, 116, 97, 114, 116]); // String with leading space
-    this.assertAssemblySuccess('DB " Mid "', [32, 77, 105, 100, 32]); // String with both leading and trailing space
+    this.assertAssemblySuccess('DB "Hello "', [45, 42, 49, 49, 52, 0]); // String with one trailing space
+    this.assertAssemblySuccess('DB "Test  "', [57, 42, 56, 57, 0, 0]); // String with two trailing spaces
+    this.assertAssemblySuccess('DB " Start"', [0, 56, 57, 38, 55, 57]); // String with leading space
+    this.assertAssemblySuccess('DB " Mid "', [0, 50, 46, 41, 0]); // String with both leading and trailing space
 
     // Test that address tracking works correctly with trailing spaces in DB strings
     const trailingSpacesProgram =
@@ -728,10 +736,10 @@ class Z80AssemblerTestClass extends TestFramework {
     };
 
     // Test that we can correctly access bytes at specific addresses
-    this.assert(getByteAtAddress(0) === 72, "Address 0 contains 'H' (72)"); // First byte of "Hello World"
-    this.assert(getByteAtAddress(15) === 32, "Address 15 contains space (32)"); // Last trailing space of MSG1
-    this.assert(getByteAtAddress(16) === 84, "Address 16 contains 'T' (84)"); // First byte of "Test Message"
-    this.assert(getByteAtAddress(31) === 32, "Address 31 contains space (32)"); // Last trailing space of MSG2
+    this.assert(getByteAtAddress(0) === 45, "Address 0 contains 'H' (45)"); // First byte of "Hello World"
+    this.assert(getByteAtAddress(15) === 0, "Address 15 contains space (0)"); // Last trailing space of MSG1
+    this.assert(getByteAtAddress(16) === 57, "Address 16 contains 'T' (57)"); // First byte of "Test Message"
+    this.assert(getByteAtAddress(31) === 0, "Address 31 contains space (0)"); // Last trailing space of MSG2
     this.assert(
       getByteAtAddress(32) === 0x3e,
       "Address 32 contains LD A,n opcode (0x3E)"
@@ -776,14 +784,14 @@ class Z80AssemblerTestClass extends TestFramework {
     this.assertAssemblySuccess(`
       MESSAGE: DB "Hello World"
       LD A, len(MESSAGE)`,
-      [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 0x3e, 11]
+      [45, 42, 49, 49, 52, 0, 60, 52, 55, 49, 41, 0x3e, 11]
     );
 
     // len() in expressions
     this.assertAssemblySuccess(`
       TEXT: DB "Test"
       LD A, len(TEXT) + 5`,
-      [84, 101, 115, 116, 0x3e, 9]
+      [57, 42, 56, 57, 0x3e, 9]
     );
 
     // len() with empty string
@@ -794,7 +802,7 @@ class Z80AssemblerTestClass extends TestFramework {
     );
 
     // chr() function tests
-    this.assertAssemblySuccess("LD A, chr(65)", [0x3e, 65]); // chr(65) = 'A'
+    this.assertAssemblySuccess("LD A, chr(65)", [0x3e, 65]); // chr() preserves numeric bytes
     this.assertAssemblySuccess("DB chr(0)", [0]);
 
     // Error cases
@@ -885,12 +893,12 @@ class Z80AssemblerTestClass extends TestFramework {
           DEFS BUFFER_SIZE, 0    ; Reserve buffer space
           
       MESSAGE:
-          DB "Program complete!", 0
+          DB "Program complete.", 255
           
       ; Subroutine
       PRINT_STRING:
           LD A, (HL)             ; Get character
-          CP 0                   ; Check for null terminator
+          CP 255                 ; Space is zero in ZX81 text, so use a separate terminator
           RET Z                  ; Return if end of string
           ; Output character code would go here
           INC HL                 ; Next character
@@ -902,11 +910,11 @@ class Z80AssemblerTestClass extends TestFramework {
     this.assertAssemblySuccess(
       complexProgram,
       [
-        0x21, 0x26, 0x80, 0x01, 0x10, 0x00, 0x3e, 0x58, 0x77, 0x23, 0x0b, 0x78,
+        0x21, 0x26, 0x80, 0x01, 0x10, 0x00, 0x3e, 0x3d, 0x77, 0x23, 0x0b, 0x78,
         0xb1, 0x20, 0xf9, 0x21, 0x36, 0x80, 0xcd, 0x48, 0x80, 0x76, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x20, 0x63, 0x6f,
-        0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x21, 0x00, 0x7e, 0xfe, 0x00, 0xc8,
+        0x00, 0x00, 53, 55, 52, 44, 55, 38, 50, 0, 40, 52,
+        50, 53, 49, 42, 57, 42, 27, 255, 0x7e, 0xfe, 255, 0xc8,
         0x23, 0x18, 0xf9,
       ]
     );
@@ -924,13 +932,13 @@ class Z80AssemblerTestClass extends TestFramework {
       START:
           LD A, VALUE1           ; Load 121
           LD B, VALUE2 / 100     ; Load 7 (721/100 = 7)
-          LD C, 'A' + VALUE1 - BASE  ; Load 86 (65 + 121 - 100)
+          LD C, 'A' + VALUE1 - BASE  ; Load 59 (38 + 121 - 100)
           HALT
       `;
 
     this.assertAssemblySuccess(
       mathProgram,
-      [0x3e, 0x79, 0x06, 0x07, 0x0e, 0x56, 0x76]
+      [0x3e, 0x79, 0x06, 0x07, 0x0e, 0x3b, 0x76]
     );
 
     // Program with forward and backward references
@@ -968,6 +976,10 @@ class Z80AssemblerTestClass extends TestFramework {
     this.assertAssemblySuccess("CPL", [0x2f]);
     this.assertAssemblySuccess("NEG", [0xed, 0x44]);
     this.assertAssemblySuccess("LDIR", [0xed, 0xb0]);
+    this.assertAssemblySuccess("CPIR", [0xed, 0xb1]);
+    this.assertAssemblySuccess("EXX", [0xd9]);
+    this.assertAssemblySuccess("BIT 7,B", [0xcb, 0x78]);
+    this.assertAssemblySuccess("BIT 7,(HL)", [0xcb, 0x7e]);
     this.assertAssemblySuccess("RET", [0xc9]);
 
     // 8-bit increment/decrement
@@ -1312,9 +1324,9 @@ class Z80AssemblerTestClass extends TestFramework {
     this.assertAssembles(equProgram, "EQU directive case insensitivity");
 
     // Test DB directive with mixed case
-    this.assertAssemblySuccess('db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
-    this.assertAssemblySuccess('DB "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
-    this.assertAssemblySuccess('Db "Hello"', [0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+    this.assertAssemblySuccess('db "Hello"', [45, 42, 49, 49, 52]);
+    this.assertAssemblySuccess('DB "Hello"', [45, 42, 49, 49, 52]);
+    this.assertAssemblySuccess('Db "Hello"', [45, 42, 49, 49, 52]);
 
     // Test DEFW directive
     this.assertAssemblySuccess("defw $1234", [0x34, 0x12]);

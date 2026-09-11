@@ -831,16 +831,12 @@ button:focus-visible {
 
 /* Hover effects only on devices that support true hovering */
 @media (hover: hover) {
-    .button-caption-edit-toggle:hover,
-    .button-caption-edit-toggle.active:hover,
     .not-ready-message:hover {
         background: var(--attention-c);
     }
 }
 
 
-/* Edit toggle and not-ready message shared styles */
-.button-caption-edit-toggle,
 .not-ready-message {
     color: var(--button-text-c);
     cursor: pointer;
@@ -851,27 +847,9 @@ button:focus-visible {
     transition: .3s;
 }
 
-/* Edit toggle specific adjustments */
-.button-caption-edit-toggle {
-    background: var(--button-bgc);
-    border: 2px solid var(--attention-c);
-    border-radius: 0;
-    box-shadow:
-        inset 1px 1px 2px color-mix(in srgb, var(--button-shadow-c), black 30%),
-        inset -1px -1px 2px color-mix(in srgb, var(--button-shadow-c), white 30%);
-    font-style: normal;
-    margin: 4px 0;
-    padding: 4px;
-    transition: .2s;
-}
-
 .not-ready-message {
     background: var(--attention-c);
     border: 2px solid var(--attention-c);
-}
-
-.button-caption-edit-toggle.active {
-    background: var(--attention-c);
 }
 
 /* Header menu */
@@ -940,29 +918,45 @@ h3 .header-item {
     text-align: right;
 }
 
-/* Game buttons */
+.sample-buttons { display: contents; }
 .game-buttons {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    margin: 4px 0 2px;
+    margin: 4px 0;
 }
-
 .game-buttons button {
-    flex: 1;
-    height: 32px;
+    min-width: 0;
+    height: 36px;
+    padding: 0 2px;
     margin: 0;
+    font-size: 12px;
 }
-
-.game-buttons button.edit-mode {
-    font-size: 125%;
-    animation: colorAwayFromBgToAttention 1s ease-in-out infinite;
-    overflow: hidden;
+.startup-setting select {
+    max-width: 100%;
+    padding: 4px;
+    background: var(--editable-text-bgc);
+    color: var(--editable-text-fgc);
+    border: 1px solid var(--border-c);
+}
+.startup-setting select { display: block; width: 100%; margin-top: 6px; }
+.touch-keyboard {
+    display: none;
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
     padding: 0;
+    resize: none;
+    font: 16px sans-serif;
+    border: 0;
+    /* A real input over the screen opens the phone keyboard on the tap itself. */
+    opacity: 0;
 }
-
-.game-buttons button .edit-input {
-    text-align: center;
+@media (any-pointer: coarse) {
+    .touch-keyboard { display: block; }
 }
 
 /* Update Dialog Overlay */

@@ -1,7 +1,7 @@
 // Initialization script - waits for all dependencies to load then starts the app
 window.addEventListener('load', () => {
     // A script that failed to load was already reported by boot.js
-    window.sinclaude = new Simulator();
+    window.sinclaude = new Simulator(SIMULATOR_SAMPLES);
 
     // Show the persisted retro font choice in the menu
     updateRetroFontsToggle();
@@ -14,9 +14,8 @@ window.addEventListener('load', () => {
 
     window.sinclaude.setupAssemblyContentObserver();
 
-    // A named game link launches directly.
-    const urlParams = new URLSearchParams(window.location.search);
-    if (loadedFromURL && urlParams.get('run') === 'claudasaur') {
+    // Shared programs use the audio gate so their opening sounds are preserved.
+    if (loadedFromURL) {
         window.sinclaude.autostart();
     }
 });

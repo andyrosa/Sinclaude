@@ -82,7 +82,7 @@
  * 
  * EXPRESSION EVALUATION:
  * Operators: + - * / () with standard precedence
- * Functions: len(symbol) returns string length, chr(n) returns character with ASCII code n
+ * Functions: len(symbol) returns string length, chr(n) returns the numeric byte n
  * 
  * ESCAPE SEQUENCES:
  * \n = newline (10), \t = tab (9), \r = carriage return (13), \0 = null (0)
@@ -96,6 +96,9 @@
  *
  * The instruction set is the definitions table in _buildInstructionSet.
  */
+
+const assemblerCharset = typeof module !== 'undefined' && module.exports
+    ? require('./zx81_charset.js') : ZX81;
 
 class Z80Assembler {
     static MEMORY_SIZE = 65536;
@@ -575,7 +578,7 @@ class Z80Assembler {
             if (this._isStringLiteral(op)) {
                 const processedStr = this._stringLiteralValue(op);
                 for (let i = 0; i < processedStr.length; i++) {
-                    bytes.push(Z80Assembler._requireRange(processedStr.charCodeAt(i), 0, 255, 'DB character byte'));
+                    bytes.push(assemblerCharset.encodeCharacter(processedStr[i]));
                 }
             } else {
                 const value = this._evaluateExpression(op, this.symbols, parsed.lineNum);
@@ -831,6 +834,8 @@ class Z80Assembler {
 
             // Block operations
             { m: 'LDIR', ops: [], opc: [0xED, 0xB0] },
+            { m: 'CPIR', ops: [], opc: [0xED, 0xB1] },
+            { m: 'EXX', ops: [], opc: [0xD9] },
 
             // Stack operations
             { m: 'PUSH', ops: ['BC'], opc: [0xC5] },
@@ -920,6 +925,8 @@ class Z80Assembler {
             { m: 'BIT', ops: ['5', 'A'], opc: [0xCB, 0x6F] },
             { m: 'BIT', ops: ['6', 'A'], opc: [0xCB, 0x77] },
             { m: 'BIT', ops: ['7', 'A'], opc: [0xCB, 0x7F] },
+            { m: 'BIT', ops: ['7', 'B'], opc: [0xCB, 0x78] },
+            { m: 'BIT', ops: ['7', '(HL)'], opc: [0xCB, 0x7E] },
             { m: 'BIT', ops: ['7', 'E'], opc: [0xCB, 0x7B] },
             { m: 'BIT', ops: ['7', 'D'], opc: [0xCB, 0x7A] },
             
@@ -1038,7 +1045,7 @@ class Z80Assembler {
     }
 
     /**
-     * Processes escape sequences in a string, converting them to their ASCII values.
+     * Processes source escapes before ZX81 character encoding.
      * @param {string} str - The string containing potential escape sequences.
      * @returns {string} The string with escape sequences converted to actual characters.
      */
@@ -1369,7 +1376,7 @@ class ExpressionParser {
             if (processedChar.length !== 1) {
                 throw new Error('Character literals must resolve to exactly one character');
             }
-            return processedChar.charCodeAt(0);
+            return assemblerCharset.encodeCharacter(processedChar);
         }
         
         // Handle string literals (not allowed in arithmetic expressions)
@@ -1454,7 +1461,7 @@ class ExpressionParser {
 
     // Handle chr() function
     handleChrFunction(charCode) {
-        // Ensure the character code is within valid ASCII range
+        // Numeric character codes must fit in one byte.
         if (charCode < 0 || charCode > 255) {
             throw new Error(`chr() function argument out of range (0-255): ${charCode}`);
         }

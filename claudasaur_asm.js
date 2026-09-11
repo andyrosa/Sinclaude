@@ -3,6 +3,7 @@
 const CLAUDASAUR_ASM = (() => {
   const duration = typeof module !== 'undefined' && module.exports
     ? require('./constants_and_css_vars.js').encodeBeepDuration : encodeBeepDuration;
+  const charset = typeof module !== 'undefined' && module.exports ? require('./zx81_charset.js') : ZX81;
   const art = [];
   const packet = (name, pixels) => {
     art.push(`${name}:`);
@@ -13,11 +14,14 @@ const CLAUDASAUR_ASM = (() => {
   };
   const text = (name, row, message) => {
     if (message.length > 32) throw new Error(`Claudasaur text exceeds screen width: ${name}`);
-    packet(name, Array.from(message, (char, col) => [row * 32 + col, char.charCodeAt(0)]));
+    // Odd-length lines use the extra blank cell on the left consistently.
+    const left = Math.round((32 - message.length) / 2);
+    // Position the letters directly: padding spaces would erase maze walls behind EXIT.
+    packet(name, Array.from(message, (char, col) => [row * 32 + left + col, charset.encodeCharacter(char)]));
   };
   // Each character holds four PLOT pixels: top-left, top-right, bottom-left,
-  // bottom-right. Inverse graphics supply the two missing quadrant patterns.
-  const plotChars = [32, 147, 14, 21, 9, 6, 17, 22, 13, 18, 16, 137, 8, 20, 19, 160];
+  // bottom-right. ZX81 codes 1-7 are that bit pattern; inverses supply the rest.
+  const plotChars = [0, 1, 2, 3, 4, 5, 6, 7, 135, 134, 133, 132, 131, 130, 129, 128];
   const graphics = (name, draw) => {
     const cells = new Map();
     const plot = (x, y) => {
@@ -30,7 +34,7 @@ const CLAUDASAUR_ASM = (() => {
   const shadedFace = (name, left, right, top, bottom) => {
     const cells = [];
     for (let row = top; row <= bottom; row++) {
-      for (let col = left; col <= right; col++) cells.push([row * 32 + col, 7]);
+      for (let col = left; col <= right; col++) cells.push([row * 32 + col, 8]);
     }
     packet(name, cells);
   };
@@ -49,14 +53,14 @@ const CLAUDASAUR_ASM = (() => {
     '   ##     ##    ',
     '  ###     ###   ',
   ];
-  const spritePixels = (scale, centerY, color = 160) => {
+  const spritePixels = (scale, centerY, color = 128) => {
     const pixels = new Map();
     sprite.forEach((line, y) => Array.from(line).forEach((char, x) => {
       if (char === '#') pixels.set((Math.round(centerY + (y - 6) * scale)) * 32 + Math.round(15 + (x - 7) * scale), color);
     }));
     return [...pixels];
   };
-  packet('mascot', spritePixels(1, 9, 7 ^ 128));
+  packet('mascot', spritePixels(1, 9, 8 ^ 128));
   const x = [0, 7, 11, 14, 15];
   // All depth bands share one projected edge so an uninterrupted wall cannot
   // change slope at a packet boundary.
@@ -64,8 +68,8 @@ const CLAUDASAUR_ASM = (() => {
   const top = x.map(col => Math.floor(wallTop(col * 2) / 2));
   const bottom = top.map(row => 23 - row);
   for (let depth = 0; depth < 4; depth++) {
-    // Use the opposite stipple phase to the facing walls (character 7).
-    packet(`monster_${depth}`, spritePixels([1, 0.65, 0.4, 0.23][depth], 12, 7 ^ 128));
+    // Use the opposite stipple phase to the facing walls (character 8).
+    packet(`monster_${depth}`, spritePixels([1, 0.65, 0.4, 0.23][depth], 12, 8 ^ 128));
     for (const side of ['left', 'right']) {
       for (const wall of [0, 1]) {
         const name = `${side}_${wall}_${depth}`;
@@ -92,22 +96,24 @@ const CLAUDASAUR_ASM = (() => {
       }
     }
     shadedFace(`front_${depth}`, x[depth + 1], 31 - x[depth + 1], top[depth + 1], bottom[depth + 1]);
-    text(`exit_${depth}`, 11, ' '.repeat(13) + 'EXIT');
+    text(`exit_${depth}`, 11, 'EXIT');
   }
-  text('heading', 0, '       C L A U D A S A U R');
-  text('intro_1', 17, ' FIND THE EXIT. AVOID THE SPIKES');
-  text('intro_2', 19, ' W/S MOVE   A/D TURN   P PAUSE');
-  text('intro_3', 21, '       SPACE TO ENTER MAZE');
-  text('help', 23, 'W/S MOVE A/D TURN SPACE MAP P=II');
-  text('bearing', 22, ' FACING:   MAP: ^ YOU * BEAST E');
-  text('waiting', 1, '   CLAUDASAUR IS WAKING UP...');
-  text('hunting', 1, '   CLAUDASAUR IS HUNTING YOU');
-  text('nearby', 1, '   FOOTSTEPS ARE GETTING LOUDER');
-  text('danger', 1, '   RUN! CLAUDASAUR IS CLOSE!');
-  text('paused_text', 1, '       PAUSED - P TO RESUME');
-  text('won_text', 18, '    YOU ESCAPED THE CLAUDASAUR!');
-  text('lost_text', 18, '    CLAUDASAUR CAUGHT YOU!');
-  text('retry_text', 21, '       SPACE TO PLAY AGAIN');
+  text('heading', 0, 'C L A U D A S A U R');
+  text('intro_1', 17, 'FIND THE EXIT. AVOID THE SPIKES');
+  text('intro_2', 19, 'W/S MOVE   A/D TURN   P PAUSE');
+  text('intro_3', 21, 'SPACE TO ENTER MAZE');
+  text('help', 23, 'W/S:MOVE  A/D:TURN  SPACE:MAP');
+  ['NORTH N', 'EAST E', 'SOUTH S', 'WEST W'].forEach((bearing, direction) => {
+    text(`bearing_${direction}`, 22, `${bearing}YOU *BEAST E:EXIT P:PAUSE`);
+  });
+  text('waiting', 1, 'CLAUDASAUR IS WAKING UP...');
+  text('hunting', 1, 'CLAUDASAUR IS HUNTING YOU');
+  text('nearby', 1, 'FOOTSTEPS ARE GETTING LOUDER');
+  text('danger', 1, 'RUN. CLAUDASAUR IS CLOSE.');
+  text('paused_text', 1, 'PAUSED - P TO RESUME');
+  text('won_text', 18, 'YOU ESCAPED THE CLAUDASAUR.');
+  text('lost_text', 18, 'CLAUDASAUR CAUGHT YOU.');
+  text('retry_text', 21, 'SPACE TO PLAY AGAIN');
   const maze = [
     '################',
     '#......#......E#',
@@ -164,9 +170,8 @@ depth: DB 0
 seen: DB 255
 delta: DB 0
 deltas: DB 240,1,16,255
-compass: DB 'N','E','S','W'
-; Byte 94 is the Sinclair up arrow; the charset has no down arrow.
-map_glyphs: DB 94,'>','v','<'
+; Compass letters are available in the original ZX81 character set.
+map_glyphs: DB 'N','E','S','W'
 facing_glyph: DB 0
 
 title:
@@ -260,21 +265,21 @@ held_key:
   LD A,B
   CP 'W'
   JR Z,forward
-  CP 145
+  CP 112
   JR Z,forward
   CP 'S'
   JR Z,backward
-  CP 147
+  CP 113
   JR Z,backward
   CP C
   JP Z,tick
   CP 'A'
   JR Z,turn_left
-  CP 144
+  CP 114
   JR Z,turn_left
   CP 'D'
   JR Z,turn_right
-  CP 146
+  CP 115
   JR Z,turn_right
   JP tick
 turn_left:
@@ -668,21 +673,17 @@ render:
   CALL paint
   LD HL,help
   CALL paint
-  LD HL,bearing
-  CALL paint
+  LD HL,bearing_table
+  LD A,(direction)
+  CALL paint_index
+  ; The map legend and the map itself both show the facing glyph.
   LD A,(direction)
   LD E,A
   LD D,0
-  LD HL,compass
-  ADD HL,DE
-  LD A,(HL)
-  LD (BUFFER+712),A
-  ; The map legend and the map itself both show the facing glyph.
   LD HL,map_glyphs
   ADD HL,DE
   LD A,(HL)
   LD (facing_glyph),A
-  LD (BUFFER+720),A
   LD HL,hunting
   LD A,(distance)
   CP 255
@@ -799,7 +800,7 @@ map_cell:
   CP 2
   LD A,'E'
   JR Z,map_put
-  LD A,160
+  LD A,128
 map_put:
   LD (DE),A
   INC HL
@@ -840,6 +841,7 @@ right_table: DEFW ${Array.from({length:4}, (_, d) => `right_0_${d},right_1_${d}`
 front_table: DEFW front_0,front_1,front_2,front_3
 monster_table: DEFW monster_0,monster_1,monster_2,monster_3
 exit_table: DEFW exit_0,exit_1,exit_2,exit_3
+bearing_table: DEFW bearing_0,bearing_1,bearing_2,bearing_3
 ${art.join('\n')}
 ; Page aligned map: read_cell uses H=78 (0x4E00).
 ORG 19968

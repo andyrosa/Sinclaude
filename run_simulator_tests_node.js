@@ -2,18 +2,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const sources = ['constants_and_css_vars.js', 'z80_assembler.js', 'z80_cpu_emulator.js',
-  'character_set_asm.js', 'basics_asm.js', 'default_asm.js', 'space_invader_asm.js', 'claudasaur_asm.js', 'simulator.js']
+const ZX81 = require('./zx81_charset.js');
+const sources = ['zx81_charset.js', 'constants_and_css_vars.js', 'z80_assembler.js', 'z80_cpu_emulator.js',
+  'character_set_asm.js', 'basics_asm.js', 'default_asm.js', 'space_invader_asm.js', 'claudasaur_asm.js', 'chess_asm.js', 'sample_programs.js', 'simulator.js']
   .map(file => fs.readFileSync(require.resolve('./' + file), 'utf8')).join('\n');
 const initialization = fs.readFileSync(require.resolve('./initialization.js'), 'utf8');
 
 // Stub browser services and presentation only. Assembly, CPU execution, URL loading,
 // state transitions, button rendering, audio lifecycle and timers are the real code.
-function fixture(url = 'https://example.test/simulator.html') {
+function fixture(url = 'https://example.test/simulator.html', storage = new Map(), extraSamples = []) {
   function eventTarget() {
     const listeners = new Map();
     return {
       classList: { toggle() {}, add() {} },
+      children: [],
+      _html: '',
+      set innerHTML(value) { this._html = value; this.children = []; },
+      get innerHTML() { return this._html; },
+      appendChild(child) { this.children.push(child); },
+      setPointerCapture() {},
       focus() {}, scrollIntoView() {},
       addEventListener(type, callback, options = false) {
         if (!listeners.has(type)) listeners.set(type, new Set());
@@ -37,7 +44,12 @@ function fixture(url = 'https://example.test/simulator.html') {
       },
     };
   }
-  const controls = { innerHTML: '' };
+  const controls = eventTarget();
+  const elements = new Map();
+  const localStorage = {
+    getItem: key => storage.has(key) ? storage.get(key) : null,
+    setItem: (key, value) => storage.set(key, String(value)),
+  };
   const section = { focus() {}, scrollIntoView() {} };
   const execution = { querySelector: () => null, appendChild() {} };
   const audioUI = Object.fromEntries(['audioStartPrompt', 'audioStartMessage', 'startWithSound', 'startMuted']
@@ -47,7 +59,12 @@ function fixture(url = 'https://example.test/simulator.html') {
     hidden: false,
     body: eventTarget(),
     documentElement: { style: { setProperty() {} } },
-    getElementById: id => audioUI[id] || controls,
+    getElementById: id => {
+      if (audioUI[id]) return audioUI[id];
+      if (id === 'executionControls') return controls;
+      if (!elements.has(id)) elements.set(id, eventTarget());
+      return elements.get(id);
+    },
     querySelector: selector => selector === '.execution-section' ? section : execution,
     createElement: eventTarget,
   });
@@ -78,7 +95,7 @@ function fixture(url = 'https://example.test/simulator.html') {
     createGain() { return { gain: {}, connect() {} }; }
   }
   const context = vm.createContext({
-    window: windowStub, document: documentStub, URL, URLSearchParams, btoa, atob,
+    window: windowStub, document: documentStub, localStorage, URL, URLSearchParams, btoa, atob,
     AudioContext: AudioStub, performance: { now: () => ++now },
     setTimeout: (callback, ms) => schedule(callback, ms, false),
     setInterval: (callback, ms) => schedule(callback, ms, true),
@@ -86,7 +103,9 @@ function fixture(url = 'https://example.test/simulator.html') {
     userMessage: message => messages.push(message),
     userMessageAboutBug: (message, detail) => bugs.push({ message, detail }),
   });
-  const { Simulator, Z80CPU, STATE } = vm.runInContext(sources + '\n({Simulator, Z80CPU, STATE});', context);
+  const { Simulator, Z80CPU, STATE, SIMULATOR_SAMPLES } = vm.runInContext(
+    sources + '\n({Simulator, Z80CPU, STATE, SIMULATOR_SAMPLES});', context);
+  const catalog = { ...SIMULATOR_SAMPLES, samples: [...SIMULATOR_SAMPLES.samples, ...extraSamples] };
   const sim = Object.create(Simulator.prototype);
   Object.assign(sim, {
     cpu: new Z80CPU(), memory: new Uint8Array(65536), ioMap: new Uint8Array(256),
@@ -100,14 +119,18 @@ function fixture(url = 'https://example.test/simulator.html') {
   });
   sim.initializeCharacterMappings();
   sim.initializeKeyMappings();
+  sim.initializePreferences(catalog);
+  sim.setupSampleControls();
+  sim.createGameButtons();
+  sim.cpu.InPort = port => sim.InPort(port);
   sim.setupCleanupHandlers();
   return {
-    sim, STATE, timers, windowStub, documentStub, contexts, controls, messages, bugs, audioUI,
+    sim, STATE, timers, windowStub, documentStub, contexts, controls, messages, bugs, audioUI, storage,
     initialize() {
       sim.setupAssemblyContentObserver = () => {};
       vm.runInNewContext(initialization, {
         window: windowStub, Simulator: function() { return sim; },
-        updateRetroFontsToggle() {}, URLSearchParams,
+        updateRetroFontsToggle() {}, URLSearchParams, SIMULATOR_SAMPLES: catalog,
       });
       windowStub.emit('load');
     },
@@ -134,14 +157,76 @@ async function main() {
   card.sim.loadDefaultAssembly();
   assert.equal(card.sim.getAssemblyCode(), require('./character_set_asm.js'), 'Default program is the character-set test');
   const choices = fixture();
+  const gameKeys = current => Array.from(current.documentStub.getElementById('gameButtons').children, button => button.textContent);
+  const chosenKeys = ['W', 'S', 'Space', 'A', 'D'];
   const programs = [['characterSet','character_set_asm.js'], ['basics','basics_asm.js'],
-    ['performance','default_asm.js'], ['spaceInvader','space_invader_asm.js'], ['claudasaur','claudasaur_asm.js']];
+    ['performance','default_asm.js'], ['spaceInvader','space_invader_asm.js'], ['claudasaur','claudasaur_asm.js'], ['chess','chess_asm.js']];
   for (const [value, file] of programs) {
     const option = { value };
     choices.sim.loadProgramFromSelect(option);
     assert.equal(choices.sim.getAssemblyCode(), require('./' + file).trimStart(), `Program list loads ${file}`);
     assert.equal(option.value, '', 'Program can be selected again');
+    assert.deepEqual(gameKeys(choices), chosenKeys, 'Loading any sample preserves the game buttons');
+    assert.equal(choices.windowStub.location.searchParams.get('sample'), value, 'Every sample gets a short link');
+    for (const parameter of ['sample', 'run']) {
+      const linked = fixture('https://example.test/simulator.html?' + parameter + '=' + value, choices.storage);
+      linked.initialize();
+      assert.equal(linked.sim.getAssemblyCode(), require('./' + file).trimStart());
+      assert.notEqual(linked.sim.state, linked.STATE.NOT_READY, 'All current and legacy sample links autostart');
+      assert.deepEqual(gameKeys(linked), chosenKeys);
+      assert.equal(linked.windowStub.location.searchParams.get('sample'), value, 'Links use the current sample parameter');
+      assert.equal(linked.windowStub.location.searchParams.has('run'), false);
+      assert.deepEqual(linked.bugs, []);
+    }
   }
+  const sampleButtons = choices.documentStub.getElementById('sampleButtons').children;
+  const sampleOptions = choices.documentStub.getElementById('sampleSelect').children;
+  assert.equal(sampleButtons.length, programs.length);
+  assert.equal(sampleOptions.length, programs.length + 1);
+  sampleButtons[1].emit('click');
+  assert.equal(choices.windowStub.location.searchParams.get('sample'), 'basics', 'Generated buttons use the generic loader');
+  choices.sim.setAssemblyCode('; 1.3K Chess - arbitrary comment\nHALT');
+  assert.deepEqual(gameKeys(choices), chosenKeys, 'Source comments cannot configure controls');
+  choices.storage.set('simulatorPreferences', JSON.stringify({
+    keyboardLayout: 'full', customKeys: ['7', 'E'], defaultSampleId: 'basics',
+  }));
+  const settingsRefresh = fixture(undefined, choices.storage);
+  assert.deepEqual(gameKeys(settingsRefresh), chosenKeys, 'Old keyboard preferences cannot restore the removed layouts');
+  assert.equal(settingsRefresh.sim.defaultSampleId, 'basics', 'Existing startup preferences survive the keyboard simplification');
+  assert.deepEqual(settingsRefresh.messages, []);
+  settingsRefresh.sim.setDefaultSample('basics');
+  assert.deepEqual(JSON.parse(choices.storage.get('simulatorPreferences')), { defaultSampleId: 'basics' });
+  const defaultRefresh = fixture(undefined, choices.storage);
+  defaultRefresh.initialize();
+  assert.equal(defaultRefresh.sim.getAssemblyCode(), require('./basics_asm.js').trimStart());
+  assert.equal(defaultRefresh.sim.state, defaultRefresh.STATE.NOT_READY, 'The startup preference loads without running');
+  defaultRefresh.sim.setDefaultSample('');
+  const blankRefresh = fixture(undefined, choices.storage);
+  blankRefresh.initialize();
+  assert.equal(blankRefresh.sim.getAssemblyCode(), '', 'Blank editor is a persistent startup choice');
+  assert.equal(blankRefresh.sim.setDefaultSample('missing'), false);
+
+  const added = fixture('https://example.test/simulator.html?sample=extra', new Map(),
+    [{ id: 'extra', name: 'Extra sample', source: 'LD A,19\nHALT' }]);
+  added.initialize();
+  assert.equal(added.sim.cpu.registers.A, 19, 'A new catalog entry needs no simulator changes');
+  assert.ok(added.documentStub.getElementById('sampleButtons').children.some(button => button.textContent === 'Load Extra sample'));
+  added.sim.assemblyColumn.textContent = 'LD A,23\nHALT';
+  added.sim.assembleAndRun();
+  assert.equal(added.sim.cpu.registers.A, 23);
+  assert.equal(added.windowStub.location.searchParams.has('sample'), false, 'Editing invalidates sample provenance');
+  assert.ok(added.windowStub.location.searchParams.has('asm'));
+  const pasted = fixture();
+  pasted.sim.loadAssemblyCode('LD A,19\nHALT');
+  pasted.sim.assembleAndRun();
+  assert.equal(pasted.windowStub.location.searchParams.has('sample'), false, 'Pasted source remains custom');
+  assert.ok(pasted.windowStub.location.searchParams.has('asm'));
+  pasted.sim.loadAssemblyCode(require('./basics_asm.js'));
+  pasted.sim.assembleAndRun();
+  assert.equal(pasted.windowStub.location.searchParams.has('sample'), false, 'Even an exact sample copy is not recognized by source');
+  pasted.sim.updateURL(';' + 'x'.repeat(3000));
+  assert.equal(pasted.windowStub.location.searchParams.has('asm'), false, 'An oversized save removes stale custom source too');
+
   const select = { value: 'characterSet' };
   card.sim.loadProgramFromSelect(select);
   assert.equal(select.value, '', 'The character-set program is selectable again after Clear');
@@ -152,7 +237,7 @@ async function main() {
   assert.equal(card.sim.memory[59999], 91);
   assert.equal(card.sim.memory[60768], 92);
   const screen = card.sim.memory.slice(60000, 60768);
-  assert.equal(String.fromCharCode(...screen.slice(0, 32)).trim(), 'CHARACTER SET TEST');
+  assert.equal(ZX81.decode(screen.slice(0, 32)).trim(), 'CHARACTER SET TEST');
   for (let code = 0; code < 256; code++) {
     const row = 2 + Math.floor(code / 16);
     const col = Math.floor(code % 16 / 4) * 8 + 3 + code % 4;
@@ -160,7 +245,7 @@ async function main() {
   }
   for (let row = 18; row < 24; row++) {
     const cells = screen.slice(row * 32, (row + 1) * 32);
-    assert.equal(String.fromCharCode(...cells.slice(0, 5)), `ROW${row}`);
+    assert.equal(ZX81.decode(cells.slice(0, 5)), `ROW${row}`);
     if (row >= 21) for (let col = 5; col < 32; col++) {
       assert.equal(cells[col], screen[(row - 3) * 32 + col] ^ 128, 'Negative lies directly below its pattern');
     }
@@ -176,13 +261,13 @@ async function main() {
     ['#.#.#.','.#.#.#','#.#.#.','.#.#.#','#.#.#.','.#.#.#'],
     ['#....#','.#..#.','..##..','..##..','.#..#.','#....#'],
   ];
-  const masks = new Map([[32,0],[6,5],[8,12],[9,4],[13,8],[14,2],[16,10],[17,6],[18,9],[19,14],[20,13],[21,3],[22,7]]);
+  const masks = new Map([[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,6],[7,7]]);
   expectedPatterns.forEach((pattern, tile) => {
     for (let y = 0; y < 6; y++) {
       let actual = '';
       for (let x = 0; x < 6; x++) {
         const byte = screen[(18 + (y >> 1)) * 32 + 5 + tile * 3 + (x >> 1)];
-        if (tile === 1) { assert.equal(byte, 7); continue; }
+        if (tile === 1) { assert.equal(byte, 8); continue; }
         const mask = masks.get(byte & 127) ^ (byte >= 128 ? 15 : 0);
         actual += mask & (1 << ((y % 2) * 2 + x % 2)) ? '#' : '.';
       }
@@ -205,8 +290,8 @@ async function main() {
   }];
   for (const retro of [false, true]) {
     graphics.useSinclairFont = retro;
-    for (const byte of [6, 7, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22, 32,
-      134, 135, 136, 137, 141, 142, 144, 145, 146, 147, 148, 149, 150, 160]) {
+    for (const byte of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 128]) {
       graphics.updateCharacterAt(0, byte);
       assert.equal(classes.get('sinclair-font'), false, 'Graphics never receive font stretching in either mode');
       assert.equal(classes.get('plot-graphics'), true);
@@ -216,30 +301,44 @@ async function main() {
     }
   }
   assert.ok(graphic.includes('d=""'), 'Inverse space fills the whole cell by inverting blank paper');
-  graphics.updateCharacterAt(0, 147);
+  graphics.updateCharacterAt(0, 135);
   assert.deepEqual([...graphic.matchAll(/M(\d+) (\d+)h4v4h-4z/g)].map(([, x, y]) => [Number(x), Number(y)]),
-    [[4, 0], [0, 4], [4, 4]],
-    'Inverse lower-right three-quarter block leaves only the top-left quadrant black');
+    [[0, 0], [4, 0], [0, 4]],
+    'Inverse upper-left three-quarter block leaves only the bottom-right quadrant black');
   const writesBeforeInversion = graphicWrites;
-  graphics.updateCharacterAt(0, 19);
-  assert.equal(graphicWrites, writesBeforeInversion, 'Inverting a graphic reuses its SVG');
   graphics.updateCharacterAt(0, 7);
+  assert.equal(graphicWrites, writesBeforeInversion, 'Inverting a graphic reuses its SVG');
+  graphics.updateCharacterAt(0, 8);
   const dots = [...graphic.matchAll(/M(\d+) (\d+)h1v1h-1z/g)].map(([, x, y]) => [Number(x), Number(y)]);
   assert.equal(dots.length, 32);
   assert.ok(dots.every(([x, y]) => (x + y) % 2 === 0), 'Stipple is an alternating 8 by 8 bitmap');
-  assert.equal(graphics.sinclairToUnicode(7), '\u2592', 'Stippled wall faces use the shade character');
-  graphics.updateCharacterAt(0, 65);
+  assert.equal(graphics.sinclairToUnicode(8), '\u2592', 'Stippled wall faces use the shade character');
+  graphics.updateCharacterAt(0, 38);
   assert.equal(classes.get('sinclair-font'), true, 'Text retains the Sinclair font');
   assert.equal(classes.get('plot-graphics'), false);
   assert.equal(graphics.screenElements[0].plotCode, undefined, 'Writing text clears the graphics cache');
   assert.equal(graphics.screenElements[0].textContent, 'A');
-  graphics.updateCharacterAt(0, 7);
+  for (const [byte, glyph, inverse] of [[0, ' ', false], [32, '4', false],
+    [160, '4', true], [166, 'A', true], [63, 'Z', false], [191, 'Z', true],
+    [64, '⸮', false], [127, '⸮', false], [192, '⸮', false], [255, '⸮', false]]) {
+    graphics.updateCharacterAt(0, byte);
+    assert.equal(graphics.sinclairToUnicode(byte), glyph, `ZX81 glyph at ${byte}`);
+    assert.equal(classes.get('inverted'), inverse, `Only valid ZX81 glyphs invert at ${byte}`);
+    assert.equal(classes.get('plot-graphics'), byte === 0, 'ASCII space and its inverse are now digit 4');
+  }
+  for (const [byte, top] of [[9, 4], [10, 0]]) {
+    graphics.updateCharacterAt(0, byte);
+    const halfDots = [...graphic.matchAll(/M(\d+) (\d+)h1v1h-1z/g)].map(([, x, y]) => [Number(x), Number(y)]);
+    assert.equal(halfDots.length, 16);
+    assert.ok(halfDots.every(([x, y]) => y >= top && y < top + 4 && (x + y) % 2 === 0));
+  }
+  graphics.updateCharacterAt(0, 8);
   graphics.useSinclairFont = false;
-  graphics.updateCharacterAt(0, 7);
+  graphics.updateCharacterAt(0, 8);
   assert.equal(classes.get('plot-graphics'), true, 'Turning retro fonts off keeps the graphics renderer');
-  assert.equal(graphics.screenElements[0].plotCode, 7);
+  assert.equal(graphics.screenElements[0].plotCode, 8);
   assert.equal(graphics.screenElements[0].textContent, '');
-  graphics.updateCharacterAt(0, 65);
+  graphics.updateCharacterAt(0, 38);
   assert.equal(classes.get('sinclair-font'), false, 'Non-retro text uses the normal font');
   assert.equal(classes.get('plot-graphics'), false);
   assert.equal(graphics.screenElements[0].textContent, 'A');
@@ -261,7 +360,7 @@ async function main() {
   assert.equal(disabled.sim.loadFromURL(), false);
   assert.equal(disabled.windowStub.location.searchParams.get('asm'), 'dont');
 
-  const gameUrl = 'https://example.test/simulator.html?run=claudasaur&other=value';
+  const gameUrl = 'https://example.test/simulator.html?sample=claudasaur&other=value';
   const game = fixture(gameUrl);
   game.initialize();
   assert.equal(game.sim.getAssemblyCode(), require('./claudasaur_asm.js').trimStart());
@@ -275,13 +374,47 @@ async function main() {
   gameRefresh.initialize();
   assert.equal(gameRefresh.sim.state, gameRefresh.STATE.FREE_RUNNING, 'Refresh restarts the game');
   gameRefresh.sim.clearAssembly();
-  assert.equal(gameRefresh.windowStub.location.searchParams.has('run'), false);
+  assert.equal(gameRefresh.windowStub.location.searchParams.has('sample'), false);
   assert.equal(gameRefresh.windowStub.location.searchParams.get('other'), 'value');
 
   const savedLoad = fixture(url.href);
+  const chessUrl = 'https://example.test/simulator.html?sample=chess&other=value';
+  const chess = fixture(chessUrl);
+  chess.initialize();
+  assert.equal(chess.sim.state, chess.STATE.FREE_RUNNING, 'The chess link starts the game');
+  assert.equal(chess.windowStub.location.href, chessUrl, 'Chess keeps its short link');
+  assert.deepEqual(gameKeys(chess), chosenKeys, 'Chess uses the same default controls as every program');
+  assert.equal(chess.sim.cpu.executeSteps(chess.sim.memory,chess.sim.ioMap,10000).error,null);
+  assert.equal(chess.sim.memory[0x2064],9,'Chess starts on the opening board without a Space press');
+  assert.ok(chess.sim.memory.slice(60000,60768).some(value=>value!==0),'The opening board is visible without input');
+  for(const key of 'E7E5') {
+    chess.sim.pressKey(key,key);
+    chess.sim.releaseKey(key);
+  }
+  assert.equal(chess.sim.ioMap[1],255, 'All four taps ended before the next CPU batch');
+  assert.equal(chess.sim.cpu.executeSteps(chess.sim.memory,chess.sim.ioMap,2000000).error,null);
+  assert.equal(chess.sim.memory[0x2064],0,'The queued move vacates E7');
+  assert.equal(chess.sim.memory[0x2044],17,'After E7E5 the computer captures on E5 with its central pawn');
+  assert.equal(chess.sim.memory[0x2033],0,'The reply vacates D4');
+  assert.equal(chess.sim.memory[0x2080],8,'The computer replied and returned the turn to Black');
+  chess.sim.pressKey('E','E');
+  chess.sim.resetRequest();
+  assert.equal(chess.sim.InPort(5),255,'Reset discards partial queued moves');
+  assert.equal(chess.sim.cpu.executeSteps(chess.sim.memory,chess.sim.ioMap,10000).error,null);
+  assert.equal(chess.sim.memory[0x2064],9,'Reset returns directly to the opening board');
+  chess.sim.loadSample('characterSet');
+  assert.deepEqual(gameKeys(chess), chosenKeys);
+  const chessRefresh=fixture(chessUrl);
+  chessRefresh.initialize();
+  assert.equal(chessRefresh.sim.state,chessRefresh.STATE.FREE_RUNNING,'Chess starts after refresh');
+  assert.deepEqual(chess.bugs,[]);
   savedLoad.initialize();
   assert.equal(savedLoad.sim.getAssemblyCode(), source);
-  assert.equal(savedLoad.sim.state, savedLoad.STATE.NOT_READY, 'Saved assembly loads without autostart');
+  assert.equal(savedLoad.sim.cpu.registers.A, 42, 'Saved assembly starts automatically from its URL');
+  assert.equal(savedLoad.sim.state, savedLoad.STATE.STEPPING, 'Saved assembly runs through HALT');
+  const savedRefresh = fixture(savedLoad.windowStub.location.href);
+  savedRefresh.initialize();
+  assert.equal(savedRefresh.sim.cpu.registers.A, 42, 'Refreshing a saved URL executes the program again');
   const plain = fixture();
   plain.initialize();
   assert.equal(plain.sim.state, plain.STATE.NOT_READY, 'An ordinary visit still waits for Run');
@@ -295,10 +428,10 @@ async function main() {
   customGame.initialize();
   assert.equal(customGame.sim.cpu.registers.A, 42, 'Saved assembly takes precedence over a named game');
   assert.equal(customGame.sim.state, customGame.STATE.STEPPING);
-  assert.equal(customGame.windowStub.location.searchParams.has('run'), false);
+  assert.equal(customGame.windowStub.location.searchParams.has('sample'), false);
 
   game.sim.updateURL(game.sim.getAssemblyCode() + '\n; edited');
-  assert.equal(game.windowStub.location.searchParams.has('run'), false,
+  assert.equal(game.windowStub.location.searchParams.has('sample'), false,
     'An oversized edited game cannot retain a link that reloads the unedited game');
   const unknownProgram = fixture('https://example.test/simulator.html?run=missing');
   assert.equal(unknownProgram.sim.loadFromURL(), false);
@@ -308,7 +441,8 @@ async function main() {
     'An unknown program must not automatically start the default program');
 
   function blockedAutostart() {
-    const autoplay = fixture();
+    const firstNote = 'LD A,44\nOUT (2),A\nLD A,142\nOUT (3),A\nHALT';
+    const autoplay = fixture('https://example.test/simulator.html?asm=' + encodeURIComponent(btoa(encodeURIComponent(firstNote))));
     autoplay.sim.initializeAudio();
     const blockedAudio = autoplay.sim.audioContext;
     blockedAudio.state = 'suspended';
@@ -319,8 +453,7 @@ async function main() {
     };
     autoplay.allowAudio = () => { activated = true; };
     // Any program's first note must survive the gate, without game-specific code.
-    autoplay.sim.loadAssemblyCode('LD A,44\nOUT (2),A\nLD A,142\nOUT (3),A\nHALT');
-    autoplay.sim.autostart();
+    autoplay.initialize();
     assert.equal(autoplay.sim.instructionCount, 0, 'CPU stays stopped before the first instruction');
     assert.equal(autoplay.sim.runLoopInterval, null);
     assert.equal(blockedAudio.notes, 0, 'Opening notes are not consumed while sound is blocked');
@@ -351,7 +484,7 @@ async function main() {
       assert.equal(autoplay.sim.ioMap[1], 255, 'Holding Space cannot enter the program after dismissing the prompt');
       autoplay.documentStub.emit('keyup', input);
       autoplay.documentStub.emit('keydown', input);
-      assert.equal(autoplay.sim.ioMap[1], 32, 'A fresh Space press reaches the program');
+      assert.equal(autoplay.sim.ioMap[1], 0, 'A fresh Space press reaches the program');
     }
   }
 
@@ -403,14 +536,14 @@ async function main() {
   const staleBootCallback = f.timers.get(bootId).callback;
   sim.setAssemblyCode('ORG 0\nHALT\nORG 60000\nDB "HELLO"');
   sim.assembleAndRun();
-  assert.equal(String.fromCharCode(...sim.memory.slice(60000, 60005)), 'HELLO', 'Explicit screen data survives assembly');
-  assert.equal(sim.memory[60005], 32, 'Uninitialized screen cells are still cleared');
+  assert.equal(ZX81.decode(sim.memory.slice(60000, 60005)), 'HELLO', 'Explicit screen data survives assembly');
+  assert.equal(sim.memory[60005], 0, 'Uninitialized screen cells are still cleared');
   assert.equal(sim.state, STATE.STEPPING);
   assert.equal(sim.isBootSequenceRunning, false);
   assert.equal(sim.currentStageTimer, null);
   assert.equal(f.timers.has(bootId), false, 'Starting a program cancels pending boot work');
   staleBootCallback();
-  assert.equal(sim.memory[60000], 72, 'Even an already queued boot callback cannot overwrite a program');
+  assert.equal(sim.memory[60000], 45, 'Even an already queued boot callback cannot overwrite a program');
 
   const audio = sim.audioContext;
   f.documentStub.hidden = true;
@@ -511,6 +644,6 @@ async function main() {
   assert.equal(invalid.sim.listing.isError, true);
   assert.match(invalid.sim.listing.text, /ORG address out of range/);
   assert.equal(invalid.sim.runLoopInterval, null);
-  console.log('Simulator passed: shared URLs, game autostart and refresh, screen data, boot cancellation, audio lifecycle, CPU faults, timer cleanup, execution deadlines, and assembly rejection.');
+  console.log('Simulator passed: shared URLs, URL autostart and refresh, screen data, boot cancellation, audio lifecycle, CPU faults, timer cleanup, execution deadlines, and assembly rejection.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

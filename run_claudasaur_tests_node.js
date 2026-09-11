@@ -57,7 +57,7 @@ function run() {
 function tick(key = 255) {
   gameTick++;
   ports[0] = 6;
-  ports[1] = typeof key === 'string' ? key.charCodeAt(0) : key;
+  ports[1] = typeof key === 'string' ? ZX81.encodeCharacter(key) : key;
   run();
 }
 function press(key) { tick(); tick(key); }
@@ -117,8 +117,8 @@ assert.equal(get('countdown'), beforePause, 'Pause freezes pursuit');
 press('P');
 press(' ');
 assert.equal(get('map_on'), 1);
-assert.equal(memory[60000 + 104 + 2 * 1 * 16 + 2], 94, 'Map shows player as an up arrow when facing north');
-assert.equal(memory[60000 + 720], 94, 'Map legend shows the same facing glyph');
+assert.equal(memory[60000 + 104 + 2 * 1 * 16 + 2], 51, 'Map shows player as N when facing north');
+assert.equal(memory[60000 + 710], 51, 'Map legend shows the same facing glyph');
 press(' ');
 assert.equal(get('map_on'), 0);
 
@@ -176,6 +176,12 @@ assert.equal(get('map_on'), 0);
 
 // Every reachable viewpoint must render inside the 32x24 back buffer.
 // This also executes every perspective table for both corridor orientations.
+const legendRows = [
+  'NORTH NYOU *BEAST E:EXIT P:PAUSE',
+  ' EAST EYOU *BEAST E:EXIT P:PAUSE',
+  'SOUTH SYOU *BEAST E:EXIT P:PAUSE',
+  ' WEST WYOU *BEAST E:EXIT P:PAUSE',
+];
 for (const cell of paths.keys()) {
   for (let facing = 0; facing < 4; facing++) {
     set('player', cell);
@@ -185,12 +191,13 @@ for (const cell of paths.keys()) {
     call('render');
     assert.equal(memory[address('buffer') - 1], 91);
     assert.equal(memory[address('buffer') + 768], 92);
-    assert.equal(memory[60000 + 712], 'NESW'.charCodeAt(facing));
-    assert.equal(memory[60000 + 720], [94, 62, 118, 60][facing], 'Legend glyph follows facing');
+    assert.equal(ZX81.decode(memory.slice(60704, 60736)), legendRows[facing],
+      'The complete legend stays centered and follows facing within one row');
+    assert.equal(memory[60000 + 710], [51, 42, 56, 60][facing], 'Legend glyph follows facing');
     const view = memory.slice(60000 + 2 * 32, 60000 + 22 * 32);
-    assert.ok(!view.some(byte => [45, 47, 92, 124].includes(byte)),
+    assert.ok(!view.some(byte => [22, 24].includes(byte)),
       'Corridor walls use PLOT graphics instead of punctuation');
-    assert.ok(view.some(byte => [6, 7, 8, 9, 13, 14, 16, 17, 18, 19, 20, 21, 22, 137, 147, 160].includes(byte)),
+    assert.ok(view.some(byte => [1, 2, 3, 4, 5, 6, 7, 8, 129, 130, 131, 132, 133, 134, 135, 128].includes(byte)),
       'Every maze viewpoint contains block-graphics walls');
   }
 }
@@ -199,11 +206,28 @@ set('player', 17);
 set('direction', 1);
 set('monster', 225);
 call('render');
-assert.equal(memory[60000 + 11 * 32], 160, 'Receding walls have solid black interiors');
-assert.equal(memory[60000 + 11 * 32 + 31], 7, 'Side passages show stippled facing walls');
+assert.equal(memory[60000 + 11 * 32], 128, 'Receding walls have solid black interiors');
+assert.equal(memory[60000 + 11 * 32 + 31], 8, 'Side passages show stippled facing walls');
 set('direction', 3);
 call('render');
-assert.equal(memory[60000 + 11 * 32 + 16], 7, 'Dead ends are filled stippled faces');
+assert.equal(memory[60000 + 11 * 32 + 16], 8, 'Dead ends are filled stippled faces');
+
+// Compare each exit view with its sign hidden: only the four letter cells may change.
+for (let depth = 0; depth < 4; depth++) {
+  set('player', 29 - depth);
+  set('direction', 1);
+  const exitPacket = address(`exit_${depth}`);
+  const firstDestination = memory.slice(exitPacket, exitPacket + 2);
+  memory.fill(0, exitPacket, exitPacket + 2);
+  call('render');
+  const expected = memory.slice(60000, 60768);
+  memory.set(firstDestination, exitPacket);
+  expected.set(ZX81.encode('EXIT'), 11 * 32 + 14);
+  call('render');
+  assert.equal(get('depth'), depth, 'Exit is visible at the intended distance');
+  assert.deepEqual(memory.slice(60000, 60768), expected,
+    `EXIT at depth ${depth} must preserve every maze cell outside its four centered letters`);
+}
 
 function prepareSoundTest(distance) {
   call('sound_reset');

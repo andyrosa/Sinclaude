@@ -2,24 +2,25 @@
 // and rerun just like the other example programs.
 // Shared with pattern_test.html so the preview and simulator use the same bytes.
 const CHARACTER_TEST_PATTERNS = [
-  [160,160,160, 160,160,160, 160,160,160], // Black
-  [7,7,7, 7,7,7, 7,7,7],                 // Stipple
-  [160,160,160, 32,32,32, 160,160,160],   // Horizontal, whole characters
-  [21,21,21, 21,21,21, 21,21,21],         // Horizontal, quarter blocks
-  [160,32,160, 160,32,160, 160,32,160],   // Vertical, whole characters
-  [6,6,6, 6,6,6, 6,6,6],                 // Vertical, quarter blocks
-  [160,32,160, 32,160,32, 160,32,160],    // Checker, whole characters
-  [18,18,18, 18,18,18, 18,18,18],         // Checker, quarter blocks
-  [18,32,17, 32,160,32, 17,32,18],        // X
+  [128,128,128, 128,128,128, 128,128,128], // Black
+  [8,8,8, 8,8,8, 8,8,8],                 // Stipple
+  [128,128,128, 0,0,0, 128,128,128],     // Horizontal, whole characters
+  [3,3,3, 3,3,3, 3,3,3],                 // Horizontal, quarter blocks
+  [128,0,128, 128,0,128, 128,0,128],     // Vertical, whole characters
+  [5,5,5, 5,5,5, 5,5,5],                 // Vertical, quarter blocks
+  [128,0,128, 0,128,0, 128,0,128],       // Checker, whole characters
+  [134,134,134, 134,134,134, 134,134,134], // Checker, quarter blocks
+  [134,0,6, 0,128,0, 6,0,134],          // X
 ];
 
 const CHARACTER_SET_ASM = (() => {
-  const rows = Array.from({ length: 24 }, () => Array(32).fill(32));
+  const charset = typeof module !== 'undefined' && module.exports ? require('./zx81_charset.js') : ZX81;
+  const rows = Array.from({ length: 24 }, () => Array(32).fill(0));
   const text = (row, col, value) => {
-    Array.from(value).forEach((char, offset) => { rows[row][col + offset] = char.charCodeAt(0); });
+    Array.from(value).forEach((char, offset) => { rows[row][col + offset] = charset.encodeCharacter(char); });
   };
   text(0, 7, 'CHARACTER SET TEST');
-  rows[1].fill(8);
+  rows[1].fill(131);
   for (let code = 0; code < 256; code += 16) {
     const row = 2 + code / 16;
     for (let group = 0; group < 4; group++) {

@@ -6,6 +6,7 @@ const { decodeBeepDuration, encodeBeepDuration } = require('./constants_and_css_
 // Exercise the real speaker methods without initializing the simulator UI.
 const timers = [];
 const context = vm.createContext({
+  ZX81: require('./zx81_charset.js'),
   decodeBeepDuration,
   setTimeout: (callback, ms) => timers.push({ callback, ms }),
 });
@@ -78,6 +79,8 @@ assert.ok(oscillators.every(node => node.stopped));
 // only write the frequency and duration ports.
 simulator.OutPort(4, 0);
 simulator.cpu = { reset() {} };
+simulator.initializeCharacterMappings();
+simulator.initializeKeyMappings();
 simulator.updateHardwareDisplay = () => {};
 simulator.clearNonEssentialTimers = () => {};
 simulator.resetRequest();

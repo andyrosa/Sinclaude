@@ -1,6 +1,7 @@
 // In the browser, <script> tags make every module a global; the Node launchers
 // require this file once so the same names exist on `global` in the same order.
 Object.assign(global, require("./constants_and_css_vars.js"));
+global.ZX81 = require("./zx81_charset.js");
 global.TestFramework = require("./tester.js");
 global.Z80Assembler = require("./z80_assembler.js");
 global.Z80CPU = require("./z80_cpu_emulator.js");

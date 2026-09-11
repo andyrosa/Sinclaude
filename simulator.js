@@ -4,6 +4,7 @@ const SCREEN_HEIGHT = 24;
 const MEMORY_SIZE = 65536;
 const FRAME_COUNT_PORT = 0;
 const KEYBOARD_PORT = 1;
+const KEYSTROKE_PORT = 5;
 const KBD_NO_KEY_PRESSED = -1;
 const BEEP_10HZ_PORT = 2;
 const BEEP_DURATION_PORT = 3;
@@ -12,14 +13,15 @@ const BEEP_DEFAULT_VOLUME = 85;
 
 const MAX_URL_LENGTH = 2000; // supposed to be 32K but erring at a lot less
 const BEEP_GAIN = 0.1;
-const BUTTON_EDIT_FOCUS_DELAY_MS = 10;
 
 // Retro graphics fill the cell without depending on a font's bearings or
 // antialiasing. Bits describe top-left, top-right, bottom-left, bottom-right.
+// ZX81 codes 0-7 equal that bit pattern; their inverses supply the other shapes.
 const sinclairPlotMasks = new Map([
-  [32, 0], [6, 5], [8, 12], [9, 4], [13, 8], [14, 2], [16, 10],
-  [17, 6], [18, 9], [19, 14], [20, 13], [21, 3], [22, 7],
+  [0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7],
 ]);
+// ZX81 codes 8-10: grey, grey lower half, grey upper half.
+const ZX81_GREY_ROWS = new Map([[8, [0, 8]], [9, [4, 8]], [10, [0, 4]]]);
 // Crisp SVG edges snap the monochrome pixels together even when browser zoom
 // and display scaling put cell boundaries between device pixels.
 function plotMarkup(size, inkSquares) {
@@ -37,25 +39,23 @@ function plotBlockMarkup(mask) {
 }
 
 const sinclairPlotPatterns = new Map([...sinclairPlotMasks].map(([code, mask]) => [code, plotBlockMarkup(mask)]));
-sinclairPlotPatterns.set(7, plotMarkup(8, Array.from({ length: 32 }, (_, i) => {
-  const y = i >> 2;
-  return [2 * (i % 4) + (y % 2), y];
-})));
+for (const [code, [top, bottom]] of ZX81_GREY_ROWS) {
+  const dots = [];
+  for (let y = top; y < bottom; y++) {
+    for (let x = y % 2; x < 8; x += 2) dots.push([x, y]);
+  }
+  sinclairPlotPatterns.set(code, plotMarkup(8, dots));
+}
 
 // Named keys use explicit port values, separate from printable character codes.
-const SPECIAL_KEYS = [
-  { name: "Space", sinclairCode: 32 },
-  { name: "Escape", sinclairCode: 12 },
-  { name: "ArrowUp", sinclairCode: 145 },
-  { name: "ArrowDown", sinclairCode: 147 },
-  { name: "ArrowLeft", sinclairCode: 144 },
-  { name: "ArrowRight", sinclairCode: 146 },
-  { name: "Enter", sinclairCode: 13 },
-];
+const SPECIAL_KEYS = Object.entries(ZX81.keys).map(([name, sinclairCode]) => ({name, sinclairCode}));
+
+const GAME_KEYS = ["W", "S", "Space", "A", "D"];
 
 class Simulator {
-  constructor() {
+  constructor(options = {}) {
     this.cpu = new Z80CPU();
+    this.cpu.InPort = port => this.InPort(port);
     this.memory = new Uint8Array(MEMORY_SIZE);
     this.ioMap = new Uint8Array(256);
     this.resetBeepPorts();
@@ -95,7 +95,7 @@ class Simulator {
 
     // Button lifecycle state tracking
     this.lastIsAssemblyAreaClear = null;
-    this.buttonEditMode = false;
+    this.initializePreferences(options);
 
     this.useSinclairFont =
       localStorage.getItem(LOCALSTORAGE_RETRO_FONTS_KEY) !== "false";
@@ -108,154 +108,75 @@ class Simulator {
     this.bootShow();
   }
 
-  initializeCharacterMappings() {
-    // Spectrum character 0-127 to Unicode
-    const sinclairByteToUnicode = [
-      // 0-31: Mix of undefined and block graphics
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "▌",
-      "▒",
-      "▄",
-      "▖",
-      "⸮",
-      "⸮",
-      "⸮",
-      "▗",
-      "▝",
-      "⸮",
-      "▐",
-      "▞",
-      "▚",
-      "▟",
-      "▙",
-      "▀",
-      "▛",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      "⸮",
-      // 32-63: Space, punctuation, numbers
-      " ",
-      "!",
-      '"',
-      "#",
-      "$",
-      "%",
-      "&",
-      "'",
-      "(",
-      ")",
-      "*",
-      "+",
-      ",",
-      "-",
-      ".",
-      "/",
-      "0",
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      ":",
-      ";",
-      "<",
-      "=",
-      ">",
-      "?",
-      // 64-95: @, A-Z, punctuation
-      "@",
-      "A",
-      "B",
-      "C",
-      "D",
-      "E",
-      "F",
-      "G",
-      "H",
-      "I",
-      "J",
-      "K",
-      "L",
-      "M",
-      "N",
-      "O",
-      "P",
-      "Q",
-      "R",
-      "S",
-      "T",
-      "U",
-      "V",
-      "W",
-      "X",
-      "Y",
-      "Z",
-      "[",
-      "\\",
-      "]",
-      "↑", // not ^
-      "_",
-      // 96-127: £, a-z, symbols
-      "£", // not `
-      "a",
-      "b",
-      "c",
-      "d",
-      "e",
-      "f",
-      "g",
-      "h",
-      "i",
-      "j",
-      "k",
-      "l",
-      "m",
-      "n",
-      "o",
-      "p",
-      "q",
-      "r",
-      "s",
-      "t",
-      "u",
-      "v",
-      "w",
-      "x",
-      "y",
-      "z",
-      "{",
-      "|",
-      "}",
-      "~",
-      "©", // not DEL
-    ];
-
-    // Bytes 128-255 are the inverted forms of 0-127 (same glyph), so the
-    // 128-entry table is indexed with the top bit masked off
-    this.sinclairByteToUnicode = sinclairByteToUnicode;
-
-    // Build reverse lookup map (Unicode char -> Sinclair byte) for O(1) conversion
-    this.unicodeToSinclairMap = new Map();
-    sinclairByteToUnicode.forEach((char, byte) => {
-      if (!this.unicodeToSinclairMap.has(char)) {
-        this.unicodeToSinclairMap.set(char, byte);
+  initializePreferences({ samples = [], defaultSampleId = "" } = {}) {
+    this.samples = new Map(samples.map(sample => [sample.id, sample]));
+    this.loadedSample = null;
+    this.defaultSampleId = defaultSampleId;
+    const stored = localStorage.getItem("simulatorPreferences");
+    if (stored !== null) {
+      try {
+        const settings = JSON.parse(stored);
+        if (settings.defaultSampleId !== "" && !this.samples.has(settings.defaultSampleId)) {
+          throw new Error("Unknown startup sample");
+        }
+        this.defaultSampleId = settings.defaultSampleId;
+      } catch (error) {
+        userMessage("Could not restore simulator settings; using defaults. " + error.message);
       }
-    });
+    }
+  }
+
+  savePreferences() {
+    localStorage.setItem("simulatorPreferences", JSON.stringify({
+      defaultSampleId: this.defaultSampleId,
+    }));
+  }
+
+  setDefaultSample(id) {
+    if (id !== "" && !this.samples.has(id)) {
+      userMessage("Unknown startup sample: " + id);
+      return false;
+    }
+    this.defaultSampleId = id;
+    this.savePreferences();
+    return true;
+  }
+
+  setupSampleControls() {
+    const buttons = document.getElementById("sampleButtons");
+    const select = document.getElementById("sampleSelect");
+    const startup = document.getElementById("defaultSampleSelect");
+    buttons.innerHTML = "";
+    select.innerHTML = "";
+    startup.innerHTML = "";
+    const option = (parent, value, label) => {
+      const item = document.createElement("option");
+      item.value = value;
+      item.textContent = label;
+      parent.appendChild(item);
+      return item;
+    };
+    const placeholder = option(select, "", "Load a program...");
+    placeholder.disabled = true;
+    placeholder.hidden = true;
+    option(startup, "", "Blank editor");
+    for (const sample of this.samples.values()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "load-btn";
+      button.textContent = "Load " + sample.name;
+      button.addEventListener("click", () => this.loadSample(sample.id));
+      buttons.appendChild(button);
+      option(select, sample.id, sample.name);
+      option(startup, sample.id, sample.name);
+    }
+    select.value = "";
+    startup.value = this.defaultSampleId;
+  }
+
+  initializeCharacterMappings() {
+    this.sinclairByteToUnicode = ZX81.characters;
+    this.unicodeToSinclairMap = ZX81.codes;
   }
 
   setupDOM() {
@@ -288,7 +209,7 @@ class Simulator {
     this.listingSection = document.querySelector(".listing-section");
     this.consoleSection = document.querySelector(".console-section");
 
-    // Generate program buttons and key inputs
+    this.setupSampleControls();
     this.createGameButtons();
 
     // Setup assembly editor
@@ -297,7 +218,6 @@ class Simulator {
     this.setupCollapsibleSection(this.listingSection);
     this.setupCollapsibleSection(this.consoleSection);
 
-    this.applyButtonEditMode(false);
   }
 
   setupAssemblyEditor() {
@@ -399,6 +319,7 @@ class Simulator {
   setAssemblyCode(code) {
     // Always set as plain text to avoid HTML issues
     this.assemblyColumn.textContent = code;
+    this.loadedSample = null;
     this.updateAddressAndOpcodesColumns();
   }
 
@@ -446,21 +367,18 @@ class Simulator {
 
   createGameButtons() {
     const gameButtonsDiv = document.getElementById("gameButtons");
-    const defaultKeys = ["W", "S", "Space", "A", "D"];
 
     // Clear existing content
     gameButtonsDiv.innerHTML = "";
-
-    // Create program buttons with key names as text
-    defaultKeys.forEach((defaultKey) => {
+    GAME_KEYS.forEach((key) => {
       const button = document.createElement("button");
-      button.textContent = defaultKey;
+      button.type = "button";
+      button.textContent = key;
       button.tabIndex = 0; // Make button focusable when clicked
 
-      // Add event listeners for both game functionality and edit mode
       button.addEventListener("pointerdown", (e) => {
-        this.handleButtonClick(button, `pointer:${e.pointerId}`);
-        if (!this.buttonEditMode) button.setPointerCapture(e.pointerId);
+        this.buttonClick(button, `pointer:${e.pointerId}`);
+        button.setPointerCapture(e.pointerId);
         e.preventDefault();
       });
       const releasePointer = (e) => {
@@ -470,59 +388,22 @@ class Simulator {
       button.addEventListener("pointerup", releasePointer);
       button.addEventListener("pointercancel", releasePointer);
       button.addEventListener("lostpointercapture", releasePointer);
+      button.addEventListener("keydown", e => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          this.buttonClick(button);
+        }
+      });
+      button.addEventListener("keyup", e => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          this.releaseKey(button);
+        }
+      });
+      button.addEventListener("blur", () => this.releaseKey(button));
 
       gameButtonsDiv.appendChild(button);
     });
-  }
-
-  handleButtonClick(button, keyId = button) {
-    if (this.buttonEditMode) {
-      this.editButtonText(button);
-    } else {
-      this.buttonClick(button, keyId);
-    }
-  }
-
-  editButtonText(button) {
-    const text = button.textContent;
-    const input = document.createElement("input");
-    input.className = "edit-input";
-    input.type = "text";
-    input.value = text;
-    input.maxLength = Math.max(...SPECIAL_KEYS.map((key) => key.name.length));
-    button.innerHTML = "";
-    button.appendChild(input);
-
-    // Small delay to ensure proper focus
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, BUTTON_EDIT_FOCUS_DELAY_MS);
-
-    const finishEdit = () => {
-      const typedCaption = input.value.trim();
-
-      // Validate the key name
-      const readableLabel = this.toReadableKeyLabel(typedCaption);
-      let finalText;
-
-      if (readableLabel) {
-        finalText = readableLabel;
-      } else if (typedCaption === "") {
-        // Empty input - keep original text
-        finalText = text;
-      } else {
-        // Invalid input - show message and keep original text
-        userMessage(
-          `Invalid key configuration "${typedCaption}" - reset to previous value`
-        );
-        finalText = text;
-      }
-
-      button.textContent = finalText;
-    };
-
-    input.addEventListener("blur", finishEdit);
   }
 
   setupKeyboard() {
@@ -576,9 +457,13 @@ class Simulator {
 
     // Desktop: Hover-based keyboard capture
     executionSection.addEventListener("mouseenter", activateCapture);
-    executionSection.addEventListener("mouseleave", deactivateCapture);
-    executionSection.addEventListener("focus", activateCapture);
-    executionSection.addEventListener("blur", deactivateCapture);
+    executionSection.addEventListener("mouseleave", () => {
+      if (document.activeElement !== this.touchKeyboard) deactivateCapture();
+    });
+    executionSection.addEventListener("focusin", activateCapture);
+    executionSection.addEventListener("focusout", e => {
+      if (!executionSection.contains(e.relatedTarget)) deactivateCapture();
+    });
     window.addEventListener("blur", () => this.releaseAllKeys());
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) this.releaseAllKeys();
@@ -594,9 +479,11 @@ class Simulator {
       }
     });
 
+    this.setupTouchKeyboard();
+
     // Hover capture must not steal input from the assembly editor either.
     const isTypingInFormField = (e) =>
-      e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable;
+      ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(e.target.tagName) || e.target.isContentEditable;
     // e.code identifies the physical key even if Shift changes e.key before keyup.
     const keyId = (e) => `keyboard:${e.code || e.key}`;
 
@@ -617,19 +504,51 @@ class Simulator {
     });
   }
 
+  setupTouchKeyboard() {
+    const input = this.touchKeyboard = document.getElementById("touchKeyboard");
+    // Phone keyboards can emit text/composition events without usable keydown events.
+    const sendText = () => {
+      const text = input.value;
+      input.value = "";
+      if (!this.keyboardCaptureActive || this.audioStartPrompt) return;
+      for (const key of text) this.tapKey(key === "\n" ? "Enter" : key);
+    };
+    input.addEventListener("compositionstart", () => { this.touchComposing = true; });
+    input.addEventListener("compositionend", e => {
+      this.touchComposing = false;
+      if (e.data) sendText();
+      else input.value = "";
+    });
+    input.addEventListener("input", e => {
+      if (!this.touchComposing && !e.isComposing) sendText();
+    });
+    input.addEventListener("keydown", e => {
+      if (e.isComposing || this.touchComposing || e.key === "Enter") return;
+      if (this.keyboardCaptureActive && !this.audioStartPrompt &&
+          this.specialKeysByName.has(e.key.toLowerCase())) {
+        e.preventDefault();
+        this.tapKey(e.key);
+      }
+    });
+    input.addEventListener("blur", () => {
+      this.touchComposing = false;
+      input.value = "";
+    });
+  }
+
+  tapKey(label) {
+    const keyId = Symbol("typed key");
+    if (this.pressKey(keyId, label)) {
+      // Text input has no held-key duration; allow polling programs to see the tap.
+      this.createTimer(() => this.releaseKey(keyId), 100, false);
+    }
+  }
+
   initializeKeyMappings() {
     this.specialKeysByName = new Map(SPECIAL_KEYS.map((key) => [key.name.toLowerCase(), key]));
     this.heldKeys = new Map();
+    this.keyQueue = [];
     this.releaseAllKeys();
-  }
-
-  toReadableKeyLabel(typedCaption) {
-    if (!typedCaption || typeof typedCaption !== "string") {
-      return null;
-    }
-    const special = this.specialKeysByName.get(typedCaption.toLowerCase());
-    if (special) return special.name;
-    return this.labelToSinclairCodeOrNull(typedCaption) === null ? null : typedCaption;
   }
 
   labelToSinclairCodeOrNull(label) {
@@ -640,8 +559,7 @@ class Simulator {
     const special = this.specialKeysByName.get(label.toLowerCase());
     if (special) return special.sinclairCode;
 
-    // Character codes must never pass through a legacy browser keyCode lookup:
-    // '%' and ArrowLeft both used 37, despite being different Sinclair inputs.
+    // Printable text and named controls have separate ZX81 mappings.
     if (label.length === 1) {
       const code = this.unicodeToSinclairMap.get(label.toUpperCase());
       if (code !== undefined) return code;
@@ -668,6 +586,7 @@ class Simulator {
     // Repeats must not make an older held key take precedence over a newer press.
     if (!this.heldKeys.has(keyId)) {
       this.heldKeys.set(keyId, code);
+      this.keyQueue.push(code);
       this.updateHeldKey();
     }
     return true;
@@ -684,6 +603,9 @@ class Simulator {
 
   releaseAllKeys() {
     this.heldKeys.clear();
+    this.keyQueue.length = 0;
+    this.touchComposing = false;
+    if (this.touchKeyboard) this.touchKeyboard.value = "";
     this.setKey(KBD_NO_KEY_PRESSED);
   }
 
@@ -736,6 +658,8 @@ class Simulator {
   }
 
   InPort(port) {
+    // Discrete input survives a complete press/release between CPU batches.
+    if (port === KEYSTROKE_PORT) return this.keyQueue.length ? this.keyQueue.shift() : 255;
     return this.ioMap[port];
   }
 
@@ -1166,7 +1090,7 @@ class Simulator {
       element.textContent = this.sinclairToUnicode(byte);
       delete element.plotCode;
     }
-    element.classList.toggle("inverted", byte >= 128);
+    element.classList.toggle("inverted", byte >= 128 && byte < 192);
     element.classList.toggle("plot-graphics", plot);
     element.classList.toggle(
       "sinclair-font",
@@ -1188,7 +1112,7 @@ class Simulator {
 
   // Sinclair byte code → Modern Unicode character conversion
   sinclairToUnicode(byte) {
-    return this.sinclairByteToUnicode[byte & 0x7f];
+    return ZX81.decodeCharacter(byte);
   }
 
   setUseSinclairFont(useSinclairFont) {
@@ -1199,15 +1123,7 @@ class Simulator {
 
   // Modern Unicode character → Sinclair byte code conversion (O(1) via reverse lookup map)
   unicodeToSinclair(char) {
-    const byte = this.unicodeToSinclairMap.get(char);
-    if (byte !== undefined) return byte;
-
-    // Try uppercase version for case-insensitive matching
-    const upperByte = this.unicodeToSinclairMap.get(char.toUpperCase());
-    if (upperByte !== undefined) return upperByte;
-
-    // Fallback: return space byte directly to avoid injecting NULs (and avoid recursion)
-    return 32;
+    return ZX81.encodeCharacter(char);
   }
 
   // Writes only when the text changed: this runs every frame, mostly with identical values
@@ -1297,6 +1213,7 @@ class Simulator {
 
   clearAssembly({ preserveURL = false } = {}) {
     this.cancelAudioStart();
+    this.releaseAllKeys();
     this.setAssemblyCode("");
     this.clearAddressAndOpcodesColumns();
     this.setMagazineListing("", false);
@@ -1339,44 +1256,28 @@ class Simulator {
   }
 
   loadDefaultAssembly() {
-    this.loadCharacterSetAssembly();
-  }
-  loadBasicsAssembly() {
-    this.loadAssemblyCode(BASICS_ASM);
-  }
-  loadPerformanceAssembly() {
-    this.loadAssemblyCode(DEFAULT_ASM);
-  }
-  loadCharacterSetAssembly() {
-    this.loadAssemblyCode(CHARACTER_SET_ASM);
-  }
-  loadSpaceInvaderAssembly() {
-    this.loadAssemblyCode(SPACE_INVADER_ASM);
-  }
-  loadClaudasaurAssembly(options) {
-    this.loadAssemblyCode(CLAUDASAUR_ASM, options);
+    if (this.defaultSampleId === "") {
+      this.clearAssembly({ preserveURL: true });
+    } else {
+      this.loadSample(this.defaultSampleId, { preserveURL: true });
+    }
   }
 
-  // The narrow-screen program select (simulator.html); option values name the loaders
-  loadProgramFromSelect(select) {
-    const loaders = {
-      characterSet: () => this.loadCharacterSetAssembly(),
-      basics: () => this.loadBasicsAssembly(),
-      performance: () => this.loadPerformanceAssembly(),
-      spaceInvader: () => this.loadSpaceInvaderAssembly(),
-      claudasaur: () => this.loadClaudasaurAssembly(),
-    };
-    const loader = loaders[select.value];
-    if (loader === undefined) {
-      userMessageAboutBug(
-        "Unknown program selected",
-        `loadProgramFromSelect() called with value '${select.value}', which has no loader`
-      );
-      return;
+  loadSample(id, { preserveURL = false } = {}) {
+    const sample = this.samples.get(id);
+    if (sample === undefined) {
+      userMessage("Unknown sample: " + id);
+      return false;
     }
-    loader();
-    // Back to the placeholder so the same program can be chosen again after Clear
-    select.value = "";
+    this.loadAssemblyCode(sample.source, { preserveURL: true });
+    // Remember explicit selection; pasted source is never recognized as a sample.
+    this.loadedSample = { id, source: this.getAssemblyCode() };
+    if (!preserveURL) this.updateURL(this.getAssemblyCode());
+    return true;
+  }
+
+  loadProgramFromSelect(select) {
+    if (this.loadSample(select.value)) select.value = "";
   }
 
   assembleAndRun({ muted = false } = {}) {
@@ -1411,6 +1312,7 @@ class Simulator {
     }
 
     this.loadAddress = result.loadAddress;
+    this.releaseAllKeys();
     this.resetBeepPorts();
     this.initializeAudio();
 
@@ -1459,95 +1361,62 @@ class Simulator {
   }
 
   updateURL(sourceCode) {
-    if (this.isUrlUpdateDisabled()) {
-      return;
-    }
+    if (this.isUrlUpdateDisabled()) return;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentEncoded = urlParams.get("asm");
-    const program = urlParams.get("run");
-
-    // Keep the short game link instead of trying to encode its large source.
-    if (program === "claudasaur" && !currentEncoded &&
-        sourceCode.trim() === CLAUDASAUR_ASM.trim()) {
-      return;
-    }
-    const desiredEncoded = !sourceCode ? null : btoa(encodeURIComponent(sourceCode));
-
-    // If no change would occur, do nothing silently
-    if (currentEncoded === desiredEncoded && !urlParams.has("run")) {
-      return;
-    }
-
-    // file:// protocol doesn't support history updates.
-    if (window.location.protocol === "file:") {
-      userMessage(
-        "Saving program to query params not implemented for file://."
-      );
-      return;
-    }
-
+    // Comparing with the loaded copy only detects edits; it does not identify code.
+    if (this.loadedSample && this.loadedSample.source !== sourceCode) this.loadedSample = null;
     const newUrl = new URL(window.location);
     newUrl.searchParams.delete("run");
-
-    if (desiredEncoded === null) {
-      // Remove asm parameter when clearing
+    if (sourceCode && this.loadedSample) {
+      newUrl.searchParams.set("sample", this.loadedSample.id);
       newUrl.searchParams.delete("asm");
-    } else {
-      // Set asm parameter when there's code
-      const baseUrl =
-        window.location.origin + window.location.pathname + "?asm=";
-      const totalLength = baseUrl.length + desiredEncoded.length;
-
-      if (totalLength > MAX_URL_LENGTH) {
-        const overage = totalLength - MAX_URL_LENGTH;
-        userMessage(
-          `Source code was not encoded on URL because it's too large (${totalLength} bytes, ${overage} over ${MAX_URL_LENGTH} limit). See Docs.`
-        );
-        if (!urlParams.has("run")) return;
-        // An edited game that cannot be shared must not retain a stale game link.
+    } else if (sourceCode) {
+      newUrl.searchParams.delete("sample");
+      newUrl.searchParams.set("asm", btoa(encodeURIComponent(sourceCode)));
+      if (newUrl.href.length > MAX_URL_LENGTH) {
+        userMessage("Source code was not encoded on URL because it's too large (" +
+          newUrl.href.length + " characters, over the " + MAX_URL_LENGTH + " limit). See Docs.");
+        // A failed save must not leave a link to different, older source.
         newUrl.searchParams.delete("asm");
-      } else {
-        newUrl.searchParams.set("asm", desiredEncoded);
       }
     }
-
-    // History update (supported on non-file protocols)
+    if (!sourceCode) {
+      newUrl.searchParams.delete("sample");
+      newUrl.searchParams.delete("asm");
+    }
+    if (newUrl.href === window.location.href) return;
+    if (window.location.protocol === "file:") {
+      userMessage("Saving program to query params not implemented for file://.");
+      return;
+    }
     try {
       window.history.replaceState(null, "", newUrl);
-    } catch (historyError) {
-      userMessageAboutBug(
-        "Failed to update URL history",
-        historyError.message
-      );
+    } catch (error) {
+      userMessageAboutBug("Failed to update URL history", error.message);
     }
   }
 
   loadFromURL() {
     try {
-      // Can read URL parameters even from file system, just can't modify them
       const urlParams = new URLSearchParams(window.location.search);
       const encoded = urlParams.get("asm");
-
       if (encoded && encoded !== "dont") {
-        let sourceCode = decodeURIComponent(atob(encoded));
-        this.loadAssemblyCode(sourceCode, { preserveURL: true });
+        this.loadAssemblyCode(decodeURIComponent(atob(encoded)), { preserveURL: true });
         return true;
       }
 
-      const program = urlParams.get("run");
-      if (program === "claudasaur") {
-        this.loadClaudasaurAssembly({ preserveURL: true });
-        return true;
+      // Older run links select from the same catalog as current sample links.
+      const id = urlParams.get("sample") ?? urlParams.get("run");
+      if (id !== null) {
+        if (!this.samples.has(id)) {
+          userMessage("Unknown URL program '" + id + "'. Available samples: " +
+            [...this.samples.keys()].join(", "));
+          return false;
+        }
+        return this.loadSample(id, { preserveURL: true });
       }
-      if (program !== null) {
-        userMessage(`Unknown URL program '${program}'. Use run=claudasaur.`);
-      }
-    } catch (e) {
-      userMessageAboutBug(
-        "Failed to load assembly program from custom URL",
-        e.message
-      );
+    } catch (error) {
+      userMessageAboutBug("Failed to load assembly program from custom URL", error.message);
     }
     return false;
   }
@@ -1650,6 +1519,7 @@ class Simulator {
 
   // Handle Reset button click
   resetRequest() {
+    this.releaseAllKeys();
     this.resetBeepPorts();
     this.cpu.reset();
     // Set PC to the program's load address (ORG)
@@ -2143,19 +2013,5 @@ class Simulator {
     delete element.dataset.originalStyles;
   }
 
-  applyButtonEditMode(enabled) {
-    this.buttonEditMode = enabled;
-    const toggle = document.querySelector(".button-caption-edit-toggle");
-    toggle.textContent = enabled
-      ? "Click here to end button customization"
-      : "Customize button-to-key mapping";
-    toggle.classList.toggle("active", enabled);
-    document
-      .querySelectorAll(".game-buttons button")
-      .forEach((button) => button.classList.toggle("edit-mode", enabled));
-  }
 
-  toggleButtonCaptionEdit() {
-    this.applyButtonEditMode(!this.buttonEditMode);
-  }
 }

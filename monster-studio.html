@@ -53,9 +53,9 @@
     </header>
     <div id="error" role="alert" hidden></div>
     <div class="palette" aria-label="Maze patterns">
-      <span><svg class="swatch" data-byte="32" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>White</span>
-      <span><svg class="swatch" data-byte="160" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Solid black</span>
-      <span><svg class="swatch" data-byte="7" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Stippled grey</span>
+      <span><svg class="swatch" data-byte="0" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>White</span>
+      <span><svg class="swatch" data-byte="128" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Solid black</span>
+      <span><svg class="swatch" data-byte="8" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"></svg>Stippled grey</span>
     </div>
     <div class="controls">
       <label for="distance">Monster distance
@@ -98,6 +98,7 @@
     </div>
     <noscript><p>Enable JavaScript to display the maze views.</p></noscript>
   </main>
+  <script src="zx81_charset.js"></script>
   <script src="constants_and_css_vars.js"></script>
   <script src="z80_assembler.js"></script>
   <script src="z80_cpu_emulator.js"></script>
@@ -156,7 +157,7 @@
             for (let ptr = packet; ; ptr += 3) {
               const destination = memory[ptr] | memory[ptr + 1] << 8;
               if (!destination) break;
-              memory[destination] = 160;
+              memory[destination] = 128;
             }
           }
           // Rows 2–21 are the maze viewport; omit the surrounding game text.

@@ -45,6 +45,7 @@ function loadScripts() {
     "scroll_target.js",
     "version_update.js",
     "tester.js",
+    "zx81_charset.js",
     "z80_assembler.js",
     "z80_assembler_test.js",
     "z80_cpu_emulator.js",
@@ -55,6 +56,8 @@ function loadScripts() {
     "character_set_asm.js",
     "space_invader_asm.js",
     "claudasaur_asm.js",
+    "chess_asm.js",
+    "sample_programs.js",
     "simulator.js",
     "initialization.js",
   ];

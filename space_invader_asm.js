@@ -14,7 +14,7 @@ TRUE                EQU -1
 KBD_FIRE            EQU ' '
 KBD_LEFT            EQU 'A'
 KBD_RIGHT           EQU 'D'
-KBD_QUIT            EQU 12
+KBD_QUIT            EQU 227 ; ZX81 STOP token (Escape)
 KBD_RESTART         EQU 'W'
 KBD_INVISIBLE       EQU 'W'
 KBD_NO_KEY_PRESSED  EQU -1
@@ -436,7 +436,7 @@ draw_game:
   LD   A, (player_col)
   DEC  A
   LD   B, PLAYER_ROW
-  LD   C, '['
+  LD   C, '('
   CALL draw_char
 
   LD   A, (player_col)
@@ -447,7 +447,7 @@ draw_game:
   LD   A, (player_col)
   INC  A
   LD   B, PLAYER_ROW
-  LD   C, ']'
+  LD   C, ')'
   CALL draw_char
 
 skip_player_draw:
@@ -458,7 +458,7 @@ skip_player_draw:
   LD   A, (missile_row)
   LD   B, A
   LD   A, (missile_col)
-  LD   C, '|'
+  LD   C, ':'
   CALL draw_char
 
 draw_bomb:
@@ -579,8 +579,8 @@ wait_for_key_release:
 
   JP   init_game
 
-humans_won_msg:   DB "          HUMANS WON!           "
-invaders_won_msg: DB "         Invader won :(         "
+humans_won_msg:   DB "          HUMANS WON.           "
+invaders_won_msg: DB "         INVADER WON :(         "
 press_to_play:    DB "     PRESS W TO PLAY AGAIN      "
 controls_msg:     DB "   A=LEFT D=RIGHT SPACE=FIRE    "
 

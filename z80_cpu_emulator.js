@@ -24,6 +24,7 @@ const CB_SHIFT_SLL = 6; // Undocumented on the real chip and not implemented her
 class Z80CPU {
     constructor() {
         this.regs = new Uint8Array(REGISTER_FILE_SIZE);
+        this.shadowRegs = new Uint8Array(6);
         // Use reset to initialize to avoid code duplication
         this.reset();
     }
@@ -34,6 +35,7 @@ class Z80CPU {
     // and N (subtract) flags. Programs relying on those flags will not work correctly.
     reset() {
         this.regs.fill(0);
+        this.shadowRegs.fill(0);
         this.PC = 0;
         this.SP = 0xFFFF;
         this.flagZ = false;
@@ -56,6 +58,9 @@ class Z80CPU {
 
     get shadowRegisters() {
         return {
+            B: this.shadowRegs[REG_B], C: this.shadowRegs[REG_C],
+            D: this.shadowRegs[REG_D], E: this.shadowRegs[REG_E],
+            H: this.shadowRegs[REG_H], L: this.shadowRegs[REG_L],
             A: this.shadowA,
             F: { Z: this.shadowFlagZ, C: this.shadowFlagC }
         };
@@ -458,6 +463,13 @@ class Z80CPU {
                 regs[REG_H] = temp_D;
                 regs[REG_L] = temp_E;
                 break;
+            case 0xD9: // EXX: AF is independent of the six exchanged registers.
+                for (let i = 0; i < 6; i++) {
+                    const value = regs[i];
+                    regs[i] = this.shadowRegs[i];
+                    this.shadowRegs[i] = value;
+                }
+                break;
             case 0xE3: // EX (SP), HL
                 {
                     const sp = this.SP;
@@ -622,6 +634,13 @@ class Z80CPU {
                 switch(extOpcode) {
                     case 0x44: // NEG
                         regs[REG_A] = this.adjustFFPlusUpdateZC(0 - regs[REG_A]);
+                        break;
+                    case 0xB1: // CPIR: repeat through PC so long searches yield to the UI.
+                        this.flagZ = regs[REG_A] === memory[this.getHL()];
+                        this.setHL(this.adjustFFFF(this.getHL() + 1));
+                        this.setBC(this.adjustFFFF(this.getBC() - 1));
+                        if (!this.flagZ && this.getBC() !== 0) this.PC = this.adjustFFFF(this.PC - 2);
+                        // Unlike CP, CPIR preserves carry. A and memory are unchanged.
                         break;
                     case 0xB0: // LDIR
                         let hl = this.getHL();

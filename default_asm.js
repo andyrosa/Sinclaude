@@ -39,9 +39,7 @@ print_hex_a_at_de:
 print_hex_a_nibble_at_de:
 ;   increments DE; clobbers af
     add  a, '0'
-    cp   '9'+1
-    jr   c, print_hex_a_nibble_at_de_print
-    add  a, 7               ; 'A'..'F'
+    ; ZX81 digits and letters are contiguous: 0-9 is followed by A-Z.
 
 print_hex_a_nibble_at_de_print:
     ld   (de), a

@@ -1,6 +1,6 @@
 # Sinclaude
 
-A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs entirely in the browser, co-written with Claude Opus 4 Aug 2025.
+A vanilla HTML/CSS/JavaScript Sinclair ZX81/Z80 emulator that runs entirely in the browser, co-written with Claude Opus 4.1 on launch date; updated with Fable 5.1 about a year later.
 
 **Live at:** https://andyrosa.github.io/Sinclaude/simulator.html
 
@@ -14,16 +14,16 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - Pretty fast CPU emulation
 - Single-step and continuous execution modes
 - Register, stack, and performance counter display
-- ZX81-style screen buffer (32x24)
-- Block characters and (Spectrum) lowercase characters; character 7 is the stippled shade used for Claudasaur's wall faces.
-- Characters 128–255 render in inverted monochrome
+- Full size ZX-81 screen buffer (32x24)
+- Original ZX81 character codes: graphics at 0–10, punctuation at 11–27, digits at 28–37, uppercase letters at 38–63
+- Characters 128–191 render in inverted monochrome
 - Configurable retro and traditional font styles
-- Configurable mapping from on-screen buttons to keyboard keys
-- Beep functionality (absent on real ZX81 and Spectrum)
+- Native phone keyboard input and five touch buttons for holding game controls
+- Programmable beep frequency, duration, and volume
 - Share and save small programs using serverless URL
 - Runs directly from the file system — no server or Node required
 - For screens less than 768 pixels wide the UI hides less-relevant assembly buttons and auto-collapses sections in stepping mode
-- 4 sample programs
+- Six bundled sample programs
 
 ## Technical Details
 
@@ -32,47 +32,41 @@ A vanilla HTML/CSS/JavaScript Sinclair ZX81/Spectrum/Z80 emulator that runs enti
 - 64K of RAM (no ROM)
 - To simplify, screen address is fixed at 60000, rows are full width, and there are no HALT bytes
 
+### Character encoding
+
+The screen, keyboard and assembler share the [ZX81 character set](https://worldofspectrum.net/ZX81BasicProgramming/appxa.html). Space is `0`, `0` is `28`, and `A` is `38`. Add `128` for an inverse character; solid black is `128`. Codes `64–127` and `192–255` are controls, BASIC tokens or unused values, and show an undefined-character marker when written directly to this fixed-cell screen. There is no BASIC token expansion.
+
+Quoted assembly strings and character literals use ZX81 codes. Lowercase input becomes uppercase; unsupported punctuation produces an assembly error. Numeric data and `chr(n)` retain their byte values. The escapes `\n` and `\r` emit NEWLINE (`118`), and `\0` emits zero. Since zero is also space, use lengths or a separate terminator for text.
+
+Programs using the previous ASCII encoding need their numeric text and key constants updated. For example, use `LD A,'A'` or `DB "HELLO"` instead of ASCII byte values. Saved source links reassemble with this encoding.
+
 ### I/O Port Map:
 
 - **Port 0:** Frame counter: increments each display refresh (~60Hz), useful for timing
-- **Port 1:** Keyboard input: reads the current key as its Sinclair character code, 255 when no key is down. Printable characters and named special keys are mapped separately. The most recently pressed key wins; releasing it restores any older key still held. Modifiers and function keys press nothing. The debug **Key** field shows the mapped Sinclair code. Run `node run_keyboard_tests_node.js` to check keyboard and on-screen button input.
+- **Port 1:** Keyboard input: reads the current key as its Sinclair character code, 255 when no key is down. Printable characters and named special keys are mapped separately. The most recently pressed key wins; releasing it restores any older key still held. Modifiers and function keys press nothing. The debug **Key** field shows the mapped Sinclair code.
 - **Port 2:** Beep frequency port: in units of 10Hz
 - **Port 3:** Exponential beep duration: `milliseconds = 4000^((byte-1)/254)` for codes 1-255. Zero means no request; 1 gives 1 ms and 255 gives 4 seconds.
-- **Port 4:** Beep volume: 0 is silent, 255 is the former full level. Default 85 gives one-third of the former gain. Persists until changed; assembling a program or resetting restores 85.
+- **Port 4:** Beep volume: 0 is silent, 255 is full volume. Default 85 is one-third volume. Persists until changed; assembling a program or resetting restores 85.
+- **Port 5:** Queued keystrokes: each `IN A,(5)` consumes one press, in order, or returns 255 when empty. Reset, Assemble and Run, or releasing keyboard capture clears the queue.
+
+Both keyboard ports use ZX81 character codes and uppercase letters. Arrow keys send `112` (up), `113` (down), `114` (left), and `115` (right); Enter sends `118` (NEWLINE), Backspace sends `119` (RUBOUT), and Escape sends `227` (STOP). Unsupported characters press nothing.
 
 ## Usage
 
 1. Open `simulator.html` directly in a web browser, or open `index.html` and click the simulator button
-2. The **Default** performance test program loads automatically. To use something else:
+2. The **Character Set Test** is the initial startup selection. The **On startup** menu setting can select another sample or a blank editor. To load a program:
    - Click **Clear** to write your own Z80 assembly code, or
-   - Click **Basics** (register operations demo, starts halted), **Space Invader** (playable micro-game), or **Claudasaur** (first-person monster maze)
+   - Load **Debugger Test**, **Performance Test**, **Space Invader**, **Claudasaur**, or **1.3K Chess** using a load button or the program menu on a narrow screen.
 3. Click "Assemble and Run" to compile and execute the code
 4. Use "Break" to pause and switch to single-step mode
 5. Use "Run" to resume continuous execution
 6. Use "Fast" to disable screen updates for slightly better performance
 
-### Playing Claudasaur
+Programs loaded from a URL assemble and start automatically. An ordinary visit loads the default program and waits for **Assemble and Run**.
 
-Open [Claudasaur directly](https://andyrosa.github.io/Sinclaude/simulator.html?run=claudasaur) to load and run the game automatically. Press **Space** on its title screen to start playing. The short link survives refreshes.
+If the browser blocks sound during automatic startup, the simulator waits before executing the first instruction and shows a prompt over the execution screen. Click, tap, or press a key to start with sound, or choose **Start muted**. Opening sounds play from the beginning, and that first interaction is not passed to the emulated keyboard. Muted playback lasts until the next Assemble and Run. When sound is already allowed, startup needs no prompt.
 
-`run=claudasaur` selects and runs the game. Saved `asm` code takes precedence if both are provided. **Clear** removes the game selection from the URL.
-
-If the browser blocks sound during automatic startup, the simulator pauses before executing the program and shows a prompt over the execution screen. Click, tap, or press a key to start with sound, or choose **Start muted**. The opening music starts from the beginning, and that first interaction is not passed to the emulated keyboard. Muted playback lasts until the next Assemble and Run. When sound is already allowed, startup needs no prompt.
-
-Click **Load 'Claudasaur'**, then **Assemble and Run**. Move the pointer over the execution screen (or tap it) to activate keyboard capture, then press **Space** to start. Find the exit before the Claude-logo-inspired, spiky Claudasaur catches you.
-
-- **W/S** or **Up/Down**: walk forward/backward. Hold to keep moving.
-- **A/D** or **Left/Right**: turn a quarter turn per press.
-- **Space**: toggle the live map; start again after escape or capture.
-- **P**: pause/resume. The existing on-screen W/S/A/D/Space buttons also work.
-
-The compass shows your facing direction. The map faces north: an arrowhead (**↑**, **>**, **v**, or **<**) is you and points the way you face, **\*** is Claudasaur, and **E** is the exit. The map does not pause the hunt. Claudasaur wakes after about six seconds and follows the shortest available path, moving more slowly than you. Each retry resets the same connected 16x16 maze so you can learn its routes.
-
-The title screen waits 300ms after drawing, then plays a 5.4-second beep loop of the repeated broom theme from Paul Dukas's *The Sorcerer's Apprentice*. The arrangement uses the C-D-E pickup and eight bars from [the original bassoon part, rehearsal 7](https://s9.imslp.org/files/imglnks/usimg/b/b3/IMSLP35118-PMLP15848-Dukas-SorcerersAppr.Bassoons.pdf), raised one octave for clearer speaker playback. Short 120-150ms notes, written rests, and volume accents preserve the bouncy 3/8 march. Pressing **Space** starts the game immediately and cancels the remaining queued music notes. During play, a low double heartbeat starts when Claudasaur is within six maze steps and doubles its pace within three. Capture plays four descending notes; escape plays a three-note rising chime. Pause stops new heartbeat notes, and retry cancels any remaining queued melody notes. Sounds advance alongside gameplay and remain active on the live map.
-
-The game runs as Z80 assembly, including perspective drawing, keyboard input, pathfinding, and win/loss logic. JavaScript prepares the assembly source and drawing data. It uses the simulator's monochrome display, with a starburst creature inspired by the Claude logo.
-
-Run its gameplay and rendering checks with `node run_claudasaur_tests_node.js`.
+On touch devices, tap the **game screen** to open the phone's keyboard. Typed characters go straight to the running program, with autocorrection and spelling suggestions disabled. The **W S Space A D** buttons support holding keys for movement. Hover or focus the execution area to use a physical keyboard.
 
 ### Making a beep sound
 
@@ -85,25 +79,9 @@ LD A, 142         ; Approximately 100ms on the exponential scale
 OUT (3), A        ; Request beep with encoded duration
 ```
 
-The simulator starts a new sound after a CPU execution batch and clears ports 2 and 3. Port 4 retains its value. A new sound does not cancel other sounds being played; volume is captured independently for each note. Existing programs that only write ports 2 and 3 use the quieter default.
+The simulator starts a new sound after a CPU execution batch and clears ports 2 and 3. Port 4 retains its value. A new sound does not cancel other sounds being played; volume is captured independently for each note.
 
 Switching away from the tab suspends audio; returning resumes it. Sound requests made while hidden are consumed without queuing notes for later playback.
-
-For nonzero codes, port 3 uses `t = k * a^byte`, with `a = 4000^(1/254)` and `k = 1/a` milliseconds. Each increment lengthens the note by about 3.32%, giving smooth proportional growth across the range. To encode 1-4000 ms, use `byte = 1 + round(254 * log(milliseconds) / log(4000))`. Code 0 is reserved for no request. For example:
-
-| Duration byte | Requested duration |
-| --- | --- |
-| 1 | 1 ms |
-| 22 | About 1.99 ms |
-| 43 | About 3.94 ms |
-| 128 | About 63.25 ms |
-| 142 | About 99.90 ms |
-| 200 | About 663.88 ms |
-| 255 | 4 seconds |
-
-`BEEP_DURATION_MIN_MS` and `BEEP_DURATION_MAX_MS` in `constants_and_css_vars.js` define the endpoints, and `BEEP_DURATION_RATIO` gives the multiplier between codes. The shared `encodeBeepDuration(ms)` and `decodeBeepDuration(byte)` helpers keep generated samples and playback consistent, with duration rounding within about 1.7%. The bundled samples have been converted; older saved assembly using raw milliseconds or the earlier quadratic scale needs its duration values re-encoded.
-
-The direct JavaScript method still takes milliseconds: `playBeep(frequencyHz, durationMs, volume = 85)`. Claudasaur uses volume for the broom theme's accents and the gameplay sound effects, with every sound at or below 85. Run `node run_speaker_tests_node.js` to check duration and volume handling.
 
 ### Delaying using the Frame Counter
 
@@ -121,10 +99,10 @@ This feature is useful for slowing down game loops.
 
 ### Saving Programs
 
-When you assemble a small program, the URL automatically updates to include the encoded program. With this URL you can:
+Selecting a bundled sample creates a short `sample` link. Assembling edited or custom source saves the source in an `asm` link when it fits the URL size limit. If your edited program is too large to fit in the URL, it stays in the editor but is not saved in the link. The old program is removed from the URL, so refreshing will not reload that older version. With this URL you can:
 - Bookmark URLs to save your programs
 - Share the URL with others to share your program
-- Opening or refreshing a shared URL preserves its saved program. Clicking **Clear** removes the program from the URL.
+- Opening or refreshing a shared URL loads and automatically starts its saved program, using the sound prompt described above when needed. Clicking **Clear** removes the program from the URL.
 - If the assembly program exceeds about 1K of text, it will not generate a URL because of limitations on URL size. A 16K RAM pack won’t fix this browser limitation.
 
 ### Assembler features
@@ -136,18 +114,18 @@ When you assemble a small program, the URL automatically updates to include the 
   - Control flow (CALL, RET, JP, JR, DJNZ)
   - Logic operations (AND, OR, XOR, CP)
   - Stack operations (PUSH, POP)
-  - Block operations (LDIR)
-- Assembler directives (ORG, EQU, DB, DEFW, DEFS, END) (more than I ever had in the real device)
+  - Block operations (LDIR, CPIR) and alternate-register exchange (EXX)
+- Assembler directives (ORG, EQU, DB, DEFW, DEFS, END)
 - Label support with arithmetic expressions
 - Multiple number formats (decimal, hex, binary)
 - String literals in data directives
 - Error reporting with line numbers
 - Addresses must be within 0–65535, and emitted bytes must fit within the 64K memory. Oversized allocations, malformed numbers, and trailing garbage are rejected before loading. `DB`/`DEFS` byte values accept -128–255; `DEFW` values accept -32768–65535.
-- Machine code output with line numbers, decimal data, and checksums — perfect for magazine listings in 'Sinclair User' and 'Your Computer' before GitHub existed
+- Machine code output with line numbers, decimal data, and checksums
 
 ## Emulator States
 - App loads in the state "state_not_ready"
-- If the URL contains an "asm" parameter, the app loads it as assembly code
+- If the URL contains saved "asm" source or a catalog selection ("sample" or "run"), the app loads it and starts through the audio gate
 - If it does not, it loads the default assembly
 - If the user clicks "Assemble and Run" and it succeeds:
   - the program counter is set to the lowest ORG (or 0 if none is used)
@@ -166,10 +144,6 @@ When you assemble a small program, the URL automatically updates to include the 
 
 ## Project Files
 
-Run `npm test` to execute the assembler, CPU, keyboard, speaker, Claudasaur, and simulator integration suites. The tests use Node.js built-ins and require no browser. Pull requests and pushes to `main` run this same command in GitHub Actions; publishing to Pages requires the tests to pass.
-
-Interactive execution checks its deadline every 32 instructions, including within CPU batches. CPU errors stop in stepping mode with the program counter on the failing instruction. Assemble and Run cancels remaining boot stages, clears stale screen contents, then loads the program's explicit memory data.
-
 ### Core Interface:
 - `simulator.html`: Main web interface with HTML structure and script loading
 - `simulator.js`: Main simulator logic and controller
@@ -187,13 +161,18 @@ Interactive execution checks its deadline every 32 instructions, including withi
 - `version_update.js`: Version management script
 
 ### Core Emulation:
+- `zx81_charset.js`: Shared ZX81 display, keyboard and assembler text encoding
 - `z80_assembler.js`: Z80 assembly language parser and compiler
 - `z80_cpu_emulator.js`: Z80 CPU instruction execution engine
 
 ### Sample Programs:
+
+- `sample_programs.js`: Sample catalog and initial startup selection
+- `character_set_asm.js`: Character Set Test, displaying all 256 codes plus rows 18–23 with solid fill, stippling, and joined quarter-block tiles. Use **Retro Fonts** to inspect graphics alignment.
 - `default_asm.js`: Performance benchmark program with hex counter
 - `basics_asm.js`: Basic test program demonstrating register operations
 - `space_invader_asm.js`: A lone 'Space Invader' game
+- `chess_asm.js`: 1.3K Chess, a native Z80 game with castling, en passant and promotion
 - `claudasaur_asm.js`: First-person maze game with a pursuing starburst monster
 
 ### Testing:
@@ -220,7 +199,7 @@ The build process automatically updates `version.js` with current build informat
 
 ## Testing
 
-The project runs two test suites:
+Examples from the assembler and CPU test suites:
 
 ### Z80 Assembler Tests (400+ tests)
 
@@ -228,7 +207,7 @@ Examples:
 ```javascript
 //assembly, expected output
 test("JP 1234H", [0xc3, 0x34, 0x12]);
-test('DB "Hello"', [72, 101, 108, 108, 111]);
+test('DB "Hello"', [45, 42, 49, 49, 52]);
 ```
 
 ### Z80 Emulator Tests (700+ tests)
@@ -237,7 +216,7 @@ Examples:
 ```javascript
 //assembly, expected CPU post-conditions
 test("JP 1234H", "pc=0x1234");
-test("LD BC, 1234H\nLD A, 0FFH\nLD (BC), A", 
+test("LD BC, 1234H\nLD A, 0FFH\nLD (BC), A",
      "a=0xFF, b=0x12, c=0x34, [0x1234]=0xFF");
 test("XOR A", "carry=false, zero=false, a=0x00");
 test("CCF", "carry=flip");
@@ -251,11 +230,9 @@ test("CCF", "carry=flip");
 - Registers IX, IY and R not implemented
 - Many IN/OUT/CP/Rotate instructions not implemented
 - No interrupts (IM/EI/DI/RST, hardware NMI even though it would be fun and useful)
-- No ROM emulation. Many rabbit holes avoided.
+- No ROM emulation.
 - "Fast" mode is only slightly faster than normal mode. That's good and bad
-- It takes close to 100% of JavaScript's main thread. We are kinda going for performance. Once you program in ZX81 basic, you develop a need for speed
-- The sample assembly programs are not optimized.
-- The emulator decodes the regular opcode groups (register loads, INC/DEC, the 8-bit ALU and the CB prefix) from their bit fields, the way it was done in the old days when nobody had time for all that typing or RAM to hold it; the irregular opcodes are a switch statement.
+- Emulation can occupy most of the browser's main thread.
 - Saving program to query params not implemented for file:// URLs.
 - Saving program limited to 2000 characters even though more are possible
 
@@ -265,13 +242,29 @@ test("CCF", "carry=flip");
 - The codebase uses a mix of camelCase and snake_case naming conventions because the authors have different preferences
 - The UI could use a lot of fixing and polish. CSS is far more complex than Z80 Assembly. Testing UI across devices and modes is much harder than testing opcodes
 
-## Easter Eggs/Hidden features
+## Games
 
-Since you got this far, might as well spoil the Easter eggs:
+### Space Invader
 
-- **Character Set Test:** Select **Load Character Set Test**, then **Assemble and Run**. It shows all 256 codes plus numbered rows 18–23 containing solid fill, stippling, and joined quarter-block tiles. Use Retro Fonts to inspect graphics alignment. This test is no longer part of boot.
-- **Space Invader Game:** If you press the **W** key during the game, your base becomes invisible so it cannot be hit by bombs
+[Space Invader](simulator.html?sample=spaceInvader).
+
+### Claudasaur
+
+[Claudasaur](simulator.html?sample=claudasaur).
+
+### 1.3K Chess
+
+Inspired by ["Full ZX-81 Chess in 1K," *Your Computer*, February 1983](https://users.ox.ac.uk/~uzdm0006/scans/1kchess/). **1,236 bytes** of Z80 code and data.
+
+Adds: castling, en passant, promotion, and checkmate and stalemate detection. Missing: repetition, 50-move rule, and insufficient-material detection.
+
+[1.3K Chess](simulator.html?sample=chess).
 
 ## About This Project
 
-This project helped me explore how to work with today's AI coding tools. Sometimes brilliant - sometimes bad. It was a lot of fun.
+This project helped me explore how to work with today's (mid 2025) AI coding tools. Sometimes brilliant - sometimes bad. It was a lot of fun.
+
+## License
+
+Project code is released under the [Unlicense](LICENSE).
+
