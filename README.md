@@ -254,7 +254,7 @@ test("CCF", "carry=flip");
 
 ### 1.3K Chess
 
-Inspired by ["Full ZX-81 Chess in 1K," *Your Computer*, February 1983](https://users.ox.ac.uk/~uzdm0006/scans/1kchess/). **1,234 bytes** of Z80 code and data.
+Inspired by David Horne's ["Full ZX-81 Chess in 1K," *Your Computer*, February 1983](https://users.ox.ac.uk/~uzdm0006/scans/1kchess/). **1,234 bytes** of Z80 code and data.
 
 Play Black by typing a move such as `E7E5`. Press **Escape** to clear the current move entry or cancel a pending promotion choice.
 

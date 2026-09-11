@@ -1,5 +1,5 @@
 const CHESS_ASM = `; 1.3K Chess: 1234 bytes of code and data.
-; Inspired by "Full ZX-81 Chess in 1K", Your Computer, February 1983.
+; Inspired by David Horne's "Full ZX-81 Chess in 1K", Your Computer, February 1983.
 ; A 0x88 board makes every edge test a single AND. Bit 3 is Black;
 ; bit 4 records movement, so castling needs no separate rights table.
 ; State shares the board's page: loading a square into L keeps H at 0x20.
