@@ -1,0 +1,38 @@
+[
+  {
+    "optimization": "Oz",
+    "code_and_data_bytes": 3034,
+    "unresolved_symbols": [
+      "__bshl",
+      "__bshru",
+      "__frameset",
+      "__frameset0",
+      "__setflag",
+      "_key_input"
+    ],
+    "runnable_in_simulator": false
+  },
+  {
+    "optimization": "Os",
+    "code_and_data_bytes": 3453,
+    "unresolved_symbols": [
+      "__bshl",
+      "__bshru",
+      "__frameset",
+      "__frameset0",
+      "__setflag",
+      "_key_input"
+    ],
+    "runnable_in_simulator": false
+  },
+  {
+    "optimization": "O2",
+    "code_and_data_bytes": 5058,
+    "unresolved_symbols": [
+      "__bshl",
+      "__bshru",
+      "_key_input"
+    ],
+    "runnable_in_simulator": false
+  }
+]

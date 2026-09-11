@@ -1,0 +1,14 @@
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#26: replace ld hl, BOARD; ld de, BOARD + 1 with ld de, BOARD + 1; ld h, d; ld l, b (1 bytes, 2 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#248: replace ld b, 4; cp 4 with ld b, 4; cp b (1 bytes, 3 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#387: replace ld a, (TARGET); ld l, a with ld hl, (TARGET) (1 bytes, 1 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm[optimized]#387: replace ld hl, (TARGET); ld h, 32 with ld hl, TARGET; ld l, (hl) (1 bytes, 6 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#465: replace ld a, (FROM); ld l, a with ld hl, (FROM) (1 bytes, 1 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm[optimized]#465: replace ld hl, (FROM); ld h, 32 with ld hl, FROM; ld l, (hl) (1 bytes, 6 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#563: replace ld c, (hl); ld (hl), 0 with ld c, (hl); ld (hl), b (1 bytes, 3 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#609: replace ld a, (FROM); ld l, a with ld hl, (FROM) (1 bytes, 1 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm[optimized]#609: replace ld hl, (FROM); ld h, 33 with ld hl, FROM; ld l, (hl); inc h (0 bytes, 2 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#692: replace ld a, (TO); ld l, a with ld hl, (TO) (1 bytes, 1 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm[optimized]#692: replace ld hl, (TO); ld h, 33 with ld hl, TO; ld l, (hl); inc h (0 bytes, 2 t-states saved)
+INFO: Search-based optimization in experiments/chess-optimization/out/baseline.asm#717: replace and 0x44; cp 0x44 with cpl; and 0x44 (1 bytes, 3 t-states saved)
+DIGGEST: SearchBasedOptimizer: 12 optimizations applied, 10 bytes, 31 t-states saved.
+INFO: mdl optimization summary: 10 bytes, 31 t-states saved. Search-based optimizer optimizations: 12.

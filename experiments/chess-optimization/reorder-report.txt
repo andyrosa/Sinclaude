@@ -1,0 +1,2 @@
+DIGGEST: CodeReorganizer moves: 0, 0 bytes, 0 t-states saved.
+INFO: mdl optimization summary: 0 bytes, 0 t-states saved. CodeReorganizer moves: 0.

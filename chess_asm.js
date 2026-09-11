@@ -1,7 +1,8 @@
-const CHESS_ASM = `; 1.3K Chess: 1236 bytes of code and data.
+const CHESS_ASM = `; 1.3K Chess: 1226 bytes of code and data.
 ; Inspired by "Full ZX-81 Chess in 1K", Your Computer, February 1983.
 ; A 0x88 board makes every edge test a single AND. Bit 3 is Black;
 ; bit 4 records movement, so castling needs no separate rights table.
+; State shares the board's page: loading a square into L keeps H at 0x20.
 BOARD EQU 0x2000
 SIDE EQU BOARD + 128
 EP EQU SIDE + 1
@@ -23,8 +24,9 @@ CHESS_START:
     ld bc, 767
     ld (hl), ' '
     ldir
-    ld hl, BOARD
     ld de, BOARD + 1
+    ld h, d
+    ld l, b ; LDIR left BC zero; reuse B for the page-aligned board base.
     ld c, 129
     ld (hl), l
     ldir
@@ -246,7 +248,7 @@ GENERATE:
     cp 5
     jr z, GEN_DIRECTION
     ld b, 4
-    cp 4
+    cp b
     jr z, GEN_DIRECTION
     ld hl, DIRECTIONS + 4
 GEN_DIRECTION:
@@ -384,9 +386,8 @@ ATTACK:
     ld de, DIRECTIONS
     ld b, 16
 ATTACK_DIRECTION:
-    ld a, (TARGET)
-    ld l, a
-    ld h, 32
+    ld hl, TARGET
+    ld l, (hl)
     ld c, 0
 ATTACK_RAY:
     ld a, (de)
@@ -462,9 +463,8 @@ ATTACK_RETURN:
     ret
 
 CASTLES:
-    ld a, (FROM)
-    ld l, a
-    ld h, 32
+    ld hl, FROM
+    ld l, (hl)
     ld a, (hl)
     and 16
     ret nz
@@ -561,7 +561,7 @@ MAKE:
     ld l, a
     ld h, 32
     ld c, (hl)
-    ld (hl), 0
+    ld (hl), b ; LDIR left B zero, saving an immediate byte.
     ld a, (TO)
     ld e, a
     ld d, h
@@ -606,9 +606,9 @@ FLIP:
     ret
 IS_PROMOTION:
     push hl
-    ld a, (FROM)
-    ld l, a
-    ld h, 33
+    ld hl, FROM
+    ld l, (hl)
+    inc h
     ld a, (hl)
     and 7
     cp 1
@@ -689,9 +689,9 @@ SEARCH_NEXT:
 ; It doesn't examine the opponent's replies or plan combinations.
 ; It's a small, immediate-gain strategy designed to save bytes.
 SCORE:
-    ld a, (TO)
-    ld l, a
-    ld h, 33
+    ld hl, TO
+    ld l, (hl)
+    inc h
     ld a, (hl)
     call VALUE
     add a, 64
@@ -714,8 +714,8 @@ SCORE_POSITION:
     ; let both axes share each mask; first movement adds 1, below a pawn's 4.
     ld a, l
     add a, 0x22
+    cpl
     and 0x44
-    cp 0x44
     jr nz, SCORE_DEVELOP
     inc c
     ld a, l

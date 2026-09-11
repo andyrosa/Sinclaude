@@ -1,0 +1,10 @@
+{
+  "mdl.jar": {
+    "url": "https://github.com/santiontanon/mdlz80optimizer/releases/download/v2.6.3/mdl.jar",
+    "sha256": "6fd1d60fca3dbc9f3dfff4729c9f8dc7d8d0b12790da5073fb631a442ea2149f"
+  },
+  "CEdev-Windows.zip": {
+    "url": "https://github.com/CE-Programming/toolchain/releases/download/v15.0/CEdev-Windows.zip",
+    "sha256": "cc954fb309f97e03ab8750a16c33c048ac4211c4cb9a7bddb99e107268619c50"
+  }
+}

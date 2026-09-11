@@ -9,7 +9,8 @@ function verifyChess(createCPU = () => new Z80CPU()) {
   const image = new Uint8Array(65536);
   Z80Assembler.loadOpcodesIntoMemory(image, assembled.instructionDetails);
   assert.equal(assembled.instructionDetails.reduce((n, line) => n + line.opcodes.length, 0), s.END_CODE, 'Payload is contiguous, with no hidden address gaps');
-  assert.ok(s.END_CODE <= 1236, 'Keep the complete game within the measured byte budget');
+  assert.ok(s.END_CODE <= 1226, 'Keep the complete game within the measured byte budget');
+  for (const name of ['FROM', 'TO', 'TARGET']) assert.equal(s[name] >> 8, s.BOARD >> 8, name + ': state and board share a page');
   for (const name of ['GLYPHS','VALUES']) assert.equal(s[name] >> 8, (s[name] + 6) >> 8, name + ': lookup stays within one page');
   const squares = Array.from({length: 64}, (_, i) => (i >> 3) * 16 + i % 8);
   const address = square => (Number(square[1]) - 1) * 16 + square.charCodeAt(0) - 97;

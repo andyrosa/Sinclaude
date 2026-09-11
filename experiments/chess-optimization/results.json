@@ -1,0 +1,20 @@
+{
+  "baseline_commit": "ad4091b4fbcc9ff665fe192a52f2eb0f08727970",
+  "baseline_bytes": 1236,
+  "baseline_sha256": "6fb2247556ecdce3ad9580f070d5203a6f6eb146fc3a59a142d4df9bff137358",
+  "optimized_bytes": 1226,
+  "optimized_sha256": "d8a7a7f80f9535bcf161d8836861cf18b27e05e750e7b6f8ec64a444c480b022",
+  "saved_bytes": 10,
+  "production_matches_candidate": true,
+  "mdl_version": "2.6.3",
+  "search_transformations": 12,
+  "full_test_suite": "PASS",
+  "chess": {
+    "positions": 64,
+    "legal_moves": 1335,
+    "keyboard_turns": 117,
+    "baseline_instructions": 6197376,
+    "optimized_instructions": 6074612,
+    "max_stack_bytes": 20
+  }
+}

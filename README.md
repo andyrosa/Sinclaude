@@ -254,7 +254,7 @@ test("CCF", "carry=flip");
 
 ### 1.3K Chess
 
-Inspired by ["Full ZX-81 Chess in 1K," *Your Computer*, February 1983](https://users.ox.ac.uk/~uzdm0006/scans/1kchess/). **1,236 bytes** of Z80 code and data.
+Inspired by ["Full ZX-81 Chess in 1K," *Your Computer*, February 1983](https://users.ox.ac.uk/~uzdm0006/scans/1kchess/). **1,226 bytes** of Z80 code and data.
 
 Adds: castling, en passant, promotion, and checkmate and stalemate detection. Missing: repetition, 50-move rule, and insufficient-material detection.
 
