@@ -440,9 +440,7 @@ async function main() {
   assert.equal(unknownProgram.sim.state, unknownProgram.STATE.NOT_READY,
     'An unknown program must not automatically start the default program');
 
-  function blockedAutostart() {
-    const firstNote = 'LD A,44\nOUT (2),A\nLD A,142\nOUT (3),A\nHALT';
-    const autoplay = fixture('https://example.test/simulator.html?asm=' + encodeURIComponent(btoa(encodeURIComponent(firstNote))));
+  function blockAudio(autoplay) {
     autoplay.sim.initializeAudio();
     const blockedAudio = autoplay.sim.audioContext;
     blockedAudio.state = 'suspended';
@@ -452,6 +450,42 @@ async function main() {
       if (activated) { blockedAudio.state = 'running'; blockedAudio.emit('statechange'); }
     };
     autoplay.allowAudio = () => { activated = true; };
+    return blockedAudio;
+  }
+
+  const silentChess = fixture(chessUrl);
+  blockAudio(silentChess);
+  silentChess.initialize();
+  assert.equal(silentChess.audioUI.audioStartPrompt.hidden, true, 'Chess never asks for sound permission');
+  assert.equal(silentChess.sim.state, silentChess.STATE.FREE_RUNNING, 'Chess starts even when browser audio is blocked');
+  assert.ok(silentChess.sim.instructionCount > 0);
+
+  for (const silentSource of [
+    'LD A,42\nHALT',
+    '; OUT (2),A\nLD A,42\nOUT (0),A\nHALT\nDB 211,2',
+    'invalid instruction',
+  ]) {
+    const silent = fixture('https://example.test/simulator.html?asm=' + encodeURIComponent(btoa(encodeURIComponent(silentSource))));
+    blockAudio(silent);
+    silent.initialize();
+    assert.equal(silent.audioUI.audioStartPrompt.hidden, true, 'Silent code, comments, data and errors do not prompt');
+    assert.equal(silent.sim.state, silentSource.startsWith('invalid') ? silent.STATE.NOT_READY : silent.STATE.STEPPING);
+  }
+
+  const soundDetection = fixture();
+  for (const source of [
+    'SPEAKER EQU 1+1\nOUT (SPEAKER),A',
+    'note: out (0x03),a',
+    'OUT (4),A',
+  ]) {
+    soundDetection.sim.setAssemblyCode(source);
+    assert.equal(soundDetection.sim.programUsesSound(), true, `Sound I/O is detected: ${source}`);
+  }
+
+  function blockedAutostart() {
+    const firstNote = 'LD A,44\nOUT (2),A\nLD A,142\nOUT (3),A\nHALT';
+    const autoplay = fixture('https://example.test/simulator.html?asm=' + encodeURIComponent(btoa(encodeURIComponent(firstNote))));
+    const blockedAudio = blockAudio(autoplay);
     // Any program's first note must survive the gate, without game-specific code.
     autoplay.initialize();
     assert.equal(autoplay.sim.instructionCount, 0, 'CPU stays stopped before the first instruction');

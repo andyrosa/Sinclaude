@@ -1597,11 +1597,30 @@ class Simulator {
     }
   }
 
+  programUsesSound() {
+    const assembler = new Z80Assembler();
+    const result = assembler.assemble(this.getAssemblyCode());
+    if (!result.success) return false;
+
+    return assembler.parsedLines.some(({ mnemonic, lineNum }) => {
+      if (mnemonic?.toUpperCase() !== "OUT") return false;
+      // Assembled operands resolve EQU names, expressions and numeric bases;
+      // inspecting instruction lines excludes comments and data bytes.
+      const port = result.instructionDetails[lineNum - 1].opcodes[1];
+      return [BEEP_10HZ_PORT, BEEP_DURATION_PORT, BEEP_VOLUME_PORT].includes(port);
+    });
+  }
+
   autostart() {
     this.cancelAudioStart();
     this.finishBootSequence();
     this.stopContinuousExecution();
     this.audioMuted = false;
+    // Silent programs and assembly errors need no sound interaction.
+    if (!this.programUsesSound()) {
+      this.assembleAndRun();
+      return;
+    }
     this.initializeAudio();
     const context = this.audioContext;
     if (!context || context.state === "running") {
